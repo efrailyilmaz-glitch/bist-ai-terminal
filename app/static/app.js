@@ -28,14 +28,21 @@ async function scanAll(force=true){
     try{
       const r=await getJSON(`/api/scan?offset=${offset}&limit=${batch}`);
       (r.rows||[]).forEach(x=>state.scan.set(x.ticker,x)); state.scanned=Math.min(state.total,offset+(r.requested||batch));
-      els.scanStatus.textContent=`Evren taranıyor ${state.scanned}/${state.total} · fiyat bulunan ${state.scan.size}`; renderTickerbar();
+      updateRegime(); els.scanStatus.textContent=`Evren taranıyor ${state.scanned}/${state.total} · fiyat bulunan ${state.scan.size}`; renderTickerbar();
       if(['overview','all','short','long'].includes(state.view)) render(false);
     }catch(e){els.scanStatus.textContent=`Tarama ${offset}-${offset+batch} atlandı`;}
   }
-  state.scanning=false; els.scanBtn.textContent='Tüm Evreni Tara'; els.scanStatus.textContent=`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
+  updateRegime(); state.scanning=false; els.scanBtn.textContent='Tüm Evreni Tara'; els.scanStatus.textContent=`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
   renderTickerbar(); render(false);
 }
 function topBy(key,n=10){return [...state.scan.values()].sort((a,b)=>(b[key]||0)-(a[key]||0)).slice(0,n)}
+function updateRegime(){
+  const a=[...state.scan.values()]; if(a.length<10)return;
+  const adv=a.filter(x=>x.change>0).length, dec=a.filter(x=>x.change<0).length;
+  const breadth=Math.round(adv/a.length*100), avg=Math.round(a.reduce((s,x)=>s+(x.short_score||50),0)/a.length);
+  state.market.advancers=adv; state.market.decliners=dec; state.market.breadth=breadth;
+  state.market.regime=(breadth>=58&&avg>=60)?'RISK-ON / BULL':(breadth<=42&&avg<=45)?'RISK-OFF / BEAR':'NÖTR / TRANSITION';
+}
 function candidateList(rows,key){return rows.map((r,i)=>{const meta=state.meta.get(r.ticker)||{};const sig=key==='short_score'?r.short_signal:r.long_signal;const reasons=(key==='short_score'?r.reasons_short:r.reasons_long)||[];return `<div class="candidate" onclick="openStock('${r.ticker}')"><span class="rank">${String(i+1).padStart(2,'0')}</span><strong>${r.ticker}</strong><div><div>${meta.name||r.name||''}</div><div class="reason">${reasons.join(' · ')||r.trend||'veri hesaplandı'}</div></div><span class="score">${r[key]||0}</span><span class="${cls(r.change)}">${pct(r.change)}</span><span class="tag ${tagClass(sig)}">${sig}</span></div>`}).join('')||'<div class="empty">Tarama sonuçları yükleniyor…</div>'}
 function overview(){
   const sh=topBy('short_score',8), lg=topBy('long_score',8); const progress=state.total?Math.round(state.scanned/state.total*100):0;
@@ -55,6 +62,16 @@ function stockRows(rows,sort='ticker'){
   return rows.map(m=>{const r=state.scan.get(m.ticker);return `<tr onclick="openStock('${m.ticker}')"><td><strong>${m.ticker}</strong></td><td>${m.name||''}</td>${r?`<td>₺${fmt(r.price)}</td><td class="${cls(r.change)}">${pct(r.change)}</td><td>${r.short_score}</td><td>${r.long_score}</td><td>${r.rsi}</td><td>${r.volume_ratio}x</td><td>${r.trend}</td>`:`<td colspan="7" class="pending">Tarama bekleniyor</td>`}</tr>`}).join('');
 }
 function horizonView(kind){const key=kind==='short'?'short_score':'long_score';const rows=[...state.scan.values()].sort((a,b)=>b[key]-a[key]);return `<div class="panel"><div class="panelHead"><div><h2>${kind==='short'?'Kısa Vade':'Uzun Vade'} Araştırma Adayları</h2><p>${kind==='short'?'Günler–haftalar: momentum, breakout, hacim ve kısa trend':'Aylar: MA200, 3/6 ay momentum ve volatilite dengesi'}</p></div><span class="pill">${state.scan.size} ANALYZED</span></div>${candidateList(rows.slice(0,100),key)}</div>`}
+function anomalyView(){
+  const rows=[...state.scan.values()].sort((a,b)=>(b.anomaly_score||0)-(a.anomaly_score||0)).slice(0,100);
+  return `<div class="panel"><div class="panelHead"><div><h2>Anomali Radar</h2><p>Hacim sıçraması · sert günlük hareket · volatilite sapması. Bu ekran manipülasyon suçu iddiası değildir.</p></div><span class="pill">RISK MONITOR</span></div>${rows.map((r,i)=>{const m=state.meta.get(r.ticker)||{};return `<div class="candidate" onclick="openStock('${r.ticker}')"><span class="rank">${String(i+1).padStart(2,'0')}</span><strong>${r.ticker}</strong><div><div>${m.name||''}</div><div class="reason">Hacim ${r.volume_ratio}x · Vol %${r.volatility} · Gün ${pct(r.change)}</div></div><span class="score">${r.anomaly_score||0}</span><span class="${cls(r.change)}">${pct(r.change)}</span><span class="tag ${(r.anomaly_score||0)>65?'weak':'neutral'}">${(r.anomaly_score||0)>65?'YÜKSEK':'İZLE'}</span></div>`}).join('')||'<div class="empty">Tarama sonuçları bekleniyor…</div>'}</div>`;
+}
+function portfolioView(){
+  const rows=[...state.scan.values()].filter(x=>(x.alpha_score||0)>=55).sort((a,b)=>(b.alpha_score||0)-(a.alpha_score||0)).slice(0,10);
+  const raw=rows.map(x=>Math.max(1,(x.alpha_score||50)*(100-Math.min(90,x.risk||50))));
+  const sum=raw.reduce((a,b)=>a+b,0)||1;
+  return `<div class="panel"><div class="panelHead"><div><h2>Model Portföy</h2><p>Alpha skoru + risk azaltımı ile oluşturulan örnek nicel araştırma sepeti; kişiye özel yatırım tavsiyesi değildir.</p></div><span class="pill">QUANT BASKET</span></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Kod</th><th>Şirket</th><th>Model ağırlık</th><th>Alpha</th><th>Kısa</th><th>Uzun</th><th>Risk</th><th>Smart Money</th></tr></thead><tbody>${rows.map((r,i)=>{const m=state.meta.get(r.ticker)||{};const w=raw[i]/sum*100;return `<tr onclick="openStock('${r.ticker}')"><td><strong>${r.ticker}</strong></td><td>${m.name||''}</td><td>%${fmt(w,1)}</td><td>${r.alpha_score||0}</td><td>${r.short_score}</td><td>${r.long_score}</td><td>${r.risk}</td><td>${r.smart_money_score||0}</td></tr>`}).join('')}</tbody></table></div></div>`;
+}
 async function openStock(t){state.current=t;state.view='detail';$$('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view==='detail'));render();}
 function detailShell(){const r=state.scan.get(state.current)||{};const m=state.meta.get(state.current)||{};return `<div class="panel"><div class="chartTop"><div class="chartTitle"><h2>${state.current} · ${m.name||''}</h2><p>${r.price?`₺${fmt(r.price)} · ${pct(r.change)} · RSI ${r.rsi} · Hacim ${r.volume_ratio}x`:'Fiyat verisi yükleniyor'}</p></div><div class="chartTools"><button data-period="1mo">1A</button><button data-period="3mo">3A</button><button data-period="6mo">6A</button><button data-period="1y" class="active">1Y</button><button data-period="2y">2Y</button><button data-period="5y">5Y</button><button data-interval="60m">1S</button><button data-interval="1d" class="active">1G</button><button data-interval="1wk">1H</button></div></div><div id="tvChart" class="chartbox"></div>${detailStats(r)}<div class="grid2"><div class="recommendBox"><h3>Kısa Vade Modeli · ${r.short_score??'—'}/100</h3><div class="chips">${(r.reasons_short||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div>${r.target_short?`<p>ATR bölgesi: hedef <b class="up">₺${fmt(r.target_short)}</b> · risk stop <b class="down">₺${fmt(r.stop_short)}</b></p>`:''}</div><div class="recommendBox"><h3>Uzun Vade Modeli · ${r.long_score??'—'}/100</h3><div class="chips">${(r.reasons_long||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div><p class="muted">Bu skor şirket değerlemesi değil; trend/momentum/volatilite tabanlı nicel araştırma puanıdır.</p></div></div></div>`}
 function detailStats(r){const a=[['Kısa skor',r.short_score],['Uzun skor',r.long_score],['20G momentum',r.momentum_20!=null?pct(r.momentum_20):'—'],['3A momentum',r.momentum_60!=null?pct(r.momentum_60):'—'],['Volatilite',r.volatility!=null?`${r.volatility}%`:'—'],['Risk',r.risk!=null?`${r.risk}/100`:'—']];return `<div class="stats">${a.map(x=>`<div class="stat"><span>${x[0]}</span><b>${x[1]??'—'}</b></div>`).join('')}</div>`}
@@ -81,6 +98,8 @@ function render(){
   if(state.view==='all'){els.title.textContent='Tüm BIST Şirketleri';els.content.innerHTML=allStocks();bindTable();}
   if(state.view==='short'){els.title.textContent='Kısa Vade Alpha Radar';els.content.innerHTML=horizonView('short');}
   if(state.view==='long'){els.title.textContent='Uzun Vade Alpha Radar';els.content.innerHTML=horizonView('long');}
+  if(state.view==='anomaly'){els.title.textContent='Anomali Radar';els.content.innerHTML=anomalyView();}
+  if(state.view==='portfolio'){els.title.textContent='Model Portföy';els.content.innerHTML=portfolioView();}
   if(state.view==='detail'){els.title.textContent=`${state.current} Hisse Analizi`;els.content.innerHTML=detailShell();bindChartTools();setTimeout(loadChart,0);}
   if(state.view==='backtest'){els.title.textContent='Backtest Lab';backtestView().then(h=>{els.content.innerHTML=h;$('#runBacktest').onclick=runBacktest});}
   if(state.view==='kap'){els.title.textContent='KAP Radar';els.content.innerHTML=kapView();}
