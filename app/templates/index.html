@@ -2,14 +2,14 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BIST AI Terminal V4</title>
+<title>BIST AI Terminal V5</title>
 <link rel="stylesheet" href="/static/styles.css">
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <div class="shell">
 <aside class="sidebar">
-  <div class="brand"><div class="mark">B</div><div><strong>BIST AI</strong><span>QUANT RESEARCH TERMINAL V4</span></div></div>
+  <div class="brand"><div class="mark">B</div><div><strong>BIST AI</strong><span>QUANT RESEARCH TERMINAL V5</span></div></div>
   <nav>
     <button class="nav active" data-view="overview">⌂ <span>Komuta Merkezi</span></button>
     <button class="nav" data-view="all">▤ <span>Tüm BIST</span></button>
@@ -21,7 +21,10 @@
     <button class="nav" data-view="anomaly">◈ <span>Anomali Radar</span></button>
     <button class="nav" data-view="portfolio">◉ <span>Model Portföy</span></button>\n    <button class="nav" data-view="watchlist">☆ <span>Watchlist</span></button>
     <button class="nav" data-view="detail">⌁ <span>Hisse Analizi</span></button>
-    <button class="nav" data-view="backtest">↺ <span>Backtest Lab</span></button>
+    <button class="nav" data-view="backtest">↺ <span>Strategy Lab</span></button>
+    <button class="nav" data-view="catalysts">◇ <span>Catalyst Calendar</span></button>
+    <button class="nav" data-view="journal">✎ <span>Research Journal</span></button>
+    <button class="nav" data-view="health">● <span>Data Health</span></button>
     <button class="nav" data-view="kap">◫ <span>KAP & Haber</span></button>
   </nav>
   <div class="side-status"><i></i><div><b id="systemMode">V3 başlatılıyor</b><small id="scanStatus">Evren yükleniyor…</small></div></div>
@@ -37,4 +40,5 @@
 </main>
 </div>
 <script src="/static/app.js"></script>\n<script src="/static/research.js"></script>
+<script src="/static/v5.js"></script>
 </body></html>
