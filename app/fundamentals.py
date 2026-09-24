@@ -94,39 +94,50 @@ def _quarterly(t:yf.Ticker):
 def _compute_scores(m:Dict):
     pe=m.get('trailing_pe'); pb=m.get('price_to_book'); ev_ebitda=m.get('ev_to_ebitda')
     ps=m.get('price_to_sales'); fcf_yield=m.get('fcf_yield')
-    value=_avg([
-        _score_low(pe,8,35),_score_low(pb,1,6),_score_low(ev_ebitda,5,22),
-        _score_low(ps,0.8,7),_score_high(fcf_yield,-2,10)
-    ])
-    quality=_avg([
-        _score_high(m.get('roe_pct'),0,30),_score_high(m.get('roa_pct'),0,15),
-        _score_high(m.get('operating_margin_pct'),0,25),_score_high(m.get('profit_margin_pct'),0,20),
-        100 if (m.get('free_cash_flow') or 0)>0 else (0 if m.get('free_cash_flow') is not None else None)
-    ])
-    growth=_avg([
-        _score_high(m.get('revenue_growth_pct'),-10,35),
-        _score_high(m.get('earnings_growth_pct'),-15,40)
-    ])
-    de=m.get('debt_to_equity')
-    current=m.get('current_ratio')
-    balance=_avg([
-        _score_low(de,0.3,2.5),
-        _score_high(current,0.7,2.0),
-        100 if (m.get('total_cash') or 0)>(m.get('total_debt') or 0) else (35 if m.get('total_cash') is not None and m.get('total_debt') is not None else None)
-    ])
-    shareholder=_avg([
-        _score_high(m.get('dividend_yield_pct'),0,6),
-        _score_low(m.get('payout_ratio_pct'),80,150) if m.get('payout_ratio_pct') is not None else None
-    ])
-    categories={'value':value,'quality':quality,'growth':growth,'balance':balance,'shareholder':shareholder}
-    weights={'value':.22,'quality':.28,'growth':.22,'balance':.20,'shareholder':.08}
-    present=[k for k,v in categories.items() if v is not None]
-    if not present:
-        total=None
+    sector=(m.get('sector') or '').lower()
+    financial=any(x in sector for x in ['financial','bank','insurance','banka','sigorta'])
+
+    if financial:
+        value=_avg([_score_low(pe,7,28),_score_low(pb,.7,4)])
+        quality=_avg([_score_high(m.get('roe_pct'),5,30),_score_high(m.get('roa_pct'),.5,4),_score_high(m.get('profit_margin_pct'),5,35)])
+        growth=_avg([_score_high(m.get('revenue_growth_pct'),-10,30),_score_high(m.get('earnings_growth_pct'),-15,35)])
+        balance=None
+        shareholder=_avg([_score_high(m.get('dividend_yield_pct'),0,6)])
+        weights={'value':.30,'quality':.35,'growth':.25,'shareholder':.10}
+        categories={'value':value,'quality':quality,'growth':growth,'shareholder':shareholder}
+        model='FINANCIALS'
     else:
+        value=_avg([
+            _score_low(pe,8,35),_score_low(pb,1,6),_score_low(ev_ebitda,5,22),
+            _score_low(ps,.8,7),_score_high(fcf_yield,-2,10)
+        ])
+        quality=_avg([
+            _score_high(m.get('roe_pct'),0,30),_score_high(m.get('roa_pct'),0,15),
+            _score_high(m.get('operating_margin_pct'),0,25),_score_high(m.get('profit_margin_pct'),0,20),
+            100 if (m.get('free_cash_flow') or 0)>0 else (0 if m.get('free_cash_flow') is not None else None)
+        ])
+        growth=_avg([_score_high(m.get('revenue_growth_pct'),-10,35),_score_high(m.get('earnings_growth_pct'),-15,40)])
+        de=m.get('debt_to_equity'); current=m.get('current_ratio')
+        balance=_avg([
+            _score_low(de,.3,2.5),_score_high(current,.7,2.0),
+            100 if (m.get('total_cash') or 0)>(m.get('total_debt') or 0) else (35 if m.get('total_cash') is not None and m.get('total_debt') is not None else None)
+        ])
+        shareholder=_avg([
+            _score_high(m.get('dividend_yield_pct'),0,6),
+            _score_low(m.get('payout_ratio_pct'),80,150) if m.get('payout_ratio_pct') is not None else None
+        ])
+        weights={'value':.22,'quality':.28,'growth':.22,'balance':.20,'shareholder':.08}
+        categories={'value':value,'quality':quality,'growth':growth,'balance':balance,'shareholder':shareholder}
+        model='CORPORATE'
+
+    present=[k for k,v in categories.items() if v is not None]
+    total=None
+    if present:
         den=sum(weights[k] for k in present)
         total=sum(categories[k]*weights[k] for k in present)/den
-    metric_keys=['trailing_pe','price_to_book','ev_to_ebitda','roe_pct','roa_pct','operating_margin_pct','profit_margin_pct','revenue_growth_pct','earnings_growth_pct','debt_to_equity','current_ratio','free_cash_flow','dividend_yield_pct']
+
+    metric_keys=['trailing_pe','price_to_book','roe_pct','roa_pct','profit_margin_pct','revenue_growth_pct','earnings_growth_pct','dividend_yield_pct']
+    if not financial:metric_keys+=['ev_to_ebitda','operating_margin_pct','debt_to_equity','current_ratio','free_cash_flow']
     coverage=round(100*sum(1 for k in metric_keys if m.get(k) is not None)/len(metric_keys))
     return {
       'fundamental_score':None if total is None else round(total),
@@ -135,7 +146,7 @@ def _compute_scores(m:Dict):
       'growth_score':None if growth is None else round(growth),
       'balance_score':None if balance is None else round(balance),
       'shareholder_score':None if shareholder is None else round(shareholder),
-      'coverage_pct':coverage
+      'coverage_pct':coverage,'factor_model':model
     }
 
 def get_fundamentals(ticker:str,force:bool=False)->Dict:
