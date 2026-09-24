@@ -7,7 +7,7 @@ from .market_data import scan_codes, yahoo_chart, market_overview
 from .backtest import run_backtest
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='3.0')
+app=FastAPI(title='BIST AI Terminal',version='3.1')
 app.mount('/static',StaticFiles(directory=str(BASE/'static')),name='static')
 
 @app.get('/',response_class=HTMLResponse)
@@ -52,4 +52,4 @@ def kap():
 @app.get('/health')
 def health():
     u=get_universe()
-    return {'status':'ok','version':'3.0','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
+    return {'status':'ok','version':'3.1','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
