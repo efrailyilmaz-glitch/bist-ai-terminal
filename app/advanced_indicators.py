@@ -40,10 +40,19 @@ def add_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) 
 
     for i in range(1,len(out)):
         prev=i-1
+        trend.iloc[i]=trend.iloc[prev]
         if pd.isna(a.iloc[i]):
             continue
-        final_upper.iloc[i]=upper.iloc[i] if (upper.iloc[i]<final_upper.iloc[prev] or out['Close'].iloc[prev]>final_upper.iloc[prev]) else final_upper.iloc[prev]
-        final_lower.iloc[i]=lower.iloc[i] if (lower.iloc[i]>final_lower.iloc[prev] or out['Close'].iloc[prev]<final_lower.iloc[prev]) else final_lower.iloc[prev]
+
+        if pd.isna(final_upper.iloc[prev]):
+            final_upper.iloc[i]=upper.iloc[i]
+        else:
+            final_upper.iloc[i]=upper.iloc[i] if (upper.iloc[i]<final_upper.iloc[prev] or out['Close'].iloc[prev]>final_upper.iloc[prev]) else final_upper.iloc[prev]
+
+        if pd.isna(final_lower.iloc[prev]):
+            final_lower.iloc[i]=lower.iloc[i]
+        else:
+            final_lower.iloc[i]=lower.iloc[i] if (lower.iloc[i]>final_lower.iloc[prev] or out['Close'].iloc[prev]<final_lower.iloc[prev]) else final_lower.iloc[prev]
 
         if trend.iloc[prev]:
             trend.iloc[i]=False if out['Close'].iloc[i]<final_lower.iloc[i] else True
