@@ -212,6 +212,12 @@ function v5Preset(name){
 function v5ApplyScreener(preset){
   preset=preset||($('#v5Preset')?.value||'all');
   const minS=Number($('#v5MinShort')?.value||0),minL=Number($('#v5MinLong')?.value||0),maxR=Number($('#v5MaxRisk')?.value||100),minA=Number($('#v5MinAdx')?.value||0),minRs=Number($('#v5MinRs')?.value||-100),minLiq=Number($('#v5MinLiq')?.value||0)*1e6;
+  const defaults=(preset==='all'&&minS===0&&minL===0&&maxR===100&&minA===0&&minRs===-100&&minLiq===0);
+  if(defaults){
+    const body=$('#allBody');if(body)body.innerHTML=stockRows(state.universe,'ticker');
+    const count=$('#v5FilterCount');if(count)count.textContent=state.total+' şirket · '+state.scan.size+' taranan';
+    return;
+  }
   let metas=state.universe.filter(function(m){
     const r=state.scan.get(m.ticker);if(!r)return false;
     if((r.short_score||0)<minS||(r.long_score||0)<minL||(r.risk||0)>maxR||(r.adx||0)<minA||(r.relative_strength_20||0)<minRs||(r.avg_value_turnover_20||0)<minLiq)return false;
