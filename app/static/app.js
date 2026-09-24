@@ -1,6 +1,23 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
 const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true}};
+const SCAN_CACHE_KEY='bist-ai-scan-v5';
+function restoreScanCache(){
+  try{
+    const cached=JSON.parse(localStorage.getItem(SCAN_CACHE_KEY)||'null');
+    if(!cached||!cached.ts||Date.now()-cached.ts>15*60*1000||!Array.isArray(cached.rows))return false;
+    cached.rows.forEach(x=>state.scan.set(x.ticker,x));
+    state.scanned=Math.min(state.total,cached.scanned||cached.rows.length);
+    return state.scan.size>0;
+  }catch(e){return false}
+}
+function persistScanCache(){
+  try{
+    const rows=[...state.scan.values()];
+    localStorage.setItem(SCAN_CACHE_KEY,JSON.stringify({ts:Date.now(),scanned:state.scanned,rows:rows}));
+  }catch(e){}
+}
+
 const fmt=(n,d=2)=>Number(n||0).toLocaleString('tr-TR',{maximumFractionDigits:d,minimumFractionDigits:0});
 const pct=n=>`${n>=0?'+':''}${fmt(n,2)}%`; const cls=n=>Number(n)>=0?'up':'down';
 const tagClass=s=>s==='GÜÇLÜ'?'':s==='POZİTİF'?'':s==='NÖTR'?'neutral':'weak';
@@ -10,8 +27,11 @@ async function init(){
     const [u,m]=await Promise.all([getJSON('/api/universe'),getJSON('/api/market')]);
     state.universe=u.rows||[]; state.total=u.count||state.universe.length; state.market=m||{};
     state.universe.forEach(x=>state.meta.set(x.ticker,x));
-    els.systemMode.textContent=`V4 · ${u.source||'UNIVERSE'}`; els.scanStatus.textContent=`${state.total} şirket bulundu`;
-    renderTickerbar(); render(); setTimeout(()=>scanAll(false),250);
+    const restored=restoreScanCache();
+    els.systemMode.textContent=`V5 · ${u.source||'UNIVERSE'}`;
+    els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
+    if(restored)updateRegime();
+    renderTickerbar(); render(); setTimeout(()=>scanAll(false),restored?900:150);
   }catch(e){els.content.innerHTML=`<div class="empty">Başlatma hatası: ${e.message}</div>`;}
 }
 function renderTickerbar(){
@@ -22,18 +42,41 @@ function renderTickerbar(){
   els.tickerbar.innerHTML=arr.map(x=>`<div class="metric"><span>${x[0]}</span><b>${x[1]}</b>${x[2]===null?'':`<small class="${cls(x[2])}">${pct(x[2])}</small>`}</div>`).join('');
 }
 async function scanAll(force=true){
-  if(state.scanning) return; state.scanning=true; if(force){state.scan.clear();state.scanned=0;}
-  els.scanBtn.textContent='Taranıyor…'; const batch=60;
-  for(let offset=0;offset<state.total;offset+=batch){
-    try{
-      const r=await getJSON(`/api/scan?offset=${offset}&limit=${batch}`);
-      (r.rows||[]).forEach(x=>state.scan.set(x.ticker,x)); state.scanned=Math.min(state.total,offset+(r.requested||batch));
-      updateRegime(); els.scanStatus.textContent=`Evren taranıyor ${state.scanned}/${state.total} · fiyat bulunan ${state.scan.size}`; renderTickerbar();
-      if(['overview','all','short','long'].includes(state.view)) render(false);
-    }catch(e){els.scanStatus.textContent=`Tarama ${offset}-${offset+batch} atlandı`;}
+  if(state.scanning)return;
+  state.scanning=true;
+  if(force){state.scan.clear();state.scanned=0;try{localStorage.removeItem(SCAN_CACHE_KEY)}catch(e){}}
+  els.scanBtn.textContent='Taranıyor…';
+  const batch=100, offsets=[];
+  for(let offset=0;offset<state.total;offset+=batch)offsets.push(offset);
+  let cursor=0,completed=0,lastPaint=0,lastPersist=0;
+  async function worker(){
+    while(true){
+      const idx=cursor++;
+      if(idx>=offsets.length)return;
+      const offset=offsets[idx];
+      try{
+        const r=await getJSON(`/api/scan?offset=${offset}&limit=${batch}`);
+        (r.rows||[]).forEach(x=>state.scan.set(x.ticker,x));
+        completed+=r.requested||Math.min(batch,state.total-offset);
+        state.scanned=Math.min(state.total,Math.max(state.scanned,completed));
+        updateRegime();
+        const now=Date.now();
+        els.scanStatus.textContent=`Evren taranıyor · ${state.scan.size} fiyat verisi · ${Math.min(state.total,completed)}/${state.total} yenilendi`;
+        renderTickerbar();
+        if(now-lastPaint>900&&['overview','short','long','setups','anomaly'].includes(state.view)){render(false);lastPaint=now}
+        if(now-lastPersist>2500){persistScanCache();lastPersist=now}
+      }catch(e){
+        completed+=Math.min(batch,state.total-offset);
+        els.scanStatus.textContent=`Bazı tarama paketleri atlandı · ${state.scan.size} veri mevcut`;
+      }
+    }
   }
-  updateRegime(); state.scanning=false; els.scanBtn.textContent='Tüm Evreni Tara'; els.scanStatus.textContent=`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
-  renderTickerbar(); render(false);
+  await Promise.all([worker(),worker()]);
+  state.scanned=state.total;
+  updateRegime();persistScanCache();
+  state.scanning=false;els.scanBtn.textContent='Tüm Evreni Tara';
+  els.scanStatus.textContent=`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
+  renderTickerbar();render(false);
 }
 function topBy(key,n=10){return [...state.scan.values()].sort((a,b)=>(b[key]||0)-(a[key]||0)).slice(0,n)}
 function updateRegime(){
