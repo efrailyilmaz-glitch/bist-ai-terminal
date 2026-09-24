@@ -14,13 +14,16 @@ POS={
  'NEW_ORDER':['yeni iş ilişkisi','sözleşme','sipariş','ihale kazandı','ihale sonucu','iş anlaşması'],
  'INVESTMENT':['yatırım','kapasite artışı','teşvik belgesi','yeni tesis','üretim kapasitesi'],
  'SHAREHOLDER_RETURN':['pay geri alım','geri alım','kar payı','kâr payı','temettü'],
+ 'CAPITAL_ACTION_POSITIVE':['bedelsiz sermaye art','iç kaynaklardan sermaye art','pay geri alım programı'],
+ 'OWNERSHIP':['pay alım','pay satım','ortaklık oranı','yönetici pay'],
  'FINANCING_POSITIVE':['kredi derecelendirme notu art','not artır','borç refinansman']
 }
 NEG={
  'LEGAL':['dava','soruşturma','inceleme','ceza','idari para cezası','işlem yasağı'],
  'OPERATIONS':['üretime ara','üretim dur','yangın','kaza','hasar','faaliyet dur'],
  'FINANCING_RISK':['temerrüt','borç yapılandır','ödeme güçlüğü','konkordato'],
- 'MARKET_EVENT':['devre kesici','açığa satışta yukarı adım']
+ 'MARKET_EVENT':['devre kesici','açığa satışta yukarı adım'],
+ 'CAPITAL_ACTION_RISK':['bedelli sermaye art','nakit sermaye art','sermaye azaltımı']
 }
 
 def _norm(s):
