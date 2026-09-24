@@ -2,31 +2,33 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BIST AI Terminal V3</title>
+<title>BIST AI Terminal V4</title>
 <link rel="stylesheet" href="/static/styles.css">
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <div class="shell">
 <aside class="sidebar">
-  <div class="brand"><div class="mark">B</div><div><strong>BIST AI</strong><span>QUANT TERMINAL V3.2</span></div></div>
+  <div class="brand"><div class="mark">B</div><div><strong>BIST AI</strong><span>QUANT RESEARCH TERMINAL V4</span></div></div>
   <nav>
     <button class="nav active" data-view="overview">⌂ <span>Komuta Merkezi</span></button>
     <button class="nav" data-view="all">▤ <span>Tüm BIST</span></button>
     <button class="nav" data-view="short">⚡ <span>Kısa Vade</span></button>
     <button class="nav" data-view="long">◆ <span>Uzun Vade</span></button>
+    <button class="nav" data-view="factors">▦ <span>Factor Lab</span></button>
+    <button class="nav" data-view="fundamental">▣ <span>Temel Analiz</span></button>
     <button class="nav" data-view="setups">✦ <span>Setup Radar</span></button>
     <button class="nav" data-view="anomaly">◈ <span>Anomali Radar</span></button>
     <button class="nav" data-view="portfolio">◉ <span>Model Portföy</span></button>
     <button class="nav" data-view="detail">⌁ <span>Hisse Analizi</span></button>
     <button class="nav" data-view="backtest">↺ <span>Backtest Lab</span></button>
-    <button class="nav" data-view="kap">◫ <span>KAP Radar</span></button>
+    <button class="nav" data-view="kap">◫ <span>KAP & Haber</span></button>
   </nav>
   <div class="side-status"><i></i><div><b id="systemMode">V3 başlatılıyor</b><small id="scanStatus">Evren yükleniyor…</small></div></div>
 </aside>
 <main>
 <header>
-  <div><div class="eyebrow">BIST AI / RESEARCH TERMINAL</div><h1 id="pageTitle">Piyasa Komuta Merkezi</h1><p id="subtitle">Tüm BIST evreni · kısa/uzun vade nicel araştırma · TradingView tipi grafik</p></div>
+  <div><div class="eyebrow">BIST AI / RESEARCH TERMINAL</div><h1 id="pageTitle">Piyasa Komuta Merkezi</h1><p id="subtitle">Tüm BIST · teknik + temel + KAP + haber + faktör araştırması · TradingView tipi grafik</p></div>
   <div class="actions"><div class="searchWrap"><span>⌕</span><input id="globalSearch" placeholder="Kod veya şirket ara..."></div><button id="scanBtn">Tüm Evreni Tara</button></div>
 </header>
 <section class="tickerbar" id="tickerbar"></section>
