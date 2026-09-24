@@ -4,15 +4,18 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from .universe import get_universe
 from .market_data import scan_codes, yahoo_chart, market_overview, multi_timeframe
-from .backtest import run_backtest
+from .backtest import run_backtest, compare_strategies, walk_forward, monte_carlo
 from .fundamentals import get_fundamentals, factor_screen
 from .kap_engine import company_profile, disclosures
 from .news_engine import headlines
 from .research_engine import research_snapshot
-from .portfolio_analytics import analyze_portfolio
+from .providers import data_health, provider_registry
+from .market_internals import market_internals
+from .catalysts import catalyst_calendar
+from .portfolio_analytics import analyze_portfolio, compare_allocations
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='4.0')
+app=FastAPI(title='BIST AI Terminal',version='5.0')
 app.mount('/static',StaticFiles(directory=str(BASE/'static')),name='static')
 
 @app.get('/',response_class=HTMLResponse)
@@ -46,9 +49,23 @@ def mtf(ticker:str):
     return multi_timeframe(ticker)
 
 @app.get('/api/backtest/{ticker}')
-def backtest(ticker:str,fast:int=20,slow:int=50,period:str='2y'):
+def backtest(ticker:str,fast:int=20,slow:int=50,period:str='5y',strategy:str='ma_trend',cost_bps:int=10,slippage_bps:int=5):
     fast=max(5,min(fast,100)); slow=max(fast+5,min(slow,250))
-    return run_backtest(ticker,fast=fast,slow=slow,period=period)
+    return run_backtest(ticker,fast=fast,slow=slow,period=period,strategy=strategy,
+                        cost_bps=max(0,min(cost_bps,100)),slippage_bps=max(0,min(slippage_bps,100)))
+
+@app.get('/api/strategy-compare/{ticker}')
+def strategy_compare(ticker:str,period:str='5y',cost_bps:int=10,slippage_bps:int=5):
+    return compare_strategies(ticker,period=period,cost_bps=max(0,min(cost_bps,100)),slippage_bps=max(0,min(slippage_bps,100)))
+
+@app.get('/api/walk-forward/{ticker}')
+def walkforward(ticker:str,period:str='5y',strategy:str='ma_trend',cost_bps:int=10,slippage_bps:int=5):
+    return walk_forward(ticker,period=period,strategy=strategy,cost_bps=max(0,min(cost_bps,100)),slippage_bps=max(0,min(slippage_bps,100)))
+
+@app.get('/api/monte-carlo/{ticker}')
+def montecarlo(ticker:str,period:str='5y',strategy:str='ma_trend',fast:int=20,slow:int=50,cost_bps:int=10,slippage_bps:int=5):
+    return monte_carlo(ticker,period=period,strategy=strategy,fast=fast,slow=slow,
+                       cost_bps=max(0,min(cost_bps,100)),slippage_bps=max(0,min(slippage_bps,100)))
 
 @app.get('/api/fundamentals/{ticker}')
 def fundamentals(ticker:str,force:bool=False):
@@ -77,9 +94,32 @@ def research(ticker:str):
     return research_snapshot(ticker)
 
 @app.get('/api/portfolio-risk')
-def portfolio_risk(codes:str):
+def portfolio_risk(codes:str,method:str='equal'):
     selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
-    return analyze_portfolio(selected)
+    return analyze_portfolio(selected,method=method)
+
+@app.get('/api/portfolio-allocations')
+def portfolio_allocations(codes:str):
+    selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
+    return compare_allocations(selected)
+
+@app.get('/api/data-health')
+def health_data():
+    return data_health()
+
+@app.get('/api/providers')
+def providers():
+    return provider_registry()
+
+@app.get('/api/market-internals')
+def internals(codes:str):
+    selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:100]
+    return market_internals(selected)
+
+@app.get('/api/catalysts')
+def catalysts(codes:str):
+    selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:16]
+    return catalyst_calendar(selected)
 
 @app.get('/api/market')
 def market(): return market_overview()
@@ -92,4 +132,4 @@ def kap():
 @app.get('/health')
 def health():
     u=get_universe()
-    return {'status':'ok','version':'4.0','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
+    return {'status':'ok','version':'5.0','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
