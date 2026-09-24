@@ -2,6 +2,7 @@ from __future__ import annotations
 import math
 import numpy as np
 import pandas as pd
+from .advanced_indicators import analyze_structure
 
 def _num(x, default=0.0):
     try:
@@ -154,6 +155,25 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     long -= max(0,min(11,(volat-35)*.23))
     long=int(max(0,min(100,round(long))))
 
+    structure=analyze_structure(df)
+    st=structure.get('supertrend')
+    ichi=structure.get('ichimoku')
+    cross=structure.get('cross',{})
+    squeeze=structure.get('squeeze',{})
+    div=structure.get('divergence',{})
+
+    if st=='BULLISH': short+=4; long+=4
+    elif st=='BEARISH': short-=4; long-=4
+    if ichi=='BULLISH': long+=5
+    elif ichi=='BEARISH': long-=5
+    if cross.get('recent_event')=='GOLDEN_CROSS': long+=7
+    elif cross.get('recent_event')=='DEATH_CROSS': long-=7
+    if div.get('rsi')=='BULLISH' or div.get('macd')=='BULLISH': short+=5
+    if div.get('rsi')=='BEARISH' or div.get('macd')=='BEARISH': short-=5
+    if squeeze.get('active') and mach>0: short+=3
+    short=int(max(0,min(100,round(short))))
+    long=int(max(0,min(100,round(long))))
+
     risk=int(max(0,min(100,round(volat*1.15+atrpct*4))))
     gap=abs((last/prev-1)*100) if prev else 0
     anomaly=int(max(0,min(100,round(max(0,vr-1)*24+max(0,gap-3)*6+max(0,volat-45)*.7))))
@@ -167,6 +187,9 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     if sk>sd and sk<80: reasons_short.append('Stoch RSI yukarı')
     if rs20>3: reasons_short.append(f'XU100 göre +%{rs20:.1f}')
     if vr>1.5: reasons_short.append(f'hacim {vr:.1f}x')
+    if st=='BULLISH': reasons_short.append('Supertrend pozitif')
+    if div.get('rsi')=='BULLISH' or div.get('macd')=='BULLISH': reasons_short.append('bullish divergence')
+    if squeeze.get('active'): reasons_short.append('Bollinger squeeze')
     if not reasons_short and last>_num(ema20.iloc[-1]): reasons_short.append('EMA20 üstü')
 
     reasons_long=[]
@@ -175,6 +198,8 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     if rs60>5: reasons_long.append(f'3A relative strength +%{rs60:.1f}')
     if mom120>10: reasons_long.append(f'6A momentum +%{mom120:.1f}')
     if adx>=25 and pdi>mdi: reasons_long.append('trend gücü yüksek')
+    if ichi=='BULLISH': reasons_long.append('Ichimoku bullish')
+    if cross.get('recent_event')=='GOLDEN_CROSS': reasons_long.append('Golden Cross')
 
     return {
       'price':round(last,2),'change':round((last/prev-1)*100,2) if prev else 0,
@@ -191,6 +216,9 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
       'momentum_60':round(mom60,2),'momentum_120':round(mom120,2),
       'volatility':round(volat,1),'risk':risk,'anomaly_score':anomaly,'smart_money_score':smart,
       'breakout20':bool(breakout),
+      'supertrend':structure.get('supertrend'),'ichimoku':structure.get('ichimoku'),'cross_state':cross.get('state'),'cross_event':cross.get('recent_event'),
+      'bollinger_squeeze':bool(squeeze.get('active')),'squeeze_percentile':squeeze.get('percentile'),'rsi_divergence':div.get('rsi'),'macd_divergence':div.get('macd'),
+      'supports':structure.get('supports',[]),'resistances':structure.get('resistances',[]),
       'trend':'YUKARI' if last>_num(ema20.iloc[-1])>_num(ema50.iloc[-1]) else 'AŞAĞI' if last<_num(ema20.iloc[-1])<_num(ema50.iloc[-1]) else 'YATAY',
       'target_short':round(last+2*atrv,2),'stop_short':round(max(0,last-1.4*atrv),2),
       'reasons_short':reasons_short[:4],'reasons_long':reasons_long[:4],
