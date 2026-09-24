@@ -6,10 +6,11 @@ Premium quantitative research terminal for Borsa Istanbul.
 
 - Dynamic BIST company universe from KAP (no hard-coded 28-stock list)
 - Progressive whole-universe scanner
-- Short-horizon score: momentum, volume, breakout, RSI, MA20/50
-- Long-horizon score: MA50/200, 3–6 month momentum, volatility filter
+- Short-horizon score: momentum, volume, breakout, RSI, Stochastic RSI, MACD, ADX, EMA20/50, MFI and relative strength
+- Long-horizon score: EMA50/200, 3–6 month momentum, ADX trend strength, XU100 relative strength and volatility filter
 - Composite alpha, risk, smart-money proxy and anomaly scores
-- TradingView Lightweight Charts candlesticks, volume and MA20/50/200
+- Indicator engine: RSI14, Stochastic RSI, MACD 12/26/9, ADX/+DI/-DI, Bollinger 20/2, ATR14, MFI14, OBV trend and XU100 relative strength
+- TradingView Lightweight Charts candlesticks with volume, EMA20/50/200, Bollinger Bands, RSI/Stochastic RSI pane and MACD pane
 - 1M / 3M / 6M / 1Y / 2Y / 5Y ranges and intraday/daily/weekly intervals
 - Global regime inputs: BIST 100, S&P 500, Nasdaq, DXY, US10Y, USD/TRY, EUR/TRY, gold and oil
 - Historical MA20/50 backtest with return, benchmark, alpha, Sharpe, drawdown and trade count
