@@ -43,6 +43,10 @@ def score_frame(df: pd.DataFrame):
     l += max(-12,min(15,mom120*.35)); l += max(-8,min(10,mom60*.25)); l -= max(0,min(12,(volat-35)*.25))
     long=int(max(0,min(100,round(l))))
     a=_num(av.iloc[-1],last*.03); risk=int(max(0,min(100,round(volat*1.4))))
+    gap=abs((last/prev-1)*100) if prev else 0
+    anomaly=int(max(0,min(100,round(max(0,vr-1)*24 + max(0,gap-3)*6 + max(0,volat-45)*0.7))))
+    smart=int(max(0,min(100,round(50 + (12 if last>_num(ma20.iloc[-1]) else -10) + max(-12,min(18,(vr-1)*12)) + max(-10,min(15,mom20*.4))))))
+    alpha=int(max(0,min(100,round(short*.55 + long*.45 - risk*.12))))
     reasons_short=[]
     if breakout: reasons_short.append('20G breakout')
     if mom20>5: reasons_short.append(f'20G momentum +%{mom20:.1f}')
@@ -57,6 +61,6 @@ def score_frame(df: pd.DataFrame):
       'short_signal':'GÜÇLÜ' if short>=80 else 'POZİTİF' if short>=68 else 'NÖTR' if short>=48 else 'ZAYIF',
       'long_signal':'GÜÇLÜ' if long>=80 else 'POZİTİF' if long>=68 else 'NÖTR' if long>=48 else 'ZAYIF',
       'rsi':round(r,1),'volume_ratio':round(vr,2),'momentum_5':round(mom5,2),'momentum_20':round(mom20,2),'momentum_60':round(mom60,2),'momentum_120':round(mom120,2),
-      'volatility':round(volat,1),'risk':risk,'breakout20':bool(breakout),'trend':'YUKARI' if last>_num(ma20.iloc[-1])>_num(ma50.iloc[-1]) else 'AŞAĞI' if last<_num(ma20.iloc[-1])<_num(ma50.iloc[-1]) else 'YATAY',
+      'volatility':round(volat,1),'risk':risk,'anomaly_score':anomaly,'smart_money_score':smart,'alpha_score':alpha,'breakout20':bool(breakout),'trend':'YUKARI' if last>_num(ma20.iloc[-1])>_num(ma50.iloc[-1]) else 'AŞAĞI' if last<_num(ma20.iloc[-1])<_num(ma50.iloc[-1]) else 'YATAY',
       'target_short':round(last+2*a,2),'stop_short':round(max(0,last-1.4*a),2),'reasons_short':reasons_short[:3],'reasons_long':reasons_long[:3],
       'spark':[round(_num(x),2) for x in c.tail(30).tolist()]}
