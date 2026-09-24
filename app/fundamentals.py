@@ -114,7 +114,8 @@ def _compute_scores(m:Dict):
         quality=_avg([
             _score_high(m.get('roe_pct'),0,30),_score_high(m.get('roa_pct'),0,15),
             _score_high(m.get('operating_margin_pct'),0,25),_score_high(m.get('profit_margin_pct'),0,20),
-            100 if (m.get('free_cash_flow') or 0)>0 else (0 if m.get('free_cash_flow') is not None else None)
+            100 if (m.get('free_cash_flow') or 0)>0 else (0 if m.get('free_cash_flow') is not None else None),
+            _score_high(m.get('fcf_conversion_pct'),0,100)
         ])
         growth=_avg([_score_high(m.get('revenue_growth_pct'),-10,35),_score_high(m.get('earnings_growth_pct'),-15,40)])
         de=m.get('debt_to_equity'); current=m.get('current_ratio')
@@ -182,8 +183,21 @@ def get_fundamentals(ticker:str,force:bool=False)->Dict:
           'target_mean_price':_clean(info.get('targetMeanPrice')),'analyst_count':_clean(info.get('numberOfAnalystOpinions')),
           'updated':time.strftime('%d.%m.%Y %H:%M:%S')
         }
+        q=_quarterly(t)
+        m['quarterly']=q
+        last4=q[:4]
+        def _sum(key):
+            vals=[x.get(key) for x in last4 if x.get(key) is not None]
+            return sum(vals) if vals else None
+        m['ttm_revenue']=_sum('revenue')
+        m['ttm_net_income']=_sum('net_income')
+        m['ttm_free_cash_flow']=_sum('free_cash_flow')
+        m['ttm_operating_cash_flow']=_sum('operating_cash_flow')
+        m['net_debt']=None if m.get('total_debt') is None or m.get('total_cash') is None else m['total_debt']-m['total_cash']
+        ni=m.get('ttm_net_income'); tfcf=m.get('ttm_free_cash_flow'); toc=m.get('ttm_operating_cash_flow')
+        m['fcf_conversion_pct']=None if ni in (None,0) or tfcf is None else tfcf/abs(ni)*100
+        m['cash_conversion_pct']=None if ni in (None,0) or toc is None else toc/abs(ni)*100
         m.update(_compute_scores(m))
-        m['quarterly']=_quarterly(t)
         m['status']='OK' if m['coverage_pct']>=15 else 'PARTIAL'
         out=m
     except Exception as e:
