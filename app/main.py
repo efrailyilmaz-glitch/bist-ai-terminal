@@ -12,6 +12,7 @@ from .research_engine import research_snapshot
 from .providers import data_health, provider_registry
 from .market_internals import market_internals
 from .catalysts import catalyst_calendar
+from .model_governance import model_card
 from .portfolio_analytics import analyze_portfolio, compare_allocations
 
 BASE=Path(__file__).resolve().parent
@@ -103,6 +104,10 @@ def portfolio_allocations(codes:str):
     selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
     return compare_allocations(selected)
 
+@app.get('/api/model-card')
+def modelcard():
+    return model_card()
+
 @app.get('/api/data-health')
 def health_data():
     return data_health()
@@ -127,7 +132,7 @@ def market(): return market_overview()
 @app.get('/api/kap')
 def kap():
     return {'status':'PUBLIC_SOURCE_READY','source':'KAP','url':'https://www.kap.org.tr/tr/bildirim-sorgu',
-            'message':'KAP bildirim/NLP katmanı V3 veri motoruna ayrılmıştır. Lisanslı REST veri yayını bağlanana kadar sahte canlı bildirim üretilmez.'}
+            'message':'KAP public profile/search katmanı aktiftir. Lisanslı REST veri yayını bağlanana kadar sahte eşzamanlı bildirim üretilmez.'}
 
 @app.get('/health')
 def health():
