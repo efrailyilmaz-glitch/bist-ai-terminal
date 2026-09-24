@@ -47,8 +47,12 @@ def snapshot():
 
 def _one(symbol):
     d=yf.download(symbol,period="5d",interval="1d",auto_adjust=True,progress=False)
-    if len(d)<2:return None
-    c=d["Close"]; last=float(c.iloc[-1]); prev=float(c.iloc[-2])
+    if len(d)<2: return None
+    c=d["Close"]
+    if isinstance(c,pd.DataFrame): c=c.iloc[:,0]
+    c=pd.to_numeric(c,errors="coerce").dropna()
+    if len(c)<2: return None
+    last=float(c.iloc[-1]); prev=float(c.iloc[-2])
     return last,round((last/prev-1)*100,2)
 
 def market_overview():
