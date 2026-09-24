@@ -53,25 +53,31 @@ def scan_codes(codes):
         if hit and now-hit[0] < 600:
             return hit[1]
 
-    syms=[c+'.IS' for c in codes]
-    download_syms=list(dict.fromkeys(syms+['XU100.IS']))
     results=[]
+    benchmark=pd.DataFrame()
     try:
-        raw=yf.download(download_syms,period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=True,progress=False,timeout=25)
-        bench=_extract(raw,'XU100.IS')
-        br20=_ret(bench,20)
-        br60=_ret(bench,60)
-        for code,sym in zip(codes,syms):
-            try:
-                df=_extract(raw,sym)
-                if df.empty: continue
-                sc=score_frame(df,benchmark_return_20=br20,benchmark_return_60=br60)
-                if sc:
-                    results.append({'ticker':code,**sc})
-            except Exception:
-                continue
+        braw=yf.download(['XU100.IS'],period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=False,progress=False,timeout=15)
+        benchmark=_extract(braw,'XU100.IS')
     except Exception:
-        pass
+        benchmark=pd.DataFrame()
+    br20=_ret(benchmark,20)
+    br60=_ret(benchmark,60)
+
+    for pos in range(0,len(codes),20):
+        chunk=codes[pos:pos+20]
+        syms=[c+'.IS' for c in chunk]
+        try:
+            raw=yf.download(syms,period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=True,progress=False,timeout=20)
+            for code,sym in zip(chunk,syms):
+                try:
+                    df=_extract(raw,sym)
+                    if df.empty: continue
+                    sc=score_frame(df,benchmark_return_20=br20,benchmark_return_60=br60)
+                    if sc:results.append({'ticker':code,**sc})
+                except Exception:
+                    continue
+        except Exception:
+            continue
 
     with _LOCK:
         _SCAN_CACHE[key]=(now,results)
