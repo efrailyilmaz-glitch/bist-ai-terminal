@@ -3,6 +3,7 @@ import time, threading, requests
 import pandas as pd
 import yfinance as yf
 from .scoring import score_frame, indicator_frame
+from .advanced_indicators import advanced_series, analyze_structure
 
 _LOCK=threading.Lock()
 _SCAN_CACHE={}
@@ -133,6 +134,8 @@ def yahoo_chart(code, period='1y', interval='1d'):
         raise ValueError('No usable candles')
     calc=base.rename(columns={'open':'Open','high':'High','low':'Low','close':'Close','volume':'Volume'})
     ind=indicator_frame(calc)
+    adv=advanced_series(calc)
+    structure=analyze_structure(calc)
 
     data={
         'ticker':code,'period':period,'interval':interval,
@@ -155,6 +158,13 @@ def yahoo_chart(code, period='1y', interval='1d'):
         'minus_di':_series(rows,ind['MINUS_DI'],2),
         'mfi':_series(rows,ind['MFI14'],2),
         'atr_pct':_series(rows,ind['ATR_PCT'],2),
+        'supertrend_up':[{'time':row['time'],'value':round(float(v),4)} for row,v,b in zip(rows,adv['supertrend'],adv['supertrend_bull']) if pd.notna(v) and bool(b)],
+        'supertrend_down':[{'time':row['time'],'value':round(float(v),4)} for row,v,b in zip(rows,adv['supertrend'],adv['supertrend_bull']) if pd.notna(v) and not bool(b)],
+        'tenkan':_series(rows,adv['tenkan']),
+        'kijun':_series(rows,adv['kijun']),
+        'ichimoku_a':_series(rows,adv['ichimoku_a']),
+        'ichimoku_b':_series(rows,adv['ichimoku_b']),
+        'structure':structure,
     }
     last=ind.iloc[-1]
     data['indicators']={
@@ -173,6 +183,65 @@ def yahoo_chart(code, period='1y', interval='1d'):
     with _LOCK:
         _CHART_CACHE[key]=(now,data)
     return data
+
+def _rows_to_df(rows):
+    if not rows:
+        return pd.DataFrame()
+    df=pd.DataFrame(rows)
+    return df.rename(columns={'open':'Open','high':'High','low':'Low','close':'Close','volume':'Volume'})
+
+def _resample_4h(rows):
+    if not rows:
+        return pd.DataFrame()
+    df=pd.DataFrame(rows)
+    if df.empty or not isinstance(df.iloc[0]['time'],(int,float)):
+        return pd.DataFrame()
+    dt=pd.to_datetime(df['time'],unit='s',utc=True)
+    df=df.set_index(dt)
+    out=df.resample('4h').agg({'open':'first','high':'max','low':'min','close':'last','volume':'sum'}).dropna()
+    return out.rename(columns={'open':'Open','high':'High','low':'Low','close':'Close','volume':'Volume'})
+
+def _tf_summary(df, label):
+    if df is None or df.empty or len(df)<30:
+        return {'timeframe':label,'status':'NO_DATA'}
+    sc=score_frame(df)
+    if not sc:
+        return {'timeframe':label,'status':'NO_DATA'}
+    return {
+        'timeframe':label,'status':'OK','score':sc.get('short_score'),'long_score':sc.get('long_score'),
+        'signal':sc.get('short_signal'),'trend':sc.get('trend'),'rsi':sc.get('rsi'),'stoch':sc.get('stoch_rsi_k'),
+        'macd_hist':sc.get('macd_hist'),'adx':sc.get('adx'),'mfi':sc.get('mfi'),'supertrend':sc.get('supertrend'),
+        'ichimoku':sc.get('ichimoku'),'rsi_divergence':sc.get('rsi_divergence'),'macd_divergence':sc.get('macd_divergence'),
+        'squeeze':sc.get('bollinger_squeeze'),'cross_event':sc.get('cross_event')
+    }
+
+def multi_timeframe(code):
+    frames=[]
+    specs=[
+        ('15D','1mo','15m'),
+        ('1S','3mo','60m'),
+        ('1G','1y','1d'),
+        ('1H','5y','1wk')
+    ]
+    hourly_rows=[]
+    for label,period,interval in specs:
+        try:
+            d=yahoo_chart(code,period=period,interval=interval)
+            rows=d.get('candles',[])
+            if interval=='60m':
+                hourly_rows=rows
+            frames.append(_tf_summary(_rows_to_df(rows),label))
+        except Exception:
+            frames.append({'timeframe':label,'status':'ERROR'})
+    try:
+        frames.insert(2,_tf_summary(_resample_4h(hourly_rows),'4S'))
+    except Exception:
+        frames.insert(2,{'timeframe':'4S','status':'ERROR'})
+    valid=[x for x in frames if x.get('status')=='OK']
+    bull=sum(1 for x in valid if x.get('score',0)>=60 and x.get('supertrend')=='BULLISH')
+    bear=sum(1 for x in valid if x.get('score',100)<45 and x.get('supertrend')=='BEARISH')
+    consensus='BULLISH' if valid and bull>=max(2,len(valid)//2+1) else ('BEARISH' if valid and bear>=max(2,len(valid)//2+1) else 'MIXED')
+    return {'ticker':code.upper(),'consensus':consensus,'bullish_frames':bull,'bearish_frames':bear,'frames':frames}
 
 def market_overview():
     out={'mode':'LIVE / YAHOO','updated':time.strftime('%d.%m.%Y %H:%M:%S'),'global_score':50,'regime':'NÖTR','fear':50,'breadth':0,'advancers':0,'decliners':0,'unchanged':0}
