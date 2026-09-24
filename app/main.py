@@ -3,11 +3,11 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from .universe import get_universe
-from .market_data import scan_codes, yahoo_chart, market_overview
+from .market_data import scan_codes, yahoo_chart, market_overview, multi_timeframe
 from .backtest import run_backtest
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='3.1')
+app=FastAPI(title='BIST AI Terminal',version='3.2')
 app.mount('/static',StaticFiles(directory=str(BASE/'static')),name='static')
 
 @app.get('/',response_class=HTMLResponse)
@@ -36,6 +36,10 @@ def scan(offset:int=0,limit:int=60,codes:str|None=None):
 def chart(ticker:str, period:str='1y', interval:str='1d'):
     return yahoo_chart(ticker,period=period,interval=interval)
 
+@app.get('/api/mtf/{ticker}')
+def mtf(ticker:str):
+    return multi_timeframe(ticker)
+
 @app.get('/api/backtest/{ticker}')
 def backtest(ticker:str,fast:int=20,slow:int=50,period:str='2y'):
     fast=max(5,min(fast,100)); slow=max(fast+5,min(slow,250))
@@ -52,4 +56,4 @@ def kap():
 @app.get('/health')
 def health():
     u=get_universe()
-    return {'status':'ok','version':'3.1','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
+    return {'status':'ok','version':'3.2','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
