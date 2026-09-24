@@ -138,7 +138,7 @@ function detailShell(){
     <div id="tvChart" class="chartbox"></div>
     ${detailStats(r)}
     ${indicatorDashboard(r)}
-    <div class="panelSub"><div class="subTitle"><b>Multi-Timeframe Konsensüs</b><span>15dk · 1s · 4s · 1g · 1h</span></div><div id="mtfGrid" class="mtfGrid"><div class="pending">Zaman dilimleri hesaplanıyor…</div></div></div>
+    <div class="panelSub"><div class="subTitle"><b>Multi-Timeframe Konsensüs</b><span>15dk · 1sa · 4sa · 1g · 1h</span></div><div id="mtfGrid" class="mtfGrid"><div class="pending">Zaman dilimleri hesaplanıyor…</div></div></div>
     <div class="panelSub"><div class="subTitle"><b>Pattern & Structure Engine</b><span>divergence · cross · squeeze · Supertrend · Ichimoku · S/R</span></div><div id="structurePanel" class="structurePanel"><div class="pending">Yapı analizi yükleniyor…</div></div></div>
     <div class="grid2">
       <div class="recommendBox"><h3>Kısa Vade Modeli · ${r.short_score??'—'}/100</h3><div class="chips">${(r.reasons_short||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div>${r.target_short?`<p>ATR bölgesi: hedef <b class="up">₺${fmt(r.target_short)}</b> · risk stop <b class="down">₺${fmt(r.stop_short)}</b></p>`:''}</div>
