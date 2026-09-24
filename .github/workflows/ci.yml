@@ -23,6 +23,7 @@ jobs:
           python - <<'PY'
           import numpy as np, pandas as pd
           from app.scoring import score_frame, indicator_frame
+          from app.advanced_indicators import analyze_structure, advanced_series
           n=260
           x=np.arange(n)
           close=100+x*.12+np.sin(x/7)*2
@@ -34,7 +35,11 @@ jobs:
           out=score_frame(df,benchmark_return_20=2,benchmark_return_60=5)
           required=['RSI14','STOCH_RSI_K','MACD','MACD_HIST','ADX14','MFI14','ATR_PCT','OBV_TREND20']
           assert all(k in ind.columns for k in required)
-          assert out and all(k in out for k in ['short_score','long_score','rsi','stoch_rsi_k','macd_hist','adx','mfi','relative_strength_20'])
+          structure=analyze_structure(df)
+          adv=advanced_series(df)
+          assert out and all(k in out for k in ['short_score','long_score','rsi','stoch_rsi_k','macd_hist','adx','mfi','relative_strength_20','supertrend','ichimoku','cross_event','rsi_divergence'])
+          assert structure['supertrend'] in ['BULLISH','BEARISH']
+          assert all(k in adv for k in ['supertrend','tenkan','kijun','ichimoku_a','ichimoku_b'])
           print('indicator smoke test ok', out['short_score'], out['long_score'])
           PY
-      - run: python -c "from app.main import app; assert app.version == '3.1'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '3.2'; print(app.title, app.version)"
