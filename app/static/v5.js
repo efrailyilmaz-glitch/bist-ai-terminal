@@ -193,3 +193,46 @@ render=function(){
     setTimeout(v5LoadAllocationCompare,0);
   }
 };
+
+function v5ScreenerToolbar(){
+  return '<div id="v5Screener" class="screenerPro"><div class="presetRow"><span>Premium Screener</span><select id="v5Preset"><option value="all">Tümü</option><option value="trend">Trend Liderleri</option><option value="breakout">Breakout + Hacim</option><option value="relative">XU100 Relative Strength</option><option value="oversold">Oversold Reversal</option><option value="lowrisk">Düşük Risk</option><option value="liquid">Likidite Liderleri</option><option value="anomaly">Anomali Radar</option></select></div><div class="filterRow"><label>Min Kısa<input id="v5MinShort" type="number" value="0" min="0" max="100"></label><label>Min Uzun<input id="v5MinLong" type="number" value="0" min="0" max="100"></label><label>Max Risk<input id="v5MaxRisk" type="number" value="100" min="0" max="100"></label><label>Min ADX<input id="v5MinAdx" type="number" value="0" min="0" max="100"></label><label>Min RS20<input id="v5MinRs" type="number" value="-100"></label><label>Min Likidite mn TL<input id="v5MinLiq" type="number" value="0" min="0"></label><button class="toolbtn" id="v5ApplyFilter">Uygula</button><span id="v5FilterCount" class="muted"></span></div></div>';
+}
+function v5Preset(name){
+  const set=(id,v)=>{const e=$(id);if(e)e.value=v};
+  set('#v5MinShort',0);set('#v5MinLong',0);set('#v5MaxRisk',100);set('#v5MinAdx',0);set('#v5MinRs',-100);set('#v5MinLiq',0);
+  if(name==='trend'){set('#v5MinShort',68);set('#v5MinLong',60);set('#v5MinAdx',22);set('#v5MinRs',0);}
+  if(name==='breakout'){set('#v5MinShort',65);set('#v5MinAdx',18);set('#v5MinRs',0);}
+  if(name==='relative'){set('#v5MinRs',5);set('#v5MinShort',55);}
+  if(name==='oversold'){set('#v5MaxRisk',75);}
+  if(name==='lowrisk'){set('#v5MaxRisk',35);set('#v5MinLong',55);}
+  if(name==='liquid'){set('#v5MinLiq',50);}
+  if(name==='anomaly'){set('#v5MaxRisk',100);}
+  v5ApplyScreener(name);
+}
+function v5ApplyScreener(preset){
+  preset=preset||($('#v5Preset')?.value||'all');
+  const minS=Number($('#v5MinShort')?.value||0),minL=Number($('#v5MinLong')?.value||0),maxR=Number($('#v5MaxRisk')?.value||100),minA=Number($('#v5MinAdx')?.value||0),minRs=Number($('#v5MinRs')?.value||-100),minLiq=Number($('#v5MinLiq')?.value||0)*1e6;
+  let metas=state.universe.filter(function(m){
+    const r=state.scan.get(m.ticker);if(!r)return false;
+    if((r.short_score||0)<minS||(r.long_score||0)<minL||(r.risk||0)>maxR||(r.adx||0)<minA||(r.relative_strength_20||0)<minRs||(r.avg_value_turnover_20||0)<minLiq)return false;
+    if(preset==='breakout'&&!(r.breakout20&&(r.volume_ratio||0)>=1.3))return false;
+    if(preset==='oversold'&&!((r.rsi||50)<38&&(r.stoch_rsi_k||50)<35&&(r.macd_hist||0)>=0))return false;
+    if(preset==='anomaly'&&(r.anomaly_score||0)<65)return false;
+    return true;
+  });
+  metas.sort((a,b)=>(state.scan.get(b.ticker)?.alpha_score||0)-(state.scan.get(a.ticker)?.alpha_score||0));
+  const body=$('#allBody');if(body)body.innerHTML=stockRows(metas,'short');
+  const count=$('#v5FilterCount');if(count)count.textContent=metas.length+' eşleşme / '+state.scan.size+' taranan';
+}
+function v5AttachScreener(){
+  const table=$('#content .tableTools');if(!table||$('#v5Screener'))return;
+  table.insertAdjacentHTML('beforebegin',v5ScreenerToolbar());
+  const p=$('#v5Preset');if(p)p.onchange=function(){v5Preset(p.value)};
+  const b=$('#v5ApplyFilter');if(b)b.onclick=function(){v5ApplyScreener()};
+  v5ApplyScreener('all');
+}
+const v5RenderBase3=render;
+render=function(){
+  v5RenderBase3();
+  if(state.view==='all')setTimeout(v5AttachScreener,0);
+};
