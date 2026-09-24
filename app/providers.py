@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os,time
 from .universe import get_universe
-from .market_data import yahoo_chart
+from .market_data import yahoo_rows
 from .news_engine import headlines
 
 def provider_registry():
@@ -23,7 +23,7 @@ def _check(name,fn):
 def data_health():
     checks=[]
     checks.append(_check('KAP Universe',lambda:{'count':len(get_universe()),'source':(get_universe()[0].get('source') if get_universe() else 'NONE')}))
-    checks.append(_check('Yahoo XU100',lambda:{'candles':len(yahoo_chart('XU100','1mo','1d').get('candles',[]))}))
+    checks.append(_check('Yahoo XU100',lambda:{'candles':len(yahoo_rows('XU100','1mo','1d').get('candles',[]))}))
     checks.append(_check('Google News RSS',lambda:{'status':headlines('ASELS',3).get('status')}))
     ok=sum(1 for x in checks if x['status']=='OK')
     return {'status':'HEALTHY' if ok==len(checks) else ('DEGRADED' if ok else 'DOWN'),
