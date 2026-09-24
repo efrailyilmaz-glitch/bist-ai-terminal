@@ -129,9 +129,10 @@ function kapResearchView(){
 const _detailShellV4=detailShell;
 detailShell=function(){
   let html=_detailShellV4();
-  const extra='<div class="panelSub"><div class="subTitle"><b>V4 Research Engine</b><span>teknik + temel + KAP + haber + makro</span></div><div id="researchPanel"><div class="loading">Birleşik araştırma skoru hesaplanıyor…</div></div></div>'+
-    '<div class="panelSub"><div class="subTitle"><b>Temel Analiz</b><span>Yahoo fundamentals · veri kapsamı açık</span></div><div id="fundamentalPanel"><div class="loading">Temel veriler yükleniyor…</div></div></div>'+
-    '<div class="panelSub"><div class="subTitle"><b>KAP & Haber</b><span>KAP profil/takvim · event NLP · headline sentiment</span></div><div id="kapNewsPanel"><div class="loading">Akış yükleniyor…</div></div></div>';
+  const cached=state.researchCache.has(state.current);
+  const extra='<div class="panelSub"><div class="subTitle"><b>V5 Deep Research</b><span>teknik + temel + KAP + haber + makro</span></div><div id="researchPanel">'+(cached?'<div class="loading">Önbellekteki araştırma açılıyor…</div>':'<div class="lazyResearch"><p>Grafik ve teknik analiz öncelikli yüklendi. Temel/KAP/haber analizi isteğe bağlıdır.</p><button class="toolbtn" id="loadDeepResearch">Derin Araştırmayı Yükle</button></div>')+'</div></div>'+
+    '<div class="panelSub"><div class="subTitle"><b>Temel Analiz</b><span>lazy-load · Yahoo fundamentals</span></div><div id="fundamentalPanel"><div class="pending">'+(cached?'Önbellek okunuyor…':'Derin araştırma yüklenince açılır.')+'</div></div></div>'+
+    '<div class="panelSub"><div class="subTitle"><b>KAP & Haber</b><span>lazy-load · KAP + headline sentiment</span></div><div id="kapNewsPanel"><div class="pending">'+(cached?'Önbellek okunuyor…':'Derin araştırma yüklenince açılır.')+'</div></div></div>';
   html=html.replace('<div class="grid2">',extra+'<div class="grid2">');
   html=html.replace(/<h2>([^<]+)<\/h2>/,'<h2>$1 <button class="starBtn '+(state.watchlist.has(state.current)?'on':'')+'" onclick="toggleWatchlist(\''+state.current+'\')">★</button></h2>');
   return html;
@@ -152,7 +153,14 @@ render=function(){
   if(state.view==='watchlist'){
     els.title.textContent='Watchlist';els.content.innerHTML=watchlistView();
   }
-  if(state.view==='detail')setTimeout(loadResearch,0);
+  if(state.view==='detail')setTimeout(()=>{
+    if(state.researchCache.has(state.current)){loadResearch();return;}
+    const b=$('#loadDeepResearch');
+    if(b)b.onclick=()=>{
+      b.disabled=true;b.textContent='Yükleniyor…';
+      loadResearch();
+    };
+  },0);
   if(state.view==='kap'){els.title.textContent='KAP & Haber';els.content.innerHTML=kapResearchView();setTimeout(loadResearch,0);}
   if(state.view==='all'){
     const head=$('.panelHead');
