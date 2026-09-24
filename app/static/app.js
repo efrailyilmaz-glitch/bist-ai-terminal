@@ -1,6 +1,6 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
-const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d'};
+const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true}};
 const fmt=(n,d=2)=>Number(n||0).toLocaleString('tr-TR',{maximumFractionDigits:d,minimumFractionDigits:0});
 const pct=n=>`${n>=0?'+':''}${fmt(n,2)}%`; const cls=n=>Number(n)>=0?'up':'down';
 const tagClass=s=>s==='GÜÇLÜ'?'':s==='POZİTİF'?'':s==='NÖTR'?'neutral':'weak';
@@ -73,22 +73,140 @@ function portfolioView(){
   return `<div class="panel"><div class="panelHead"><div><h2>Model Portföy</h2><p>Alpha skoru + risk azaltımı ile oluşturulan örnek nicel araştırma sepeti; kişiye özel yatırım tavsiyesi değildir.</p></div><span class="pill">QUANT BASKET</span></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Kod</th><th>Şirket</th><th>Model ağırlık</th><th>Alpha</th><th>Kısa</th><th>Uzun</th><th>Risk</th><th>Smart Money</th></tr></thead><tbody>${rows.map((r,i)=>{const m=state.meta.get(r.ticker)||{};const w=raw[i]/sum*100;return `<tr onclick="openStock('${r.ticker}')"><td><strong>${r.ticker}</strong></td><td>${m.name||''}</td><td>%${fmt(w,1)}</td><td>${r.alpha_score||0}</td><td>${r.short_score}</td><td>${r.long_score}</td><td>${r.risk}</td><td>${r.smart_money_score||0}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 async function openStock(t){state.current=t;state.view='detail';$$('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view==='detail'));render();}
-function detailShell(){const r=state.scan.get(state.current)||{};const m=state.meta.get(state.current)||{};return `<div class="panel"><div class="chartTop"><div class="chartTitle"><h2>${state.current} · ${m.name||''}</h2><p>${r.price?`₺${fmt(r.price)} · ${pct(r.change)} · RSI ${r.rsi} · Hacim ${r.volume_ratio}x`:'Fiyat verisi yükleniyor'}</p></div><div class="chartTools"><button data-period="1mo">1A</button><button data-period="3mo">3A</button><button data-period="6mo">6A</button><button data-period="1y" class="active">1Y</button><button data-period="2y">2Y</button><button data-period="5y">5Y</button><button data-interval="60m">1S</button><button data-interval="1d" class="active">1G</button><button data-interval="1wk">1H</button></div></div><div id="tvChart" class="chartbox"></div>${detailStats(r)}<div class="grid2"><div class="recommendBox"><h3>Kısa Vade Modeli · ${r.short_score??'—'}/100</h3><div class="chips">${(r.reasons_short||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div>${r.target_short?`<p>ATR bölgesi: hedef <b class="up">₺${fmt(r.target_short)}</b> · risk stop <b class="down">₺${fmt(r.stop_short)}</b></p>`:''}</div><div class="recommendBox"><h3>Uzun Vade Modeli · ${r.long_score??'—'}/100</h3><div class="chips">${(r.reasons_long||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div><p class="muted">Bu skor şirket değerlemesi değil; trend/momentum/volatilite tabanlı nicel araştırma puanıdır.</p></div></div></div>`}
-function detailStats(r){const a=[['Kısa skor',r.short_score],['Uzun skor',r.long_score],['20G momentum',r.momentum_20!=null?pct(r.momentum_20):'—'],['3A momentum',r.momentum_60!=null?pct(r.momentum_60):'—'],['Volatilite',r.volatility!=null?`${r.volatility}%`:'—'],['Risk',r.risk!=null?`${r.risk}/100`:'—']];return `<div class="stats">${a.map(x=>`<div class="stat"><span>${x[0]}</span><b>${x[1]??'—'}</b></div>`).join('')}</div>`}
-async function ensureTickerScan(t){if(state.scan.has(t))return;try{const r=await getJSON(`/api/scan?codes=${encodeURIComponent(t)}`);(r.rows||[]).forEach(x=>state.scan.set(x.ticker,x));}catch(e){}}
+function indicatorTone(label,value){
+  if(value==null)return '';
+  if(label==='RSI') return value>=70?'amber':value<=30?'down':'up';
+  if(label==='Stoch RSI') return value>=80?'amber':value<=20?'down':'up';
+  if(label==='ADX') return value>=25?'up':'';
+  if(label==='MFI') return value>=80?'amber':value<=20?'down':'up';
+  if(label==='MACD Hist') return value>=0?'up':'down';
+  if(label==='RS vs XU100') return value>=0?'up':'down';
+  return '';
+}
+function indicatorDashboard(r){
+  const items=[
+    ['RSI',r.rsi,r.rsi!=null?fmt(r.rsi,1):'—'],
+    ['Stoch RSI',r.stoch_rsi_k,r.stoch_rsi_k!=null?`${fmt(r.stoch_rsi_k,1)} / ${fmt(r.stoch_rsi_d,1)}`:'—'],
+    ['MACD Hist',r.macd_hist,r.macd_hist!=null?fmt(r.macd_hist,4):'—'],
+    ['ADX',r.adx,r.adx!=null?fmt(r.adx,1):'—'],
+    ['MFI',r.mfi,r.mfi!=null?fmt(r.mfi,1):'—'],
+    ['ATR %',null,r.atr_pct!=null?`%${fmt(r.atr_pct,2)}`:'—'],
+    ['Bollinger %B',null,r.bb_pct!=null?`${fmt(r.bb_pct,1)}`:'—'],
+    ['OBV Trend',r.obv_trend,r.obv_trend!=null?fmt(r.obv_trend,3):'—'],
+    ['RS vs XU100',r.relative_strength_20,r.relative_strength_20!=null?pct(r.relative_strength_20):'—'],
+    ['Smart Money',null,r.smart_money_score!=null?`${r.smart_money_score}/100`:'—']
+  ];
+  return `<div class="indicatorGrid">${items.map(x=>`<div class="indicatorCard"><span>${x[0]}</span><b class="${indicatorTone(x[0],x[1])}">${x[2]}</b></div>`).join('')}</div>`;
+}
+function detailShell(){
+  const r=state.scan.get(state.current)||{}, m=state.meta.get(state.current)||{};
+  const p=state.chartPeriod, iv=state.chartInterval;
+  return `<div class="panel">
+    <div class="chartTop">
+      <div class="chartTitle"><h2>${state.current} · ${m.name||''}</h2><p>${r.price?`₺${fmt(r.price)} · ${pct(r.change)} · Alpha ${r.alpha_score??'—'} · Risk ${r.risk??'—'}`:'Fiyat verisi yükleniyor'}</p></div>
+      <div class="chartTools">
+        ${[['1mo','1A'],['3mo','3A'],['6mo','6A'],['1y','1Y'],['2y','2Y'],['5y','5Y']].map(x=>`<button data-period="${x[0]}" class="${p===x[0]?'active':''}">${x[1]}</button>`).join('')}
+        ${[['60m','1S'],['1d','1G'],['1wk','1H']].map(x=>`<button data-interval="${x[0]}" class="${iv===x[0]?'active':''}">${x[1]}</button>`).join('')}
+      </div>
+    </div>
+    <div class="indicatorToolbar">
+      <span>Göstergeler</span>
+      ${[['ema','EMA 20/50/200'],['bb','Bollinger'],['rsi','RSI'],['stoch','Stoch RSI'],['macd','MACD']].map(x=>`<button data-indicator="${x[0]}" class="${state.indicators[x[0]]?'active':''}">${x[1]}</button>`).join('')}
+    </div>
+    <div id="tvChart" class="chartbox"></div>
+    ${detailStats(r)}
+    ${indicatorDashboard(r)}
+    <div class="grid2">
+      <div class="recommendBox"><h3>Kısa Vade Modeli · ${r.short_score??'—'}/100</h3><div class="chips">${(r.reasons_short||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div>${r.target_short?`<p>ATR bölgesi: hedef <b class="up">₺${fmt(r.target_short)}</b> · risk stop <b class="down">₺${fmt(r.stop_short)}</b></p>`:''}</div>
+      <div class="recommendBox"><h3>Uzun Vade Modeli · ${r.long_score??'—'}/100</h3><div class="chips">${(r.reasons_long||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div><p class="muted">Trend, relative strength, momentum ve risk birlikte değerlendirilir; tek bir indikatör karar vermez.</p></div>
+    </div>
+  </div>`;
+}
+function detailStats(r){
+  const a=[['Kısa skor',r.short_score],['Uzun skor',r.long_score],['Alpha',r.alpha_score],['20G momentum',r.momentum_20!=null?pct(r.momentum_20):'—'],['3A momentum',r.momentum_60!=null?pct(r.momentum_60):'—'],['Volatilite',r.volatility!=null?`${r.volatility}%`:'—'],['Risk',r.risk!=null?`${r.risk}/100`:'—'],['Hacim',r.volume_ratio!=null?`${r.volume_ratio}x`:'—']];return `<div class="stats">${a.map(x=>`<div class="stat"><span>${x[0]}</span><b>${x[1]??'—'}</b></div>`).join('')}</div>`;
+}
+async function ensureTickerScan(t){
+  if(state.scan.has(t))return;
+  try{const r=await getJSON(`/api/scan?codes=${encodeURIComponent(t)}`);(r.rows||[]).forEach(x=>state.scan.set(x.ticker,x));}catch(e){}
+}
+function addGuide(series,price,color,title){
+  try{series.createPriceLine({price,color,lineWidth:1,lineStyle:2,axisLabelVisible:true,title});}catch(e){}
+}
 async function loadChart(){
-  await ensureTickerScan(state.current); if(state.view!=='detail')return; const el=$('#tvChart'); if(!el)return;
+  await ensureTickerScan(state.current);
+  if(state.view!=='detail')return;
+  const el=$('#tvChart'); if(!el)return;
   try{
     const d=await getJSON(`/api/chart/${state.current}?period=${state.chartPeriod}&interval=${state.chartInterval}`);
     if(!d.candles?.length){el.innerHTML='<div class="empty">Grafik verisi bulunamadı</div>';return;}
     if(state.chart){try{state.chart.remove()}catch(e){} state.chart=null;}
-    const chart=LightweightCharts.createChart(el,{autoSize:true,layout:{background:{type:'solid',color:'#07121a'},textColor:'#8198a9'},grid:{vertLines:{color:'#102431'},horzLines:{color:'#102431'}},rightPriceScale:{borderColor:'#1a3344'},timeScale:{borderColor:'#1a3344',timeVisible:state.chartInterval!=='1d'&&state.chartInterval!=='1wk'}});
-    state.chart=chart; const candle=chart.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#28d17c',downColor:'#ff5e72',borderVisible:false,wickUpColor:'#28d17c',wickDownColor:'#ff5e72'}); candle.setData(d.candles);
-    const vol=chart.addSeries(LightweightCharts.HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:''}); vol.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}}); vol.setData(d.candles.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'rgba(40,209,124,.35)':'rgba(255,94,114,.35)'})));
-    const ma20=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#49d7ff',priceLineVisible:false,lastValueVisible:false});ma20.setData(d.ma20||[]);
-    const ma50=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,lastValueVisible:false});ma50.setData(d.ma50||[]);
-    const ma200=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#a77cff',priceLineVisible:false,lastValueVisible:false});ma200.setData(d.ma200||[]); chart.timeScale().fitContent();
-  }catch(e){el.innerHTML=`<div class="empty">Grafik yüklenemedi: ${e.message}</div>`;}
+    const chart=LightweightCharts.createChart(el,{
+      autoSize:true,
+      layout:{background:{type:'solid',color:'#07121a'},textColor:'#8198a9',panes:{separatorColor:'#173040',separatorHoverColor:'#28516a',enableResize:true}},
+      grid:{vertLines:{color:'#102431'},horzLines:{color:'#102431'}},
+      rightPriceScale:{borderColor:'#1a3344'},
+      timeScale:{borderColor:'#1a3344',timeVisible:state.chartInterval!=='1d'&&state.chartInterval!=='1wk'}
+    });
+    state.chart=chart;
+
+    const candle=chart.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#28d17c',downColor:'#ff5e72',borderVisible:false,wickUpColor:'#28d17c',wickDownColor:'#ff5e72'},0);
+    candle.setData(d.candles);
+    const vol=chart.addSeries(LightweightCharts.HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:''},0);
+    vol.priceScale().applyOptions({scaleMargins:{top:.83,bottom:0}});
+    vol.setData(d.candles.map(x=>({time:x.time,value:x.volume,color:x.close>=x.open?'rgba(40,209,124,.26)':'rgba(255,94,114,.26)'})));
+
+    if(state.indicators.ema){
+      const e20=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#49d7ff',priceLineVisible:false,lastValueVisible:false,title:'EMA20'},0); e20.setData(d.ema20||[]);
+      const e50=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,lastValueVisible:false,title:'EMA50'},0); e50.setData(d.ema50||[]);
+      const e200=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#a77cff',priceLineVisible:false,lastValueVisible:false,title:'EMA200'},0); e200.setData(d.ema200||[]);
+    }
+    if(state.indicators.bb){
+      const bu=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'rgba(95,150,255,.55)',priceLineVisible:false,lastValueVisible:false,title:'BB+'},0);bu.setData(d.bb_upper||[]);
+      const bm=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'rgba(120,145,165,.55)',priceLineVisible:false,lastValueVisible:false,title:'BB20'},0);bm.setData(d.bb_mid||[]);
+      const bl=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'rgba(95,150,255,.55)',priceLineVisible:false,lastValueVisible:false,title:'BB-'},0);bl.setData(d.bb_lower||[]);
+    }
+
+    let pane=1;
+    if(state.indicators.rsi||state.indicators.stoch){
+      let guide=null;
+      if(state.indicators.rsi){
+        const rs=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#49d7ff',priceLineVisible:false,title:'RSI'},pane);rs.setData(d.rsi||[]);guide=rs;
+      }
+      if(state.indicators.stoch){
+        const sk=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Stoch K'},pane);sk.setData(d.stoch_k||[]);
+        const sd=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#a77cff',priceLineVisible:false,title:'Stoch D'},pane);sd.setData(d.stoch_d||[]);
+        if(!guide)guide=sk;
+      }
+      if(guide){guide.priceScale().applyOptions({autoScale:false,scaleMargins:{top:.08,bottom:.08}});addGuide(guide,70,'rgba(255,185,74,.5)','70');addGuide(guide,30,'rgba(255,94,114,.45)','30');}
+      pane++;
+    }
+
+    if(state.indicators.macd){
+      const mh=chart.addSeries(LightweightCharts.HistogramSeries,{priceLineVisible:false,title:'MACD Hist'},pane);
+      mh.setData((d.macd_hist||[]).map(x=>({time:x.time,value:x.value,color:x.value>=0?'rgba(40,209,124,.55)':'rgba(255,94,114,.55)'})));
+      const ml=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#49d7ff',priceLineVisible:false,title:'MACD'},pane);ml.setData(d.macd||[]);
+      const ms=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Signal'},pane);ms.setData(d.macd_signal||[]);
+    }
+
+    try{
+      const panes=chart.panes();
+      if(panes[0])panes[0].setHeight(390);
+      for(let i=1;i<panes.length;i++)panes[i].setHeight(145);
+    }catch(e){}
+    chart.timeScale().fitContent();
+  }catch(e){
+    el.innerHTML=`<div class="empty">Grafik yüklenemedi: ${e.message}</div>`;
+  }
+}
+function bindChartTools(){
+  $$('.chartTools button').forEach(b=>b.onclick=()=>{
+    if(b.dataset.period){state.chartPeriod=b.dataset.period;$$('[data-period]').forEach(x=>x.classList.toggle('active',x.dataset.period===state.chartPeriod))}
+    if(b.dataset.interval){state.chartInterval=b.dataset.interval;$$('[data-interval]').forEach(x=>x.classList.toggle('active',x.dataset.interval===state.chartInterval))}
+    loadChart();
+  });
+  $$('.indicatorToolbar button').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.indicator; state.indicators[k]=!state.indicators[k]; b.classList.toggle('active',state.indicators[k]); loadChart();
+  });
 }
 async function backtestView(){return `<div class="panel"><div class="panelHead"><div><h2>Backtest Lab · ${state.current}</h2><p>MA20/MA50 trend stratejisi · gerçek tarihsel fiyat serisi</p></div><button class="toolbtn" id="runBacktest">Çalıştır</button></div><div id="btResult" class="empty">Backtest çalıştırılmayı bekliyor.</div></div>`}
 async function runBacktest(){const box=$('#btResult');if(!box)return;box.innerHTML='<div class="loading">Backtest hesaplanıyor…</div>';try{const b=await getJSON(`/api/backtest/${state.current}?fast=20&slow=50&period=2y`);if(b.error)throw new Error(b.error);box.innerHTML=`<div class="btgrid">${[['Strateji',pct(b.return_pct)],['Buy & Hold',pct(b.buy_hold_pct)],['Alpha',pct(b.alpha_pct)],['Sharpe',b.sharpe],['Max DD',pct(b.max_drawdown)],['İşlem',b.trades]].map(x=>`<div class="stat"><span>${x[0]}</span><b>${x[1]}</b></div>`).join('')}</div><p class="muted">Geçmiş performans gelecekteki sonucu garanti etmez. İşlem maliyeti/slippage katmanı sonraki motor sürümünde parametreleştirilecek.</p>`;}catch(e){box.innerHTML=`<div class="empty">Backtest hatası: ${e.message}</div>`}}
@@ -105,7 +223,6 @@ function render(){
   if(state.view==='kap'){els.title.textContent='KAP Radar';els.content.innerHTML=kapView();}
 }
 function bindTable(){const s=$('#tableSearch'),sort=$('#tableSort'); if(s)s.oninput=e=>{els.search.value=e.target.value;render()};if(sort)sort.onchange=e=>{const q=(els.search.value||'').trim().toUpperCase();const rows=state.universe.filter(x=>!q||x.ticker.includes(q)||(x.name||'').toUpperCase().includes(q));$('#allBody').innerHTML=stockRows(rows,e.target.value)}}
-function bindChartTools(){$$('.chartTools button').forEach(b=>b.onclick=()=>{if(b.dataset.period){state.chartPeriod=b.dataset.period;$$('[data-period]').forEach(x=>x.classList.toggle('active',x.dataset.period===state.chartPeriod))}if(b.dataset.interval){state.chartInterval=b.dataset.interval;$$('[data-interval]').forEach(x=>x.classList.toggle('active',x.dataset.interval===state.chartInterval))}loadChart()})}
 $$('.nav').forEach(b=>b.onclick=()=>{$$('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.view=b.dataset.view;render()});
 els.scanBtn.onclick=()=>scanAll(true);
 els.search.oninput=e=>{if(state.view==='all'){render();return;}const q=e.target.value.trim().toUpperCase();if(q.length>=2){const m=state.universe.find(x=>x.ticker===q)||state.universe.find(x=>x.ticker.startsWith(q));if(m)openStock(m.ticker)}};
