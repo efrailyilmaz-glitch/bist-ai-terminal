@@ -65,6 +65,25 @@ function stockRows(rows,sort='ticker'){
   return rows.map(m=>{const r=state.scan.get(m.ticker);return `<tr onclick="openStock('${m.ticker}')"><td><strong>${m.ticker}</strong></td><td>${m.name||''}</td>${r?`<td>₺${fmt(r.price)}</td><td class="${cls(r.change)}">${pct(r.change)}</td><td>${r.short_score}</td><td>${r.long_score}</td><td>${fmt(r.rsi,1)}</td><td>${fmt(r.stoch_rsi_k,1)}</td><td class="${cls(r.macd_hist)}">${fmt(r.macd_hist,4)}</td><td>${fmt(r.adx,1)}</td><td>${fmt(r.mfi,1)}</td><td class="${cls(r.relative_strength_20)}">${pct(r.relative_strength_20)}</td><td>${r.volume_ratio}x</td><td>${r.trend}</td>`:`<td colspan="12" class="pending">Tarama bekleniyor</td>`}</tr>`}).join('');
 }
 function horizonView(kind){const key=kind==='short'?'short_score':'long_score';const rows=[...state.scan.values()].sort((a,b)=>b[key]-a[key]);return `<div class="panel"><div class="panelHead"><div><h2>${kind==='short'?'Kısa Vade':'Uzun Vade'} Araştırma Adayları</h2><p>${kind==='short'?'Günler–haftalar: momentum, breakout, hacim ve kısa trend':'Aylar: MA200, 3/6 ay momentum ve volatilite dengesi'}</p></div><span class="pill">${state.scan.size} ANALYZED</span></div>${candidateList(rows.slice(0,100),key)}</div>`}
+function setupRows(rows,label){
+  return rows.slice(0,30).map(function(r,i){
+    const m=state.meta.get(r.ticker)||{};
+    return '<div class="candidate" onclick="openStock(\''+r.ticker+'\')"><span class="rank">'+String(i+1).padStart(2,'0')+'</span><strong>'+r.ticker+'</strong><div><div>'+((m.name||r.name)||'')+'</div><div class="reason">'+label+' · RSI '+fmt(r.rsi,1)+' · ADX '+fmt(r.adx,1)+' · RS20 '+pct(r.relative_strength_20||0)+'</div></div><span class="score">'+(r.alpha_score||0)+'</span><span class="'+cls(r.change)+'">'+pct(r.change)+'</span><span class="tag">'+label+'</span></div>';
+  }).join('')||'<div class="empty">Henüz eşleşme yok</div>';
+}
+function setupView(){
+  const all=[...state.scan.values()];
+  const golden=all.filter(x=>x.cross_event==='GOLDEN_CROSS').sort((a,b)=>(b.alpha_score||0)-(a.alpha_score||0));
+  const squeeze=all.filter(x=>x.bollinger_squeeze).sort((a,b)=>(b.short_score||0)-(a.short_score||0));
+  const bullDiv=all.filter(x=>x.rsi_divergence==='BULLISH'||x.macd_divergence==='BULLISH').sort((a,b)=>(b.short_score||0)-(a.short_score||0));
+  const trend=all.filter(x=>x.supertrend==='BULLISH'&&x.ichimoku==='BULLISH').sort((a,b)=>(b.alpha_score||0)-(a.alpha_score||0));
+  return '<div class="setupGrid">'+
+    '<div class="panel"><div class="panelHead"><div><h2>Golden Cross</h2><p>EMA50 son dönemde EMA200 üzerine geçti</p></div><span class="pill">'+golden.length+'</span></div>'+setupRows(golden,'GOLDEN')+'</div>'+
+    '<div class="panel"><div class="panelHead"><div><h2>Bollinger Squeeze</h2><p>Volatilite daralması · olası kırılım hazırlığı</p></div><span class="pill">'+squeeze.length+'</span></div>'+setupRows(squeeze,'SQUEEZE')+'</div>'+
+    '<div class="panel"><div class="panelHead"><div><h2>Bullish Divergence</h2><p>Fiyat ile RSI/MACD arasında pozitif uyumsuzluk</p></div><span class="pill">'+bullDiv.length+'</span></div>'+setupRows(bullDiv,'DIVERGENCE')+'</div>'+
+    '<div class="panel"><div class="panelHead"><div><h2>Trend Alignment</h2><p>Supertrend + Ichimoku aynı yönde pozitif</p></div><span class="pill">'+trend.length+'</span></div>'+setupRows(trend,'TREND')+'</div>'+
+  '</div>';
+}
 function anomalyView(){
   const rows=[...state.scan.values()].sort((a,b)=>(b.anomaly_score||0)-(a.anomaly_score||0)).slice(0,100);
   return `<div class="panel"><div class="panelHead"><div><h2>Anomali Radar</h2><p>Hacim sıçraması · sert günlük hareket · volatilite sapması. Bu ekran manipülasyon suçu iddiası değildir.</p></div><span class="pill">RISK MONITOR</span></div>${rows.map((r,i)=>{const m=state.meta.get(r.ticker)||{};return `<div class="candidate" onclick="openStock('${r.ticker}')"><span class="rank">${String(i+1).padStart(2,'0')}</span><strong>${r.ticker}</strong><div><div>${m.name||''}</div><div class="reason">Hacim ${r.volume_ratio}x · Vol %${r.volatility} · Gün ${pct(r.change)}</div></div><span class="score">${r.anomaly_score||0}</span><span class="${cls(r.change)}">${pct(r.change)}</span><span class="tag ${(r.anomaly_score||0)>65?'weak':'neutral'}">${(r.anomaly_score||0)>65?'YÜKSEK':'İZLE'}</span></div>`}).join('')||'<div class="empty">Tarama sonuçları bekleniyor…</div>'}</div>`;
@@ -267,6 +286,7 @@ function render(){
   if(state.view==='all'){els.title.textContent='Tüm BIST Şirketleri';els.content.innerHTML=allStocks();bindTable();}
   if(state.view==='short'){els.title.textContent='Kısa Vade Alpha Radar';els.content.innerHTML=horizonView('short');}
   if(state.view==='long'){els.title.textContent='Uzun Vade Alpha Radar';els.content.innerHTML=horizonView('long');}
+  if(state.view==='setups'){els.title.textContent='Setup Radar';els.content.innerHTML=setupView();}
   if(state.view==='anomaly'){els.title.textContent='Anomali Radar';els.content.innerHTML=anomalyView();}
   if(state.view==='portfolio'){els.title.textContent='Model Portföy';els.content.innerHTML=portfolioView();}
   if(state.view==='detail'){els.title.textContent=`${state.current} Hisse Analizi`;els.content.innerHTML=detailShell();bindChartTools();setTimeout(function(){loadChart();loadMtf();},0);}
