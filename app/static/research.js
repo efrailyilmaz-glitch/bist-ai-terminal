@@ -64,7 +64,9 @@ function fundamentalHtml(f){
     ['FD/FAVÖK',val4(f.ev_to_ebitda,1)],['F/S',val4(f.price_to_sales,1)],['ROE',f.roe_pct!=null?pct(f.roe_pct):'—'],['ROA',f.roa_pct!=null?pct(f.roa_pct):'—'],
     ['Faaliyet Marjı',f.operating_margin_pct!=null?pct(f.operating_margin_pct):'—'],['Net Marj',f.profit_margin_pct!=null?pct(f.profit_margin_pct):'—'],
     ['Gelir Büyümesi',f.revenue_growth_pct!=null?pct(f.revenue_growth_pct):'—'],['Kâr Büyümesi',f.earnings_growth_pct!=null?pct(f.earnings_growth_pct):'—'],
-    ['Borç/Özsermaye',val4(f.debt_to_equity,2)],['Cari Oran',val4(f.current_ratio,2)],['FCF Yield',f.fcf_yield!=null?pct(f.fcf_yield):'—'],['Temettü Verimi',f.dividend_yield_pct!=null?pct(f.dividend_yield_pct):'—']
+    ['Borç/Özsermaye',val4(f.debt_to_equity,2)],['Cari Oran',val4(f.current_ratio,2)],['FCF Yield',f.fcf_yield!=null?pct(f.fcf_yield):'—'],['Temettü Verimi',f.dividend_yield_pct!=null?pct(f.dividend_yield_pct):'—'],
+    ['Net Borç',compact4(f.net_debt)],['TTM FCF',compact4(f.ttm_free_cash_flow)],['FCF/Kâr Dönüşüm',f.fcf_conversion_pct!=null?pct(f.fcf_conversion_pct):'—'],['OCF/Kâr Dönüşüm',f.cash_conversion_pct!=null?pct(f.cash_conversion_pct):'—'],
+    ['Analist Hedef Ort.',f.target_mean_price!=null?'₺'+val4(f.target_mean_price,2):'—'],['Analist Sayısı',f.analyst_count??'—'],['Faktör Modeli',f.factor_model||'—'],['Beta',val4(f.beta,2)]
   ];
   const q=f.quarterly||[];
   return factorScoreCards(f)+
