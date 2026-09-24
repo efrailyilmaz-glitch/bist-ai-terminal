@@ -1,6 +1,6 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
-const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true}};
+const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true}};
 const fmt=(n,d=2)=>Number(n||0).toLocaleString('tr-TR',{maximumFractionDigits:d,minimumFractionDigits:0});
 const pct=n=>`${n>=0?'+':''}${fmt(n,2)}%`; const cls=n=>Number(n)>=0?'up':'down';
 const tagClass=s=>s==='GÜÇLÜ'?'':s==='POZİTİF'?'':s==='NÖTR'?'neutral':'weak';
@@ -10,7 +10,7 @@ async function init(){
     const [u,m]=await Promise.all([getJSON('/api/universe'),getJSON('/api/market')]);
     state.universe=u.rows||[]; state.total=u.count||state.universe.length; state.market=m||{};
     state.universe.forEach(x=>state.meta.set(x.ticker,x));
-    els.systemMode.textContent=`V3 · ${u.source||'UNIVERSE'}`; els.scanStatus.textContent=`${state.total} şirket bulundu`;
+    els.systemMode.textContent=`V4 · ${u.source||'UNIVERSE'}`; els.scanStatus.textContent=`${state.total} şirket bulundu`;
     renderTickerbar(); render(); setTimeout(()=>scanAll(false),250);
   }catch(e){els.content.innerHTML=`<div class="empty">Başlatma hatası: ${e.message}</div>`;}
 }
