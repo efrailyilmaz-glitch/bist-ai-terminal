@@ -35,10 +35,19 @@ function factorTable(rows){
     '</tbody></table></div>';
 }
 
+function sectorSummary(rows){
+  const g={};
+  rows.forEach(r=>{const s=r.sector||'Unknown';if(!g[s])g[s]=[];g[s].push(r);});
+  const data=Object.entries(g).map(([sector,arr])=>{
+    const avg=k=>{const v=arr.map(x=>x[k]).filter(x=>x!=null);return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;};
+    return {sector,count:arr.length,fund:avg('fundamental_score'),value:avg('value_score'),quality:avg('quality_score'),growth:avg('growth_score')};
+  }).sort((a,b)=>(b.fund||-1)-(a.fund||-1));
+  return '<div class="sectorSummary"><h4>Sektör Faktör Özeti <span class="muted">(yalnız yüklenen örneklem)</span></h4><div class="tableWrap"><table class="stockTable"><thead><tr><th>Sektör</th><th>Şirket</th><th>Fund.</th><th>Value</th><th>Quality</th><th>Growth</th></tr></thead><tbody>'+data.map(x=>'<tr><td>'+x.sector+'</td><td>'+x.count+'</td><td>'+(x.fund??'—')+'</td><td>'+(x.value??'—')+'</td><td>'+(x.quality??'—')+'</td><td>'+(x.growth??'—')+'</td></tr>').join('')+'</tbody></table></div></div>';
+}
 function factorView(){
   return '<div class="panel"><div class="panelHead"><div><h2>Factor Lab</h2><p>Value · Quality · Growth · Balance Sheet · Shareholder Return</p></div><button class="toolbtn" id="runFactors">Top Adayları Zenginleştir</button></div>'+
     '<div class="factorNote">Temel veriler talep üzerine yüklenir. Sektör yüzdeliği yalnız yüklenen örneklem içindeki karşılaştırmadır; tüm piyasa konsensüsü değildir.</div>'+
-    '<div id="factorResult">'+(state.factorRows.length?factorTable(state.factorRows):'<div class="empty">Teknik tarama ilerledikçe en güçlü adayları temel verilerle zenginleştirebilirsin.</div>')+'</div></div>';
+    '<div id="factorResult">'+(state.factorRows.length?sectorSummary(state.factorRows)+factorTable(state.factorRows):'<div class="empty">Teknik tarama ilerledikçe en güçlü adayları temel verilerle zenginleştirebilirsin.</div>')+'</div></div>';
 }
 
 async function loadFactors(){
@@ -48,7 +57,7 @@ async function loadFactors(){
   box.innerHTML='<div class="loading">Temel veriler ve faktörler yükleniyor…</div>';
   try{
     const d=await getJSON('/api/factor-screen?codes='+encodeURIComponent(candidates.join(',')));
-    state.factorRows=d.rows||[];box.innerHTML=factorTable(state.factorRows);
+    state.factorRows=d.rows||[];box.innerHTML=sectorSummary(state.factorRows)+factorTable(state.factorRows);
   }catch(e){box.innerHTML='<div class="empty">Factor Lab hatası: '+e.message+'</div>';}
 }
 
