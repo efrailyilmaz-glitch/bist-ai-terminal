@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pathlib import Path
 from .universe import get_universe
 from .market_data import scan_codes, yahoo_chart, market_overview, multi_timeframe
@@ -17,6 +19,18 @@ from .portfolio_analytics import analyze_portfolio, compare_allocations
 
 BASE=Path(__file__).resolve().parent
 app=FastAPI(title='BIST AI Terminal',version='5.0')
+app.add_middleware(GZipMiddleware,minimum_size=800)
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self,request,call_next):
+        response=await call_next(request)
+        response.headers['X-Content-Type-Options']='nosniff'
+        response.headers['X-Frame-Options']='SAMEORIGIN'
+        response.headers['Referrer-Policy']='strict-origin-when-cross-origin'
+        response.headers['Permissions-Policy']='camera=(), microphone=(), geolocation=()'
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 app.mount('/static',StaticFiles(directory=str(BASE/'static')),name='static')
 
 @app.get('/',response_class=HTMLResponse)
@@ -136,5 +150,4 @@ def kap():
 
 @app.get('/health')
 def health():
-    u=get_universe()
-    return {'status':'ok','version':'5.0','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
+    return {'status':'ok','version':'5.0','service':'bist-ai-terminal'}
