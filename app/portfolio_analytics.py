@@ -1,16 +1,23 @@
 from __future__ import annotations
-import math
+import math, time, threading
 from typing import List
 import numpy as np
 import pandas as pd
 import yfinance as yf
 
 TRADING_DAYS=252
+_CACHE={}
+_LOCK=threading.Lock()
 
 def _clean_series(s):
     return pd.to_numeric(s,errors='coerce').dropna()
 
 def _load(codes):
+    key=','.join(codes)
+    now=time.time()
+    with _LOCK:
+        hit=_CACHE.get(key)
+        if hit and now-hit[0]<300:return hit[1],hit[2]
     syms=[x+'.IS' for x in codes]+['XU100.IS']
     raw=yf.download(syms,period='2y',interval='1d',group_by='column',auto_adjust=True,threads=True,progress=False,timeout=25)
     if raw is None or raw.empty:return None,None
@@ -22,6 +29,7 @@ def _load(codes):
     if not valid:return None,None
     bench=close['XU100'] if 'XU100' in close.columns else None
     rets=close[valid].pct_change().dropna(how='all').fillna(0)
+    with _LOCK:_CACHE[key]=(time.time(),rets,bench)
     return rets,bench
 
 def _normalize(w):
