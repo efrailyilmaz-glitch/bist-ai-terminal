@@ -180,6 +180,11 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     smart=int(max(0,min(100,round(50+(10 if last>_num(ema20.iloc[-1]) else -9)+max(-12,min(18,(vr-1)*12))+max(-10,min(15,mom20*.35))+max(-7,min(7,obvt*18))))))
     alpha=int(max(0,min(100,round(short*.50+long*.42+max(-8,min(8,rs20*.2))-risk*.10))))
 
+    high252=_num(c.tail(252).max(),last)
+    low252=_num(c.tail(252).min(),last)
+    dist_high=(last/high252-1)*100 if high252 else 0
+    dist_low=(last/low252-1)*100 if low252 else 0
+    avg_value_turnover=_num((c*v).tail(20).mean(),0)
     reasons_short=[]
     if breakout: reasons_short.append('20G breakout')
     if mach>0 and macd>macds: reasons_short.append('MACD pozitif')
@@ -215,7 +220,7 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
       'volume_ratio':round(vr,2),'momentum_5':round(mom5,2),'momentum_20':round(mom20,2),
       'momentum_60':round(mom60,2),'momentum_120':round(mom120,2),
       'volatility':round(volat,1),'risk':risk,'anomaly_score':anomaly,'smart_money_score':smart,
-      'breakout20':bool(breakout),
+      'breakout20':bool(breakout),'above_ema20':bool(last>_num(ema20.iloc[-1],last)),'above_ema50':bool(last>_num(ema50.iloc[-1],last)),'above_ema200':bool(last>_num(ema200.iloc[-1],last)),\n      'distance_52w_high_pct':round(dist_high,2),'distance_52w_low_pct':round(dist_low,2),'near_52w_high':bool(dist_high>=-5),'avg_value_turnover_20':round(avg_value_turnover,0),
       'supertrend':structure.get('supertrend'),'ichimoku':structure.get('ichimoku'),'cross_state':cross.get('state'),'cross_event':cross.get('recent_event'),
       'bollinger_squeeze':bool(squeeze.get('active')),'squeeze_percentile':squeeze.get('percentile'),'rsi_divergence':div.get('rsi'),'macd_divergence':div.get('macd'),
       'supports':structure.get('supports',[]),'resistances':structure.get('resistances',[]),
