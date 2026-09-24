@@ -218,8 +218,8 @@ def _tf_summary(df, label):
 def multi_timeframe(code):
     frames=[]
     specs=[
-        ('15D','1mo','15m'),
-        ('1S','3mo','60m'),
+        ('15DK','1mo','15m'),
+        ('1SA','3mo','60m'),
         ('1G','1y','1d'),
         ('1H','5y','1wk')
     ]
@@ -234,9 +234,9 @@ def multi_timeframe(code):
         except Exception:
             frames.append({'timeframe':label,'status':'ERROR'})
     try:
-        frames.insert(2,_tf_summary(_resample_4h(hourly_rows),'4S'))
+        frames.insert(2,_tf_summary(_resample_4h(hourly_rows),'4SA'))
     except Exception:
-        frames.insert(2,{'timeframe':'4S','status':'ERROR'})
+        frames.insert(2,{'timeframe':'4SA','status':'ERROR'})
     valid=[x for x in frames if x.get('status')=='OK']
     bull=sum(1 for x in valid if x.get('score',0)>=60 and x.get('supertrend')=='BULLISH')
     bear=sum(1 for x in valid if x.get('score',100)<45 and x.get('supertrend')=='BEARISH')
