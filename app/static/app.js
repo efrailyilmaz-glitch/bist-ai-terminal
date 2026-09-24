@@ -1,6 +1,6 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
-const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true}};
+const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true}};
 const fmt=(n,d=2)=>Number(n||0).toLocaleString('tr-TR',{maximumFractionDigits:d,minimumFractionDigits:0});
 const pct=n=>`${n>=0?'+':''}${fmt(n,2)}%`; const cls=n=>Number(n)>=0?'up':'down';
 const tagClass=s=>s==='GÜÇLÜ'?'':s==='POZİTİF'?'':s==='NÖTR'?'neutral':'weak';
@@ -114,11 +114,13 @@ function detailShell(){
     </div>
     <div class="indicatorToolbar">
       <span>Göstergeler</span>
-      ${[['ema','EMA 20/50/200'],['bb','Bollinger'],['rsi','RSI'],['stoch','Stoch RSI'],['macd','MACD']].map(x=>`<button data-indicator="${x[0]}" class="${state.indicators[x[0]]?'active':''}">${x[1]}</button>`).join('')}
+      ${[['ema','EMA 20/50/200'],['bb','Bollinger'],['supertrend','Supertrend'],['ichimoku','Ichimoku'],['levels','Destek/Direnç'],['rsi','RSI'],['stoch','Stoch RSI'],['macd','MACD']].map(x=>`<button data-indicator="${x[0]}" class="${state.indicators[x[0]]?'active':''}">${x[1]}</button>`).join('')}
     </div>
     <div id="tvChart" class="chartbox"></div>
     ${detailStats(r)}
     ${indicatorDashboard(r)}
+    <div class="panelSub"><div class="subTitle"><b>Multi-Timeframe Konsensüs</b><span>15dk · 1s · 4s · 1g · 1h</span></div><div id="mtfGrid" class="mtfGrid"><div class="pending">Zaman dilimleri hesaplanıyor…</div></div></div>
+    <div class="panelSub"><div class="subTitle"><b>Pattern & Structure Engine</b><span>divergence · cross · squeeze · Supertrend · Ichimoku · S/R</span></div><div id="structurePanel" class="structurePanel"><div class="pending">Yapı analizi yükleniyor…</div></div></div>
     <div class="grid2">
       <div class="recommendBox"><h3>Kısa Vade Modeli · ${r.short_score??'—'}/100</h3><div class="chips">${(r.reasons_short||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div>${r.target_short?`<p>ATR bölgesi: hedef <b class="up">₺${fmt(r.target_short)}</b> · risk stop <b class="down">₺${fmt(r.stop_short)}</b></p>`:''}</div>
       <div class="recommendBox"><h3>Uzun Vade Modeli · ${r.long_score??'—'}/100</h3><div class="chips">${(r.reasons_long||['Tarama verisi bekleniyor']).map(x=>`<span class="chip">${x}</span>`).join('')}</div><p class="muted">Trend, relative strength, momentum ve risk birlikte değerlendirilir; tek bir indikatör karar vermez.</p></div>
@@ -131,6 +133,37 @@ function detailStats(r){
 async function ensureTickerScan(t){
   if(state.scan.has(t))return;
   try{const r=await getJSON(`/api/scan?codes=${encodeURIComponent(t)}`);(r.rows||[]).forEach(x=>state.scan.set(x.ticker,x));}catch(e){}
+}
+function structureHtml(s){
+  if(!s)return '<div class="pending">Yapı verisi yok</div>';
+  const div=s.divergence||{}, cr=s.cross||{}, sq=s.squeeze||{};
+  const cards=[
+    ['Supertrend',s.supertrend||'—',s.supertrend==='BULLISH'?'up':s.supertrend==='BEARISH'?'down':''],
+    ['Ichimoku',s.ichimoku||'—',s.ichimoku==='BULLISH'?'up':s.ichimoku==='BEARISH'?'down':''],
+    ['EMA Cross',(cr.recent_event&&cr.recent_event!=='NONE')?cr.recent_event:(cr.state||'—'),cr.state==='GOLDEN'?'up':'down'],
+    ['Bollinger Squeeze',sq.active?'AKTİF':'Pasif',sq.active?'amber':''],
+    ['RSI Divergence',div.rsi||'NONE',div.rsi==='BULLISH'?'up':div.rsi==='BEARISH'?'down':''],
+    ['MACD Divergence',div.macd||'NONE',div.macd==='BULLISH'?'up':div.macd==='BEARISH'?'down':'']
+  ];
+  const sup=(s.supports||[]).map(function(x){return '<span class="level support">S ₺'+fmt(x)+'</span>';}).join('');
+  const res=(s.resistances||[]).map(function(x){return '<span class="level resistance">R ₺'+fmt(x)+'</span>';}).join('');
+  return '<div class="structureCards">'+cards.map(function(x){return '<div class="structureCard"><span>'+x[0]+'</span><b class="'+x[2]+'">'+x[1]+'</b></div>';}).join('')+'</div><div class="levelsRow">'+sup+(res||'<span class="pending">Direnç seviyesi bulunamadı</span>')+'</div>';
+}
+function mtfHtml(d){
+  if(!d||!d.frames)return '<div class="pending">Zaman dilimi verisi yok</div>';
+  const tone=d.consensus==='BULLISH'?'up':d.consensus==='BEARISH'?'down':'amber';
+  let out='<div class="mtfConsensus">Konsensüs <b class="'+tone+'">'+d.consensus+'</b></div>';
+  out+=d.frames.map(function(x){
+    if(x.status!=='OK')return '<div class="mtfCard muted"><span>'+x.timeframe+'</span><b>—</b><small>'+x.status+'</small></div>';
+    const t=x.supertrend==='BULLISH'?'up':x.supertrend==='BEARISH'?'down':'';
+    return '<div class="mtfCard"><span>'+x.timeframe+'</span><b>'+x.score+'/100</b><small class="'+t+'">'+x.trend+' · '+x.supertrend+'</small><em>RSI '+x.rsi+' · ADX '+x.adx+'</em></div>';
+  }).join('');
+  return out;
+}
+async function loadMtf(){
+  const box=$('#mtfGrid'); if(!box)return;
+  try{const d=await getJSON('/api/mtf/'+state.current); if($('#mtfGrid'))$('#mtfGrid').innerHTML=mtfHtml(d);}
+  catch(e){if($('#mtfGrid'))$('#mtfGrid').innerHTML='<div class="pending">MTF yüklenemedi: '+e.message+'</div>';}
 }
 function addGuide(series,price,color,title){
   try{series.createPriceLine({price,color,lineWidth:1,lineStyle:2,axisLabelVisible:true,title});}catch(e){}
@@ -169,6 +202,21 @@ async function loadChart(){
       const bl=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'rgba(95,150,255,.55)',priceLineVisible:false,lastValueVisible:false,title:'BB-'},0);bl.setData(d.bb_lower||[]);
     }
 
+    if(state.indicators.supertrend){
+      const su=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#28d17c',priceLineVisible:false,lastValueVisible:false,title:'Supertrend +'},0);su.setData(d.supertrend_up||[]);
+      const sd=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#ff5e72',priceLineVisible:false,lastValueVisible:false,title:'Supertrend -'},0);sd.setData(d.supertrend_down||[]);
+    }
+    if(state.indicators.ichimoku){
+      const ten=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#49d7ff',priceLineVisible:false,lastValueVisible:false,title:'Tenkan'},0);ten.setData(d.tenkan||[]);
+      const kij=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,lastValueVisible:false,title:'Kijun'},0);kij.setData(d.kijun||[]);
+      const ia=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'rgba(40,209,124,.55)',priceLineVisible:false,lastValueVisible:false,title:'Cloud A'},0);ia.setData(d.ichimoku_a||[]);
+      const ib=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'rgba(255,94,114,.55)',priceLineVisible:false,lastValueVisible:false,title:'Cloud B'},0);ib.setData(d.ichimoku_b||[]);
+    }
+    if(state.indicators.levels && d.structure){
+      (d.structure.supports||[]).forEach(function(x,i){addGuide(candle,x,'rgba(40,209,124,.5)','S'+(i+1));});
+      (d.structure.resistances||[]).forEach(function(x,i){addGuide(candle,x,'rgba(255,94,114,.5)','R'+(i+1));});
+    }
+    const sp=$('#structurePanel'); if(sp)sp.innerHTML=structureHtml(d.structure);
     let pane=1;
     if(state.indicators.rsi||state.indicators.stoch){
       let guide=null;
@@ -221,7 +269,7 @@ function render(){
   if(state.view==='long'){els.title.textContent='Uzun Vade Alpha Radar';els.content.innerHTML=horizonView('long');}
   if(state.view==='anomaly'){els.title.textContent='Anomali Radar';els.content.innerHTML=anomalyView();}
   if(state.view==='portfolio'){els.title.textContent='Model Portföy';els.content.innerHTML=portfolioView();}
-  if(state.view==='detail'){els.title.textContent=`${state.current} Hisse Analizi`;els.content.innerHTML=detailShell();bindChartTools();setTimeout(loadChart,0);}
+  if(state.view==='detail'){els.title.textContent=`${state.current} Hisse Analizi`;els.content.innerHTML=detailShell();bindChartTools();setTimeout(function(){loadChart();loadMtf();},0);}
   if(state.view==='backtest'){els.title.textContent='Backtest Lab';backtestView().then(h=>{els.content.innerHTML=h;$('#runBacktest').onclick=runBacktest});}
   if(state.view==='kap'){els.title.textContent='KAP Radar';els.content.innerHTML=kapView();}
 }
