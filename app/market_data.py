@@ -1,5 +1,7 @@
 from __future__ import annotations
 import time, threading, requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from requests.adapters import HTTPAdapter
 import pandas as pd
 import yfinance as yf
 from .scoring import score_frame, indicator_frame
@@ -7,7 +9,14 @@ from .advanced_indicators import advanced_series, analyze_structure
 
 _LOCK=threading.Lock()
 _SCAN_CACHE={}
+_SCORE_CACHE={}
 _CHART_CACHE={}
+_BENCH_CACHE={'ts':0.0,'br20':0.0,'br60':0.0}
+_MARKET_CACHE={'ts':0.0,'data':None}
+_MTF_CACHE={}
+_HTTP=requests.Session()
+_HTTP.headers.update({'User-Agent':'Mozilla/5.0 BIST-AI-Terminal/5.1'})
+_HTTP.mount('https://',HTTPAdapter(pool_connections=24,pool_maxsize=24,max_retries=1))
 
 def _norm(df):
     if df is None or df.empty:
@@ -44,43 +53,67 @@ def _ret(df,n):
     except Exception:
         return 0.0
 
-def scan_codes(codes):
-    codes=[c.upper().replace('.IS','') for c in codes if c]
-    key=','.join(codes)
+def _benchmark_returns():
     now=time.time()
     with _LOCK:
-        hit=_SCAN_CACHE.get(key)
-        if hit and now-hit[0] < 600:
-            return hit[1]
-
-    results=[]
-    benchmark=pd.DataFrame()
+        if now-_BENCH_CACHE['ts']<600:
+            return _BENCH_CACHE['br20'],_BENCH_CACHE['br60']
+    br20=br60=0.0
     try:
-        braw=yf.download(['XU100.IS'],period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=False,progress=False,timeout=15)
+        braw=yf.download(['XU100.IS'],period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=False,progress=False,timeout=12)
         benchmark=_extract(braw,'XU100.IS')
+        br20=_ret(benchmark,20);br60=_ret(benchmark,60)
     except Exception:
-        benchmark=pd.DataFrame()
-    br20=_ret(benchmark,20)
-    br60=_ret(benchmark,60)
-
-    for pos in range(0,len(codes),20):
-        chunk=codes[pos:pos+20]
-        syms=[c+'.IS' for c in chunk]
-        try:
-            raw=yf.download(syms,period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=True,progress=False,timeout=20)
-            for code,sym in zip(chunk,syms):
-                try:
-                    df=_extract(raw,sym)
-                    if df.empty: continue
-                    sc=score_frame(df,benchmark_return_20=br20,benchmark_return_60=br60)
-                    if sc:results.append({'ticker':code,**sc})
-                except Exception:
-                    continue
-        except Exception:
-            continue
-
+        pass
     with _LOCK:
-        _SCAN_CACHE[key]=(now,results)
+        _BENCH_CACHE.update({'ts':now,'br20':br20,'br60':br60})
+    return br20,br60
+
+def _scan_chunk(chunk,br20,br60):
+    rows=[]
+    syms=[x+'.IS' for x in chunk]
+    try:
+        raw=yf.download(syms,period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=False,progress=False,timeout=18)
+        for code,sym in zip(chunk,syms):
+            try:
+                df=_extract(raw,sym)
+                if df.empty:continue
+                sc=score_frame(df,benchmark_return_20=br20,benchmark_return_60=br60)
+                if sc:rows.append({'ticker':code,**sc})
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return rows
+
+def scan_codes(codes):
+    codes=list(dict.fromkeys([c.upper().replace('.IS','') for c in codes if c]))
+    now=time.time()
+    key=','.join(codes)
+    with _LOCK:
+        hit=_SCAN_CACHE.get(key)
+        if hit and now-hit[0]<600:return hit[1]
+
+    result_map={}
+    missing=[]
+    with _LOCK:
+        for code in codes:
+            hit=_SCORE_CACHE.get(code)
+            if hit and now-hit[0]<600:result_map[code]=hit[1]
+            else:missing.append(code)
+
+    if missing:
+        br20,br60=_benchmark_returns()
+        chunks=[missing[i:i+25] for i in range(0,len(missing),25)]
+        with ThreadPoolExecutor(max_workers=min(3,len(chunks))) as ex:
+            futures=[ex.submit(_scan_chunk,ch,br20,br60) for ch in chunks]
+            for fut in as_completed(futures):
+                for row in fut.result():
+                    result_map[row['ticker']]=row
+                    with _LOCK:_SCORE_CACHE[row['ticker']]=(time.time(),row)
+
+    results=[result_map[c] for c in codes if c in result_map]
+    with _LOCK:_SCAN_CACHE[key]=(time.time(),results)
     return results
 
 def _series(rows, values, digits=4):
@@ -108,7 +141,7 @@ def yahoo_chart(code, period='1y', interval='1d'):
 
     symbol=code if code.startswith('^') or '=' in code or '.' in code or '-' in code else code+'.IS'
     url=f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
-    r=requests.get(
+    r=_HTTP.get(
         url,
         params={'range':period,'interval':interval,'includePrePost':'false','events':'div,splits'},
         headers={'User-Agent':'Mozilla/5.0 BIST-AI-Terminal/3.1'},
@@ -222,55 +255,60 @@ def _tf_summary(df, label):
     }
 
 def multi_timeframe(code):
-    frames=[]
-    specs=[
-        ('15DK','1mo','15m'),
-        ('1SA','3mo','60m'),
-        ('1G','1y','1d'),
-        ('1H','5y','1wk')
-    ]
-    hourly_rows=[]
-    for label,period,interval in specs:
+    code=code.upper().replace('.IS','')
+    now=time.time()
+    with _LOCK:
+        hit=_MTF_CACHE.get(code)
+        if hit and now-hit[0]<180:return hit[1]
+    specs=[('15DK','1mo','15m'),('1SA','3mo','60m'),('1G','1y','1d'),('1H','5y','1wk')]
+    by_label={};hourly_rows=[]
+    def load(spec):
+        label,period,interval=spec
         try:
             d=yahoo_chart(code,period=period,interval=interval)
-            rows=d.get('candles',[])
-            if interval=='60m':
-                hourly_rows=rows
-            frames.append(_tf_summary(_rows_to_df(rows),label))
+            return label,interval,d.get('candles',[])
         except Exception:
-            frames.append({'timeframe':label,'status':'ERROR'})
-    try:
-        frames.insert(2,_tf_summary(_resample_4h(hourly_rows),'4SA'))
-    except Exception:
-        frames.insert(2,{'timeframe':'4SA','status':'ERROR'})
+            return label,interval,None
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        for label,interval,rows in ex.map(load,specs):
+            if rows is None:by_label[label]={'timeframe':label,'status':'ERROR'}
+            else:
+                if interval=='60m':hourly_rows=rows
+                by_label[label]=_tf_summary(_rows_to_df(rows),label)
+    frames=[by_label.get('15DK',{'timeframe':'15DK','status':'ERROR'}),
+            by_label.get('1SA',{'timeframe':'1SA','status':'ERROR'})]
+    try:frames.append(_tf_summary(_resample_4h(hourly_rows),'4SA'))
+    except Exception:frames.append({'timeframe':'4SA','status':'ERROR'})
+    frames.extend([by_label.get('1G',{'timeframe':'1G','status':'ERROR'}),by_label.get('1H',{'timeframe':'1H','status':'ERROR'})])
     valid=[x for x in frames if x.get('status')=='OK']
     bull=sum(1 for x in valid if x.get('score',0)>=60 and x.get('supertrend')=='BULLISH')
     bear=sum(1 for x in valid if x.get('score',100)<45 and x.get('supertrend')=='BEARISH')
     consensus='BULLISH' if valid and bull>=max(2,len(valid)//2+1) else ('BEARISH' if valid and bear>=max(2,len(valid)//2+1) else 'MIXED')
-    return {'ticker':code.upper(),'consensus':consensus,'bullish_frames':bull,'bearish_frames':bear,'frames':frames}
+    data={'ticker':code,'consensus':consensus,'bullish_frames':bull,'bearish_frames':bear,'frames':frames}
+    with _LOCK:_MTF_CACHE[code]=(time.time(),data)
+    return data
 
 def market_overview():
+    now=time.time()
+    with _LOCK:
+        if _MARKET_CACHE['data'] is not None and now-_MARKET_CACHE['ts']<120:
+            return _MARKET_CACHE['data']
     out={'mode':'LIVE / YAHOO','updated':time.strftime('%d.%m.%Y %H:%M:%S'),'global_score':50,'regime':'NÖTR','fear':50,'breadth':0,'advancers':0,'decliners':0,'unchanged':0}
-    symbols=[
-        ('xu100','XU100'),('usdtry','TRY=X'),('eurtry','EURTRY=X'),('sp500','^GSPC'),
-        ('nasdaq','^IXIC'),('dxy','DX-Y.NYB'),('us10y','^TNX'),('gold','GC=F'),('oil','CL=F')
-    ]
-    ok=0
-    for key,sym in symbols:
+    symbols=[('xu100','XU100'),('usdtry','TRY=X'),('eurtry','EURTRY=X'),('sp500','^GSPC'),('nasdaq','^IXIC'),('dxy','DX-Y.NYB'),('us10y','^TNX'),('gold','GC=F'),('oil','CL=F')]
+    def fetch(item):
+        key,sym=item
         try:
             d=yahoo_chart(sym,period='1mo',interval='1d')
             if d and len(d['candles'])>=2:
                 a,b=d['candles'][-1]['close'],d['candles'][-2]['close']
-                out[key]=a
-                out[key+'_change']=round((a/b-1)*100,2)
-                ok+=1
-            else:
-                out[key]=0
-                out[key+'_change']=0
+                return key,a,round((a/b-1)*100,2),True
         except Exception:
-            out[key]=0
-            out[key+'_change']=0
-
+            pass
+        return key,0,0,False
+    ok=0
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for key,value,change,good in ex.map(fetch,symbols):
+            out[key]=value;out[key+'_change']=change;ok+=1 if good else 0
     score=50
     score += 12 if out.get('sp500_change',0)>0 else -10
     score += 10 if out.get('nasdaq_change',0)>0 else -8
@@ -282,4 +320,6 @@ def market_overview():
     out['global_score']=score
     out['regime']='RISK-ON / BULL' if score>=62 else ('RISK-OFF / BEAR' if score<=38 else 'NÖTR / TRANSITION')
     out['mode']='LIVE / YAHOO' if ok>=3 else ('PARTIAL / YAHOO' if ok else 'DATA UNAVAILABLE')
+    with _LOCK:_MARKET_CACHE.update({'ts':time.time(),'data':out})
     return out
+
