@@ -101,10 +101,12 @@ function v5HealthView(){
 async function v5LoadHealth(){
   const box=$('#healthResult'); if(!box)return;
   try{
-    const d=await getJSON('/api/data-health');
+    const data=await Promise.all([getJSON('/api/data-health'),getJSON('/api/model-card')]);
+    const d=data[0],model=data[1];
     const providers=Object.entries(d.providers||{}).map(function(kv){const k=kv[0],v=kv[1];return '<div class="providerCard"><span>'+k.toUpperCase()+'</span><b>'+v.active+'</b><small>'+(v.licensed_ready?'Premium connector ENV hazır':'Premium connector bağlı değil')+'</small></div>';}).join('');
     const checks=(d.checks||[]).map(function(x){return '<div class="healthRow"><i class="'+(x.status==='OK'?'ok':'bad')+'"></i><strong>'+x.name+'</strong><span>'+x.status+'</span><b>'+x.latency_ms+' ms</b><small>'+(x.error||JSON.stringify(x.detail||{}))+'</small></div>';}).join('');
-    box.innerHTML='<div class="healthHero '+(d.status==='HEALTHY'?'ok':'warn')+'"><b>'+d.status+'</b><span>'+d.ok+'/'+d.total+' kaynak · '+d.timestamp+'</span></div><div class="providerGrid">'+providers+'</div><div class="healthList">'+checks+'</div>';
+    const limits=(model.known_limitations||[]).map(function(x){return '<li>'+x+'</li>';}).join('');
+    box.innerHTML='<div class="healthHero '+(d.status==='HEALTHY'?'ok':'warn')+'"><b>'+d.status+'</b><span>'+d.ok+'/'+d.total+' kaynak · '+d.timestamp+'</span></div><div class="providerGrid">'+providers+'</div><div class="healthList">'+checks+'</div><div class="governanceCard"><h4>Model Governance · V'+model.version+'</h4><p>'+model.purpose+'</p><ul>'+limits+'</ul></div>';
   }catch(e){box.innerHTML='<div class="empty">Data Health hatası: '+e.message+'</div>';}
 }
 
