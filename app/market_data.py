@@ -11,6 +11,7 @@ _LOCK=threading.Lock()
 _SCAN_CACHE={}
 _SCORE_CACHE={}
 _CHART_CACHE={}
+_RAW_CACHE={}
 _BENCH_CACHE={'ts':0.0,'br20':0.0,'br60':0.0}
 _MARKET_CACHE={'ts':0.0,'data':None}
 _MTF_CACHE={}
@@ -123,86 +124,58 @@ def _series(rows, values, digits=4):
             out.append({'time':row['time'],'value':round(float(val),digits)})
     return out
 
-def yahoo_chart(code, period='1y', interval='1d'):
+def yahoo_rows(code,period='1y',interval='1d'):
     code=code.upper().replace('.IS','')
     period=period if period in {'1mo','3mo','6mo','1y','2y','5y'} else '1y'
     interval=interval if interval in {'15m','30m','60m','1d','1wk'} else '1d'
-    if interval in {'15m','30m'} and period not in {'1mo'}:
-        period='1mo'
-    if interval=='60m' and period in {'1y','2y','5y'}:
-        period='6mo'
+    if interval in {'15m','30m'} and period not in {'1mo'}:period='1mo'
+    if interval=='60m' and period in {'1y','2y','5y'}:period='6mo'
+    key=f'{code}:{period}:{interval}'
+    now=time.time()
+    with _LOCK:
+        hit=_RAW_CACHE.get(key)
+        if hit and now-hit[0]<180:return hit[1]
+    symbol=code if code.startswith('^') or '=' in code or '.' in code or '-' in code else code+'.IS'
+    url=f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
+    r=_HTTP.get(url,params={'range':period,'interval':interval,'includePrePost':'false','events':'div,splits'},timeout=15)
+    r.raise_for_status()
+    result=r.json().get('chart',{}).get('result') or []
+    if not result:raise ValueError('Yahoo returned no chart result')
+    obj=result[0];ts=obj.get('timestamp') or [];q=obj['indicators']['quote'][0];rows=[]
+    for i,t in enumerate(ts):
+        try:
+            o,h,l,cl,v=q['open'][i],q['high'][i],q['low'][i],q['close'][i],q['volume'][i]
+            if None in (o,h,l,cl):continue
+            tm=int(t) if interval not in {'1d','1wk'} else time.strftime('%Y-%m-%d',time.gmtime(t))
+            rows.append({'time':tm,'open':round(float(o),4),'high':round(float(h),4),'low':round(float(l),4),'close':round(float(cl),4),'volume':int(v or 0)})
+        except Exception:continue
+    if not rows:raise ValueError('No usable candles')
+    data={'ticker':code,'period':period,'interval':interval,'currency':(obj.get('meta') or {}).get('currency','TRY'),'candles':rows}
+    with _LOCK:_RAW_CACHE[key]=(time.time(),data)
+    return data
 
+def yahoo_chart(code, period='1y', interval='1d'):
+    raw=yahoo_rows(code,period,interval)
+    code=raw['ticker'];period=raw['period'];interval=raw['interval'];rows=raw['candles']
     key=f'{code}:{period}:{interval}'
     now=time.time()
     with _LOCK:
         hit=_CHART_CACHE.get(key)
-        if hit and now-hit[0] < 180:
-            return hit[1]
-
-    symbol=code if code.startswith('^') or '=' in code or '.' in code or '-' in code else code+'.IS'
-    url=f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
-    r=_HTTP.get(
-        url,
-        params={'range':period,'interval':interval,'includePrePost':'false','events':'div,splits'},
-        headers={'User-Agent':'Mozilla/5.0 BIST-AI-Terminal/3.1'},
-        timeout=20
-    )
-    r.raise_for_status()
-    result=r.json().get('chart',{}).get('result') or []
-    if not result:
-        raise ValueError('Yahoo returned no chart result')
-
-    obj=result[0]
-    ts=obj.get('timestamp') or []
-    q=obj['indicators']['quote'][0]
-    rows=[]
-    for i,t in enumerate(ts):
-        try:
-            o,h,l,c,v=q['open'][i],q['high'][i],q['low'][i],q['close'][i],q['volume'][i]
-            if None in (o,h,l,c): continue
-            tm=int(t) if interval not in {'1d','1wk'} else time.strftime('%Y-%m-%d',time.gmtime(t))
-            rows.append({
-                'time':tm,'open':round(float(o),4),'high':round(float(h),4),
-                'low':round(float(l),4),'close':round(float(c),4),'volume':int(v or 0)
-            })
-        except Exception:
-            continue
-
+        if hit and now-hit[0]<180:return hit[1]
     base=pd.DataFrame(rows)
-    if base.empty:
-        raise ValueError('No usable candles')
     calc=base.rename(columns={'open':'Open','high':'High','low':'Low','close':'Close','volume':'Volume'})
-    ind=indicator_frame(calc)
-    adv=advanced_series(calc)
-    structure=analyze_structure(calc)
-
+    ind=indicator_frame(calc);adv=advanced_series(calc);structure=analyze_structure(calc)
     data={
-        'ticker':code,'period':period,'interval':interval,
-        'currency':(obj.get('meta') or {}).get('currency','TRY'),
-        'candles':rows,
-        'ema20':_series(rows,ind['EMA20']),
-        'ema50':_series(rows,ind['EMA50']),
-        'ema200':_series(rows,ind['EMA200']),
-        'bb_upper':_series(rows,ind['BB_UPPER']),
-        'bb_mid':_series(rows,ind['BB_MID']),
-        'bb_lower':_series(rows,ind['BB_LOWER']),
-        'rsi':_series(rows,ind['RSI14'],2),
-        'stoch_k':_series(rows,ind['STOCH_RSI_K'],2),
-        'stoch_d':_series(rows,ind['STOCH_RSI_D'],2),
-        'macd':_series(rows,ind['MACD'],5),
-        'macd_signal':_series(rows,ind['MACD_SIGNAL'],5),
-        'macd_hist':_series(rows,ind['MACD_HIST'],5),
-        'adx':_series(rows,ind['ADX14'],2),
-        'plus_di':_series(rows,ind['PLUS_DI'],2),
-        'minus_di':_series(rows,ind['MINUS_DI'],2),
-        'mfi':_series(rows,ind['MFI14'],2),
-        'atr_pct':_series(rows,ind['ATR_PCT'],2),
+        'ticker':code,'period':period,'interval':interval,'currency':raw.get('currency','TRY'),'candles':rows,
+        'ema20':_series(rows,ind['EMA20']),'ema50':_series(rows,ind['EMA50']),'ema200':_series(rows,ind['EMA200']),
+        'bb_upper':_series(rows,ind['BB_UPPER']),'bb_mid':_series(rows,ind['BB_MID']),'bb_lower':_series(rows,ind['BB_LOWER']),
+        'rsi':_series(rows,ind['RSI14'],2),'stoch_k':_series(rows,ind['STOCH_RSI_K'],2),'stoch_d':_series(rows,ind['STOCH_RSI_D'],2),
+        'macd':_series(rows,ind['MACD'],5),'macd_signal':_series(rows,ind['MACD_SIGNAL'],5),'macd_hist':_series(rows,ind['MACD_HIST'],5),
+        'adx':_series(rows,ind['ADX14'],2),'plus_di':_series(rows,ind['PLUS_DI'],2),'minus_di':_series(rows,ind['MINUS_DI'],2),
+        'mfi':_series(rows,ind['MFI14'],2),'atr_pct':_series(rows,ind['ATR_PCT'],2),
         'supertrend_up':[{'time':row['time'],'value':round(float(v),4)} for row,v,b in zip(rows,adv['supertrend'],adv['supertrend_bull']) if pd.notna(v) and bool(b)],
         'supertrend_down':[{'time':row['time'],'value':round(float(v),4)} for row,v,b in zip(rows,adv['supertrend'],adv['supertrend_bull']) if pd.notna(v) and not bool(b)],
-        'tenkan':_series(rows,adv['tenkan']),
-        'kijun':_series(rows,adv['kijun']),
-        'ichimoku_a':_series(rows,adv['ichimoku_a']),
-        'ichimoku_b':_series(rows,adv['ichimoku_b']),
+        'tenkan':_series(rows,adv['tenkan']),'kijun':_series(rows,adv['kijun']),'ichimoku_a':_series(rows,adv['ichimoku_a']),'ichimoku_b':_series(rows,adv['ichimoku_b']),
         'structure':structure,
     }
     last=ind.iloc[-1]
@@ -218,9 +191,7 @@ def yahoo_chart(code, period='1y', interval='1d'):
         'atr_pct':round(float(last['ATR_PCT']),2) if pd.notna(last['ATR_PCT']) else None,
         'bb_pct':round(float(last['BB_PCT']),1) if pd.notna(last['BB_PCT']) else None,
     }
-
-    with _LOCK:
-        _CHART_CACHE[key]=(now,data)
+    with _LOCK:_CHART_CACHE[key]=(time.time(),data)
     return data
 
 def _rows_to_df(rows):
@@ -265,7 +236,7 @@ def multi_timeframe(code):
     def load(spec):
         label,period,interval=spec
         try:
-            d=yahoo_chart(code,period=period,interval=interval)
+            d=yahoo_rows(code,period=period,interval=interval)
             return label,interval,d.get('candles',[])
         except Exception:
             return label,interval,None
@@ -298,7 +269,7 @@ def market_overview():
     def fetch(item):
         key,sym=item
         try:
-            d=yahoo_chart(sym,period='1mo',interval='1d')
+            d=yahoo_rows(sym,period='1mo',interval='1d')
             if d and len(d['candles'])>=2:
                 a,b=d['candles'][-1]['close'],d['candles'][-2]['close']
                 return key,a,round((a/b-1)*100,2),True
