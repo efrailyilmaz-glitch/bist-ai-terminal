@@ -44,7 +44,7 @@ def yahoo_chart(code, period='1y', interval='1d'):
     with _LOCK:
         hit=_CHART_CACHE.get(key)
         if hit and now-hit[0] < 180: return hit[1]
-    symbol=code if code.startswith('^') or '=' in code else code+'.IS'
+    symbol=code if code.startswith('^') or '=' in code or '.' in code or '-' in code else code+'.IS'
     url=f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
     r=requests.get(url,params={'range':period,'interval':interval,'includePrePost':'false','events':'div,splits'},headers={'User-Agent':'Mozilla/5.0'},timeout=20)
     r.raise_for_status()
@@ -72,13 +72,25 @@ def yahoo_chart(code, period='1y', interval='1d'):
 
 def market_overview():
     out={'mode':'LIVE / YAHOO','updated':time.strftime('%d.%m.%Y %H:%M:%S'),'global_score':50,'regime':'NÖTR','fear':50,'breadth':0,'advancers':0,'decliners':0,'unchanged':0}
-    for key,sym in [('xu100','XU100'),('usdtry','TRY=X'),('sp500','^GSPC')]:
+    symbols=[('xu100','XU100'),('usdtry','TRY=X'),('eurtry','EURTRY=X'),('sp500','^GSPC'),('nasdaq','^IXIC'),('dxy','DX-Y.NYB'),('us10y','^TNX'),('gold','GC=F'),('oil','CL=F')]
+    ok=0
+    for key,sym in symbols:
         try:
             d=yahoo_chart(sym,period='1mo',interval='1d')
             if d and len(d['candles'])>=2:
                 a,b=d['candles'][-1]['close'],d['candles'][-2]['close']
-                out[key]=a; out[key+'_change']=round((a/b-1)*100,2)
+                out[key]=a; out[key+'_change']=round((a/b-1)*100,2); ok+=1
             else: out[key]=0; out[key+'_change']=0
         except Exception:
             out[key]=0; out[key+'_change']=0
+    score=50
+    score += 12 if out.get('sp500_change',0)>0 else -10
+    score += 10 if out.get('nasdaq_change',0)>0 else -8
+    score += 14 if out.get('xu100_change',0)>0 else -12
+    score += -8 if out.get('usdtry_change',0)>0.35 else (4 if out.get('usdtry_change',0)<0 else 0)
+    score += -5 if out.get('us10y_change',0)>1 else 2
+    score += -4 if out.get('dxy_change',0)>0.5 else 2
+    score=int(max(0,min(100,score))); out['global_score']=score
+    out['regime']='RISK-ON / BULL' if score>=62 else ('RISK-OFF / BEAR' if score<=38 else 'NÖTR / TRANSITION')
+    out['mode']='LIVE / YAHOO' if ok>=3 else ('PARTIAL / YAHOO' if ok else 'DATA UNAVAILABLE')
     return out
