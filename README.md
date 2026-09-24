@@ -36,3 +36,16 @@ Health endpoint: `/health`
 ## Deployment
 
 Render configuration is in `render.yaml`. The service is configured for deploy-on-commit from the linked branch.
+
+
+## V3.2 structure engine
+
+- Multi-timeframe consensus: 15-minute, 1-hour, 4-hour, daily and weekly
+- Supertrend 10/3 overlay
+- Ichimoku Tenkan/Kijun and cloud boundaries
+- RSI and MACD bullish/bearish divergence detection
+- EMA50/EMA200 Golden Cross / Death Cross detection
+- Bollinger Band squeeze percentile detection
+- Pivot-clustered automatic support and resistance levels
+- Whole-market Setup Radar for Golden Cross, squeeze, divergence and trend alignment
+- Structure signals feed into short- and long-horizon research scores
