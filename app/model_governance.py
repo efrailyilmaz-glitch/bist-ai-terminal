@@ -21,7 +21,7 @@ def model_card():
         'Headline sentiment scores titles only; article bodies are not semantically analyzed.',
         'KAP public-page parsing is not a substitute for licensed real-time KAP REST distribution.',
         'Smart-money and anomaly scores are price/volume proxies, not custody, takas, order-book or manipulation proof.',
-        'Monte Carlo uses historical block-bootstrap distributions and is not an election-style probability forecast or price forecast.'
+        'Monte Carlo uses historical block-bootstrap distributions and is a stress/distribution tool, not a future price forecast.'
       ],
       'data_policy':{
         'missing':'N/A or reduced confidence','level2':'not fabricated','takas':'not fabricated',
