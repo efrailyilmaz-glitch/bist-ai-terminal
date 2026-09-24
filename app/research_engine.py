@@ -1,9 +1,13 @@
 from __future__ import annotations
-import time
+import time, threading
+from concurrent.futures import ThreadPoolExecutor
 from .market_data import scan_codes, market_overview
 from .fundamentals import get_fundamentals
 from .kap_engine import company_profile, disclosures
 from .news_engine import headlines
+
+_CACHE={}
+_LOCK=threading.Lock()
 
 def _v(x,default=50):
     try:return float(x) if x is not None else float(default)
@@ -29,13 +33,20 @@ def _kap_signal(d):
 
 def research_snapshot(ticker:str):
     code=ticker.upper().replace('.IS','')
+    now=time.time()
+    with _LOCK:
+        hit=_CACHE.get(code)
+        if hit and now-hit[0]<300:return hit[1]
+
     tech_rows=scan_codes([code])
     tech=tech_rows[0] if tech_rows else {}
-    fund=get_fundamentals(code)
-    kap=disclosures(code)
-    profile=company_profile(code)
-    news=headlines(code)
-    macro=market_overview()
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        f_fund=ex.submit(get_fundamentals,code)
+        f_kap=ex.submit(disclosures,code)
+        f_profile=ex.submit(company_profile,code)
+        f_news=ex.submit(headlines,code)
+        f_macro=ex.submit(market_overview)
+        fund=f_fund.result();kap=f_kap.result();profile=f_profile.result();news=f_news.result();macro=f_macro.result()
 
     short_tech=_v(tech.get('short_score'))
     long_tech=_v(tech.get('long_score'))
@@ -86,7 +97,7 @@ def research_snapshot(ticker:str):
       'kap':100 if kap.get('items') else 0,'news':100 if news.get('items') else 0,'macro':100 if macro.get('mode')!='DATA UNAVAILABLE' else 0
     }
     confidence=round(.35*component_coverage['technical']+.35*component_coverage['fundamental']+.12*component_coverage['kap']+.08*component_coverage['news']+.10*component_coverage['macro'])
-    return {
+    data={
       'ticker':code,'updated':time.strftime('%d.%m.%Y %H:%M:%S'),
       'short_research_score':round(short),'long_research_score':round(long),
       'short_stance':_stance(short),'long_stance':_stance(long),'confidence':confidence,
@@ -97,3 +108,5 @@ def research_snapshot(ticker:str):
       'coverage':component_coverage,'strengths':strengths[:6],'flags':flags[:6],
       'technical':tech,'fundamentals':fund,'kap_profile':profile,'kap':kap,'news':news,'macro':macro
     }
+    with _LOCK:_CACHE[code]=(time.time(),data)
+    return data
