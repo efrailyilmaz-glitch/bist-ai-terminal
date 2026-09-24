@@ -148,3 +148,28 @@ render=function(){
     if(head&&!$('#exportScanBtn')){const b=document.createElement('button');b.id='exportScanBtn';b.className='toolbtn';b.textContent='CSV Dışa Aktar';b.onclick=exportScanCsv;head.appendChild(b);}
   }
 };
+
+function portfolioRiskHtml(d){
+  if(!d||d.status!=='OK')return '<div class="empty">Portföy risk verisi bulunamadı.</div>';
+  const cards=[['Yıllık Getiri',pct(d.annual_return_pct)],['Yıllık Vol.',pct(d.annual_volatility_pct)],['Sharpe Proxy',d.sharpe_proxy],['Max Drawdown',pct(d.max_drawdown_pct)],['Ort. Korelasyon',d.avg_correlation],['Çeşitlendirme',d.diversification_score+'/100']];
+  const risk='<div class="tableWrap"><table class="stockTable"><thead><tr><th>Kod</th><th>Ağırlık</th><th>Volatilite</th><th>XU100 Beta</th><th>Risk Katkısı</th></tr></thead><tbody>'+d.risk_rows.map(x=>'<tr onclick="openStock(\''+x.ticker+'\')"><td><strong>'+x.ticker+'</strong></td><td>%'+x.weight_pct+'</td><td>%'+x.volatility_pct+'</td><td>'+(x.beta_xu100??'—')+'</td><td>%'+x.risk_contribution_pct+'</td></tr>').join('')+'</tbody></table></div>';
+  const names=d.tickers||[];
+  const corr='<div class="corrWrap"><table class="corrTable"><thead><tr><th></th>'+names.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+d.correlation.map(row=>'<tr><th>'+row.ticker+'</th>'+names.map(x=>'<td class="'+((row[x]||0)>=.7?'corrHigh':(row[x]||0)<=.2?'corrLow':'')+'">'+val4(row[x],2)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+  return '<div class="btgrid">'+cards.map(x=>'<div class="stat"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('')+'</div><h4>Risk Katkısı</h4>'+risk+'<h4>Korelasyon Matrisi</h4>'+corr+'<p class="muted">'+d.note+'</p>';
+}
+async function loadPortfolioRisk(){
+  const box=$('#portfolioRisk');if(!box)return;
+  const codes=[...state.scan.values()].filter(x=>(x.alpha_score||0)>=55).sort((a,b)=>(b.alpha_score||0)-(a.alpha_score||0)).slice(0,8).map(x=>x.ticker);
+  if(!codes.length){box.innerHTML='<div class="empty">Risk analizi için yeterli aday yok.</div>';return;}
+  try{const d=await getJSON('/api/portfolio-risk?codes='+encodeURIComponent(codes.join(',')));box.innerHTML=portfolioRiskHtml(d);}
+  catch(e){box.innerHTML='<div class="empty">Portföy risk analizi yüklenemedi: '+e.message+'</div>';}
+}
+const _portfolioViewV4=portfolioView;
+portfolioView=function(){
+  return _portfolioViewV4()+'<div class="panel portfolioRiskPanel"><div class="panelHead"><div><h2>Portföy Risk Laboratuvarı</h2><p>Korelasyon · beta · volatilite · drawdown · risk katkısı</p></div><span class="pill">EQUAL-WEIGHT PROXY</span></div><div id="portfolioRisk"><div class="loading">Risk analizi hesaplanıyor…</div></div></div>';
+};
+const _renderPortfolioV4=render;
+render=function(){
+  _renderPortfolioV4();
+  if(state.view==='portfolio')setTimeout(loadPortfolioRisk,0);
+};
