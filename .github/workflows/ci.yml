@@ -39,6 +39,7 @@ jobs:
           adv=advanced_series(df)
           assert out and all(k in out for k in ['short_score','long_score','rsi','stoch_rsi_k','macd_hist','adx','mfi','relative_strength_20','supertrend','ichimoku','cross_event','rsi_divergence'])
           assert structure['supertrend'] in ['BULLISH','BEARISH']
+          assert structure['supertrend_value'] > 0
           assert all(k in adv for k in ['supertrend','tenkan','kijun','ichimoku_a','ichimoku_b'])
           print('indicator smoke test ok', out['short_score'], out['long_score'])
           PY
