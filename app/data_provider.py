@@ -1,60 +1,69 @@
 from __future__ import annotations
-import random
 from datetime import datetime
+import math
+import pandas as pd
+import yfinance as yf
 
-def _series(seed:int, base:float, n=72):
-    rnd=random.Random(seed); arr=[]; p=base
-    for _ in range(n):
-        p=max(1,p*(1+rnd.gauss(0,0.006))); arr.append(round(p,2))
-    return arr
+TICKERS=["ASELS","THYAO","TUPRS","KCHOL","ASTOR","PGSUS","BIMAS","FROTO","GARAN","MGROS","AKBNK","TOASO","ISCTR","ALARK","YKBNK","TCELL","SISE","TTKOM","SAHOL","EREGL","ENJSA","ULKER","KONTR","AEFES","EKGYO","KOZAL","PETKM","SASA"]
+NAMES={"ASELS":"Aselsan","THYAO":"Türk Hava Yolları","TUPRS":"Tüpraş","KCHOL":"Koç Holding","ASTOR":"Astor Enerji","PGSUS":"Pegasus","BIMAS":"BİM","FROTO":"Ford Otosan","GARAN":"Garanti BBVA","MGROS":"Migros","AKBNK":"Akbank","TOASO":"Tofaş","ISCTR":"İş Bankası C","ALARK":"Alarko Holding","YKBNK":"Yapı Kredi","TCELL":"Turkcell","SISE":"Şişecam","TTKOM":"Türk Telekom","SAHOL":"Sabancı Holding","EREGL":"Ereğli Demir Çelik","ENJSA":"Enerjisa","ULKER":"Ülker","KONTR":"Kontrolmatik","AEFES":"Anadolu Efes","EKGYO":"Emlak Konut","KOZAL":"Koza Altın","PETKM":"Petkim","SASA":"Sasa Polyester"}
+SECTORS={"ASELS":"Savunma","THYAO":"Ulaştırma","TUPRS":"Enerji","KCHOL":"Holding","ASTOR":"Enerji","PGSUS":"Ulaştırma","BIMAS":"Perakende","FROTO":"Otomotiv","GARAN":"Banka","MGROS":"Perakende","AKBNK":"Banka","TOASO":"Otomotiv","ISCTR":"Banka","ALARK":"Holding","YKBNK":"Banka","TCELL":"İletişim","SISE":"Sanayi","TTKOM":"İletişim","SAHOL":"Holding","EREGL":"Demir Çelik","ENJSA":"Enerji","ULKER":"Gıda","KONTR":"Teknoloji","AEFES":"Gıda","EKGYO":"GYO","KOZAL":"Madencilik","PETKM":"Petrokimya","SASA":"Kimya"}
+_cache={"stocks":[],"market":{},"at":None}
 
-UNIVERSE=[
-('ASELS','Aselsan','Savunma',232.40,92),('THYAO','Türk Hava Yolları','Ulaştırma',314.75,88),
-('TUPRS','Tüpraş','Enerji',201.20,86),('KCHOL','Koç Holding','Holding',181.50,84),
-('ASTOR','Astor Enerji','Enerji',111.80,83),('PGSUS','Pegasus','Ulaştırma',224.2,82),
-('BIMAS','BİM','Perakende',563.00,81),('FROTO','Ford Otosan','Otomotiv',1068.00,80),
-('GARAN','Garanti BBVA','Banka',145.10,79),('MGROS','Migros','Perakende',587.00,78),
-('AKBNK','Akbank','Banka',69.25,77),('TOASO','Tofaş','Otomotiv',276.75,76),
-('ISCTR','İş Bankası C','Banka',14.94,75),('ALARK','Alarko Holding','Holding',96.2,75),
-('YKBNK','Yapı Kredi','Banka',35.74,74),('TCELL','Turkcell','İletişim',101.4,74),
-('SISE','Şişecam','Sanayi',47.82,73),('TTKOM','Türk Telekom','İletişim',55.3,73),
-('SAHOL','Sabancı Holding','Holding',93.20,72),('EREGL','Ereğli Demir Çelik','Demir Çelik',31.42,71),
-('ENJSA','Enerjisa','Enerji',83.25,70),('ULKER','Ülker','Gıda',118.4,70),
-('KONTR','Kontrolmatik','Teknoloji',58.15,69),('AEFES','Anadolu Efes','Gıda',18.6,68),
-('EKGYO','Emlak Konut','GYO',21.1,66),('KOZAL','Koza Altın','Madencilik',28.8,64),
-('PETKM','Petkim','Petrokimya',16.74,61),('SASA','Sasa Polyester','Kimya',4.43,55)]
+def _rsi(s,n=14):
+    d=s.diff(); up=d.clip(lower=0).rolling(n).mean(); dn=(-d.clip(upper=0)).rolling(n).mean()
+    rs=up/dn.replace(0,float("nan")); return 100-(100/(1+rs))
+
+def _score(close,vol):
+    ma20=close.rolling(20).mean().iloc[-1]; ma50=close.rolling(50).mean().iloc[-1]
+    r=float(_rsi(close).iloc[-1]) if len(close)>=15 else 50
+    vr=float(vol.iloc[-1]/vol.tail(20).mean()) if vol.tail(20).mean() else 1
+    score=50+(10 if close.iloc[-1]>ma20 else -10)+(10 if ma20>ma50 else -10)
+    score+=8 if 45<=r<=68 else (-6 if r>78 else 0); score+=min(10,max(-5,(vr-1)*10))
+    return int(max(0,min(100,round(score)))),round(r,1),round(vr,2),ma20,ma50
+
+def _live():
+    symbols=[x+".IS" for x in TICKERS]
+    raw=yf.download(symbols,period="6mo",interval="1d",group_by="ticker",auto_adjust=True,threads=True,progress=False)
+    rows=[]
+    for t in TICKERS:
+        try:
+            df=raw[t+".IS"].dropna()
+            if len(df)<55: continue
+            close=df["Close"]; vol=df["Volume"]; last=float(close.iloc[-1]); prev=float(close.iloc[-2])
+            score,rsi,vr,ma20,ma50=_score(close,vol)
+            atr=float((df["High"]-df["Low"]).tail(14).mean())
+            signal="GÜÇLÜ AL" if score>=80 else "AL" if score>=68 else "İZLE" if score>=50 else "ZAYIF"
+            rows.append({"ticker":t,"name":NAMES.get(t,t),"sector":SECTORS.get(t,""),"price":round(last,2),"change":round((last/prev-1)*100,2),"score":score,"signal":signal,"target":round(last+2*atr,2),"stop":round(max(0,last-1.5*atr),2),"upside":round(2*atr/last*100,1),"risk":max(5,100-score),"chart":[round(float(x),2) for x in close.tail(72)],"rsi":rsi,"volume_ratio":vr,"kap_impact":0,"smart_money":min(100,max(0,round(50+(vr-1)*20+(10 if last>ma20 else -10)))),"trend":"YUKARI" if last>ma20>ma50 else "AŞAĞI" if last<ma20<ma50 else "YATAY"})
+        except Exception: pass
+    return sorted(rows,key=lambda x:x["score"],reverse=True)
 
 def snapshot():
-    rows=[]
-    for i,(ticker,name,sector,base,score) in enumerate(UNIVERSE):
-        s=_series(100+i,base); last=s[-1]; prev=s[-2]; change=(last/prev-1)*100
-        target=last*(1+(score-50)/250); stop=last*(1-max(.035,(100-score)/700))
-        sig='GÜÇLÜ AL' if score>=86 else 'AL' if score>=76 else 'İZLE' if score>=65 else 'UZAK DUR'
-        rows.append({'ticker':ticker,'name':name,'sector':sector,'price':last,'change':round(change,2),
-        'score':score,'signal':sig,'target':round(target,2),'stop':round(stop,2),
-        'upside':round((target/last-1)*100,1),'risk':max(8,min(78,92-score+(i%5)*3)),
-        'chart':s,'rsi':round(42+(score%34),1),'volume_ratio':round(.9+(score%13)/10,2),
-        'kap_impact':round((score-70)*1.7,1),'smart_money':max(15,min(95,score+(i%4)*2-3)),
-        'trend':'YUKARI' if score>=72 else 'YATAY' if score>=62 else 'AŞAĞI'})
-    return sorted(rows,key=lambda x:x['score'],reverse=True)
+    global _cache
+    try:
+        rows=_live()
+        if rows: _cache["stocks"]=rows; _cache["at"]=datetime.now(); return rows
+    except Exception: pass
+    return _cache["stocks"]
+
+def _one(symbol):
+    d=yf.download(symbol,period="5d",interval="1d",auto_adjust=True,progress=False)
+    if len(d)<2:return None
+    c=d["Close"]; last=float(c.iloc[-1]); prev=float(c.iloc[-2])
+    return last,round((last/prev-1)*100,2)
 
 def market_overview():
-    return {'mode':'DEMO/CACHE','updated':datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-    'xu100':11284.6,'xu100_change':.84,'usdtry':41.33,'usdtry_change':.12,'sp500':6461.2,
-    'sp500_change':.31,'global_score':63,'regime':'RISK-ON / BULL','fear':34,'breadth':68,
-    'advancers':331,'decliners':176,'unchanged':29}
+    vals={}
+    for key,sym in {"xu100":"XU100.IS","usdtry":"TRY=X","sp500":"^GSPC"}.items():
+        try: vals[key]=_one(sym)
+        except Exception: vals[key]=None
+    return {"mode":"LIVE / YAHOO" if vals.get("xu100") else "CACHE","updated":datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+    "xu100":round(vals["xu100"][0],2) if vals.get("xu100") else 0,"xu100_change":vals["xu100"][1] if vals.get("xu100") else 0,
+    "usdtry":round(vals["usdtry"][0],4) if vals.get("usdtry") else 0,"usdtry_change":vals["usdtry"][1] if vals.get("usdtry") else 0,
+    "sp500":round(vals["sp500"][0],2) if vals.get("sp500") else 0,"sp500_change":vals["sp500"][1] if vals.get("sp500") else 0,
+    "global_score":50,"regime":"VERİ HESAPLANIYOR","fear":50,"breadth":50,"advancers":0,"decliners":0,"unchanged":0}
 
 def kap_feed():
-    return [{'time':'17:38','ticker':'ASELS','title':'Yeni iş ilişkisi / sözleşme bildirimi','impact':82,'sentiment':'Pozitif'},
-    {'time':'17:21','ticker':'THYAO','title':'Operasyonel trafik sonuçları','impact':61,'sentiment':'Pozitif'},
-    {'time':'16:54','ticker':'TUPRS','title':'Yatırım ve kapasite güncellemesi','impact':74,'sentiment':'Pozitif'},
-    {'time':'16:28','ticker':'SASA','title':'Finansman / borçlanma işlemi','impact':-38,'sentiment':'Negatif'}]
+    return [{"time":"—","ticker":"KAP","title":"Canlı KAP entegrasyonu hazırlanıyor; resmi KAP veri yayın REST servisi abonelik tabanlıdır.","impact":0,"sentiment":"Bilgi"}]
 
-def portfolio():
-    top=snapshot()[:5]
-    return {'equity':125430.0,'day_pnl':1420.0,'day_pnl_pct':1.15,'drawdown':-2.8,'cash':18400.0,
-    'positions':[{'ticker':r['ticker'],'weight':w,'pnl':p} for r,w,p in zip(top,[24,22,19,18,17],[4.8,3.1,2.4,1.7,-.4])]}
-
-def backtest():
-    return {'return_pct':28.4,'xu100_pct':17.9,'alpha_pct':10.5,'sharpe':1.62,'max_drawdown':-8.7,
-    'win_rate':58.4,'profit_factor':1.71,'trades':146,'equity':[100,101,99,103,105,108,106,112,115,113,119,123,121,128.4]}
+def portfolio(): return {"equity":0,"day_pnl":0,"day_pnl_pct":0,"drawdown":0,"cash":0,"positions":[]}
+def backtest(): return {"return_pct":0,"xu100_pct":0,"alpha_pct":0,"sharpe":0,"max_drawdown":0,"win_rate":0,"profit_factor":0,"trades":0,"equity":[100]}
