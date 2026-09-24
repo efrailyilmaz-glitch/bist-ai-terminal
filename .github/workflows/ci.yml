@@ -17,4 +17,24 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt
       - run: python -m compileall app
-      - run: python -c "from app.main import app; assert app.version == '3.0'; print(app.title, app.version)"
+      - run: node --check app/static/app.js
+      - name: Indicator smoke test
+        run: |
+          python - <<'PY'
+          import numpy as np, pandas as pd
+          from app.scoring import score_frame, indicator_frame
+          n=260
+          x=np.arange(n)
+          close=100+x*.12+np.sin(x/7)*2
+          df=pd.DataFrame({
+              'Open':close-.3,'High':close+1.2,'Low':close-1.1,'Close':close,
+              'Volume':1_000_000+(np.sin(x/5)+1)*180_000
+          })
+          ind=indicator_frame(df)
+          out=score_frame(df,benchmark_return_20=2,benchmark_return_60=5)
+          required=['RSI14','STOCH_RSI_K','MACD','MACD_HIST','ADX14','MFI14','ATR_PCT','OBV_TREND20']
+          assert all(k in ind.columns for k in required)
+          assert out and all(k in out for k in ['short_score','long_score','rsi','stoch_rsi_k','macd_hist','adx','mfi','relative_strength_20'])
+          print('indicator smoke test ok', out['short_score'], out['long_score'])
+          PY
+      - run: python -c "from app.main import app; assert app.version == '3.1'; print(app.title, app.version)"
