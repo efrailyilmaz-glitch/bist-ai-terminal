@@ -18,7 +18,8 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m compileall app
       - run: node --check app/static/app.js
-      - name: Indicator smoke test
+      - run: node --check app/static/research.js
+      - name: Technical indicator smoke test
         run: |
           python - <<'PY'
           import numpy as np, pandas as pd
@@ -33,14 +34,34 @@ jobs:
           })
           ind=indicator_frame(df)
           out=score_frame(df,benchmark_return_20=2,benchmark_return_60=5)
-          required=['RSI14','STOCH_RSI_K','MACD','MACD_HIST','ADX14','MFI14','ATR_PCT','OBV_TREND20']
-          assert all(k in ind.columns for k in required)
           structure=analyze_structure(df)
           adv=advanced_series(df)
+          required=['RSI14','STOCH_RSI_K','MACD','MACD_HIST','ADX14','MFI14','ATR_PCT','OBV_TREND20']
+          assert all(k in ind.columns for k in required)
           assert out and all(k in out for k in ['short_score','long_score','rsi','stoch_rsi_k','macd_hist','adx','mfi','relative_strength_20','supertrend','ichimoku','cross_event','rsi_divergence'])
           assert structure['supertrend'] in ['BULLISH','BEARISH']
           assert structure['supertrend_value'] > 0
           assert all(k in adv for k in ['supertrend','tenkan','kijun','ichimoku_a','ichimoku_b'])
-          print('indicator smoke test ok', out['short_score'], out['long_score'])
+          print('technical smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '3.2'; print(app.title, app.version)"
+      - name: V4 research smoke test
+        run: |
+          python - <<'PY'
+          from app.fundamentals import _compute_scores
+          from app.kap_engine import classify
+          from app.news_engine import score_headline
+          sample={
+            'sector':'Industrials','trailing_pe':12,'price_to_book':2,'ev_to_ebitda':8,'price_to_sales':1.5,
+            'fcf_yield':6,'roe_pct':22,'roa_pct':9,'operating_margin_pct':18,'profit_margin_pct':14,
+            'revenue_growth_pct':20,'earnings_growth_pct':24,'debt_to_equity':.7,'current_ratio':1.6,
+            'free_cash_flow':100,'total_cash':80,'total_debt':120,'dividend_yield_pct':2,'payout_ratio_pct':35
+          }
+          scores=_compute_scores(sample)
+          assert scores['fundamental_score'] is not None and scores['coverage_pct']>50
+          event=classify('Yeni iş ilişkisi kapsamında önemli sözleşme imzalandı')
+          assert event['sentiment_score']>0
+          sent,_,_=score_headline('Şirket yeni yatırım ve kapasite artışı açıkladı')
+          assert sent>0
+          print('V4 research smoke ok',scores['fundamental_score'])
+          PY
+      - run: python -c "from app.main import app; assert app.version == '4.0'; print(app.title, app.version)"
