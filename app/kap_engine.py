@@ -74,8 +74,8 @@ def company_profile(ticker:str,force:bool=False):
         for a in soup.find_all('a'):
             txt=_norm(a.get_text(' ',strip=True))
             href=a.get('href','')
-            if '/Sektorler' in href or '/sektorler' in href:
-                if txt and txt not in sectors:sectors.append(txt)
+            if ('/Sektorler' in href or '/sektorler' in href) and ('sector=' in href or 'sector=' in href.lower()):
+                if txt and txt.lower()!='sektörler' and txt not in sectors:sectors.append(txt)
         market=None
         for a in soup.find_all('a'):
             txt=_norm(a.get_text(' ',strip=True))
