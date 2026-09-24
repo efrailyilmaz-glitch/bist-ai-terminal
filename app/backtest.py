@@ -2,14 +2,14 @@ from __future__ import annotations
 import math
 import numpy as np
 import pandas as pd
-from .market_data import yahoo_chart
+from .market_data import yahoo_rows
 from .scoring import indicator_frame
 from .advanced_indicators import add_supertrend
 
 TRADING_DAYS=252
 
 def _frame(ticker,period='5y'):
-    d=yahoo_chart(ticker,period=period,interval='1d')
+    d=yahoo_rows(ticker,period=period,interval='1d')
     rows=d.get('candles',[])
     if len(rows)<80:return None,rows
     df=pd.DataFrame(rows)
