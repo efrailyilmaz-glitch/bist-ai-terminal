@@ -9,6 +9,7 @@ from .fundamentals import get_fundamentals, factor_screen
 from .kap_engine import company_profile, disclosures
 from .news_engine import headlines
 from .research_engine import research_snapshot
+from .portfolio_analytics import analyze_portfolio
 
 BASE=Path(__file__).resolve().parent
 app=FastAPI(title='BIST AI Terminal',version='4.0')
@@ -74,6 +75,11 @@ def news(ticker:str,limit:int=15):
 @app.get('/api/research/{ticker}')
 def research(ticker:str):
     return research_snapshot(ticker)
+
+@app.get('/api/portfolio-risk')
+def portfolio_risk(codes:str):
+    selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
+    return analyze_portfolio(selected)
 
 @app.get('/api/market')
 def market(): return market_overview()
