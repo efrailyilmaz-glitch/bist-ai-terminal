@@ -18,3 +18,6 @@
 .levelsRow{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.level{padding:5px 8px;border-radius:99px;font-size:9px;border:1px solid #1b394a}
 .level.support{color:#4be195;border-color:#245d48;background:#0c2a21}.level.resistance{color:#ff8291;border-color:#60303a;background:#2a1218}
 @media(max-width:1100px){.mtfGrid{grid-template-columns:repeat(3,1fr)}.structureCards{grid-template-columns:repeat(3,1fr)}}
+
+.setupGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:1100px){.setupGrid{grid-template-columns:1fr}}
