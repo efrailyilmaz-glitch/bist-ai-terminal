@@ -5,9 +5,13 @@ from pathlib import Path
 from .universe import get_universe
 from .market_data import scan_codes, yahoo_chart, market_overview, multi_timeframe
 from .backtest import run_backtest
+from .fundamentals import get_fundamentals, factor_screen
+from .kap_engine import company_profile, disclosures
+from .news_engine import headlines
+from .research_engine import research_snapshot
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='3.2')
+app=FastAPI(title='BIST AI Terminal',version='4.0')
 app.mount('/static',StaticFiles(directory=str(BASE/'static')),name='static')
 
 @app.get('/',response_class=HTMLResponse)
@@ -45,6 +49,32 @@ def backtest(ticker:str,fast:int=20,slow:int=50,period:str='2y'):
     fast=max(5,min(fast,100)); slow=max(fast+5,min(slow,250))
     return run_backtest(ticker,fast=fast,slow=slow,period=period)
 
+@app.get('/api/fundamentals/{ticker}')
+def fundamentals(ticker:str,force:bool=False):
+    return get_fundamentals(ticker,force=force)
+
+@app.get('/api/factor-screen')
+def factors(codes:str):
+    selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:24]
+    return factor_screen(selected)
+
+@app.get('/api/kap-profile/{ticker}')
+def kap_profile(ticker:str,force:bool=False):
+    return company_profile(ticker,force=force)
+
+@app.get('/api/kap-disclosures/{ticker}')
+def kap_disclosures(ticker:str,limit:int=12):
+    return disclosures(ticker,limit=max(1,min(limit,30)))
+
+@app.get('/api/news/{ticker}')
+def news(ticker:str,limit:int=15):
+    data=headlines(ticker,limit=max(1,min(limit,30)))
+    return data
+
+@app.get('/api/research/{ticker}')
+def research(ticker:str):
+    return research_snapshot(ticker)
+
 @app.get('/api/market')
 def market(): return market_overview()
 
@@ -56,4 +86,4 @@ def kap():
 @app.get('/health')
 def health():
     u=get_universe()
-    return {'status':'ok','version':'3.2','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
+    return {'status':'ok','version':'4.0','universe_count':len(u),'universe_source':u[0].get('source') if u else 'NONE'}
