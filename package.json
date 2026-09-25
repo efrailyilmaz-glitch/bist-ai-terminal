@@ -68,7 +68,7 @@
         }
       ],
       "artifactName": "BIST-AI-Terminal-${version}-${arch}.${ext}",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
       "gatekeeperAssess": false
     },
     "dmg": {
