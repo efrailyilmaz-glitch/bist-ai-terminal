@@ -69,6 +69,22 @@ jobs:
           pyinstaller --noconfirm --clean --onedir --noconsole --name bist-ai-backend `
             --paths "." `
             --collect-submodules app `
+            --hidden-import app.advanced_indicators `
+            --hidden-import app.backtest `
+            --hidden-import app.catalysts `
+            --hidden-import app.data_provider `
+            --hidden-import app.fundamentals `
+            --hidden-import app.kap_engine `
+            --hidden-import app.main `
+            --hidden-import app.market_data `
+            --hidden-import app.market_internals `
+            --hidden-import app.model_governance `
+            --hidden-import app.news_engine `
+            --hidden-import app.portfolio_analytics `
+            --hidden-import app.providers `
+            --hidden-import app.research_engine `
+            --hidden-import app.scoring `
+            --hidden-import app.universe `
             --collect-all uvicorn --collect-all fastapi --collect-all starlette `
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml `
             --add-data "app/templates;app/templates" `
@@ -81,6 +97,22 @@ jobs:
           pyinstaller --noconfirm --clean --onedir --name bist-ai-backend \
             --paths "." \
             --collect-submodules app \
+            --hidden-import app.advanced_indicators \
+            --hidden-import app.backtest \
+            --hidden-import app.catalysts \
+            --hidden-import app.data_provider \
+            --hidden-import app.fundamentals \
+            --hidden-import app.kap_engine \
+            --hidden-import app.main \
+            --hidden-import app.market_data \
+            --hidden-import app.market_internals \
+            --hidden-import app.model_governance \
+            --hidden-import app.news_engine \
+            --hidden-import app.portfolio_analytics \
+            --hidden-import app.providers \
+            --hidden-import app.research_engine \
+            --hidden-import app.scoring \
+            --hidden-import app.universe \
             --collect-all uvicorn --collect-all fastapi --collect-all starlette \
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml \
             --add-data "app/templates:app/templates" \
