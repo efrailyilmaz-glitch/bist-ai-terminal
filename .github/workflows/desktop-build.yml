@@ -67,6 +67,8 @@ jobs:
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean --onedir --noconsole --name bist-ai-backend `
+            --paths "." `
+            --collect-submodules app `
             --collect-all uvicorn --collect-all fastapi --collect-all starlette `
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml `
             --add-data "app/templates;app/templates" `
