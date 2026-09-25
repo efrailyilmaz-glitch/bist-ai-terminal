@@ -76,7 +76,7 @@ jobs:
       - name: Build local Python engine (macOS)
         if: matrix.platform == 'mac'
         run: |
-          pyinstaller --noconfirm --clean --onedir --noconsole --name bist-ai-backend \
+          pyinstaller --noconfirm --clean --onedir --name bist-ai-backend \
             --collect-all uvicorn --collect-all fastapi --collect-all starlette \
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml \
             --add-data "app/templates:app/templates" \
@@ -141,7 +141,6 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -150,9 +149,16 @@ jobs:
           path: release-artifacts
           merge-multiple: true
 
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release-artifacts/*.exe
-            release-artifacts/*.dmg
-          generate_release_notes: true
+      - name: Publish desktop installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            TITLE="BIST AI Terminal ${GITHUB_REF_NAME}"
+            gh release create "$TAG" release-artifacts/* --target "${GITHUB_SHA}" --title "$TITLE" --generate-notes
+          else
+            TAG="desktop-latest"
+            gh release delete "$TAG" --cleanup-tag -y || true
+            gh release create "$TAG" release-artifacts/* --target "${GITHUB_SHA}" --title "BIST AI Terminal Desktop Latest" --prerelease --notes "Automated Windows and macOS desktop installers for the latest main build."
+          fi
