@@ -10,6 +10,20 @@ let backendPort = null;
 let quitting = false;
 
 app.setName('BIST AI Terminal');
+if (process.platform === 'win32') app.setAppUserModelId('com.bistai.terminal');
+
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
 
 function freePort() {
   return new Promise((resolve, reject) => {
