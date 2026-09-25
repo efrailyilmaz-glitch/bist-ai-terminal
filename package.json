@@ -1,0 +1,80 @@
+{
+  "name": "bist-ai-terminal-desktop",
+  "version": "5.1.0",
+  "description": "BIST AI Quant Research Terminal Desktop",
+  "main": "electron/main.cjs",
+  "author": "Yildirim",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "desktop": "electron .",
+    "dist:win": "electron-builder --win nsis --x64",
+    "dist:mac:x64": "electron-builder --mac dmg --x64",
+    "dist:mac:arm64": "electron-builder --mac dmg --arm64"
+  },
+  "devDependencies": {
+    "electron": "^38.1.2",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bistai.terminal",
+    "productName": "BIST AI Terminal",
+    "copyright": "Copyright © 2026",
+    "directories": {
+      "output": "desktop-dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/bist-ai-backend",
+        "to": "backend"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "BIST-AI-Terminal-Setup-\${version}-\${arch}.\${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BIST AI Terminal",
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.finance",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "artifactName": "BIST-AI-Terminal-\${version}-\${arch}.\${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "BIST AI Terminal \${version}",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        { "x": 150, "y": 190, "type": "file" },
+        { "x": 390, "y": 190, "type": "link", "path": "/Applications" }
+      ]
+    }
+  }
+}
