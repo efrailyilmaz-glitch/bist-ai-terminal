@@ -1,0 +1,132 @@
+name: Desktop Installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            arch: x64
+            artifact: windows-x64
+          - os: macos-13
+            platform: mac
+            arch: x64
+            artifact: mac-intel
+          - os: macos-14
+            platform: mac
+            arch: arm64
+            artifact: mac-apple-silicon
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "pyinstaller>=6.11"
+
+      - name: Install Electron dependencies
+        run: npm install
+
+      - name: Build local Python engine (Windows)
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onedir --noconsole --name bist-ai-backend `
+            --collect-all uvicorn --collect-all fastapi --collect-all starlette `
+            --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml `
+            --add-data "app/templates;app/templates" `
+            --add-data "app/static;app/static" `
+            app/desktop_server.py
+
+      - name: Build local Python engine (macOS)
+        if: matrix.platform == 'mac'
+        run: |
+          pyinstaller --noconfirm --clean --onedir --noconsole --name bist-ai-backend \
+            --collect-all uvicorn --collect-all fastapi --collect-all starlette \
+            --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml \
+            --add-data "app/templates:app/templates" \
+            --add-data "app/static:app/static" \
+            app/desktop_server.py
+
+      - name: Smoke test backend (Windows)
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          $env:BIST_AI_PORT="18765"
+          $p = Start-Process -FilePath ".\\dist\\bist-ai-backend\\bist-ai-backend.exe" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 5
+          Invoke-RestMethod http://127.0.0.1:18765/health
+          Stop-Process -Id $p.Id -Force
+
+      - name: Smoke test backend (macOS)
+        if: matrix.platform == 'mac'
+        run: |
+          BIST_AI_PORT=18765 ./dist/bist-ai-backend/bist-ai-backend >/tmp/bist-ai.log 2>&1 &
+          PID=$!
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:18765/health; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18765/health
+          kill $PID || true
+
+      - name: Build Windows installer
+        if: matrix.platform == 'win'
+        run: npm run dist:win
+
+      - name: Build macOS Intel installer
+        if: matrix.platform == 'mac' && matrix.arch == 'x64'
+        run: npm run dist:mac:x64
+
+      - name: Build macOS Apple Silicon installer
+        if: matrix.platform == 'mac' && matrix.arch == 'arm64'
+        run: npm run dist:mac:arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bist-ai-${{ matrix.artifact }}
+          path: |
+            desktop-dist/*.exe
+            desktop-dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/*.exe
+            release-artifacts/*.dmg
+          generate_release_notes: true
