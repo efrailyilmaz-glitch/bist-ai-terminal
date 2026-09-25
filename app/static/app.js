@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
 const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true}};
-const SCAN_CACHE_KEY='bist-ai-scan-v6';
+const SCAN_CACHE_KEY='bist-ai-scan-v7';
 function restoreScanCache(){
   try{
     const cached=JSON.parse(localStorage.getItem(SCAN_CACHE_KEY)||'null');
@@ -28,7 +28,7 @@ async function init(){
     state.universe=u.rows||[]; state.total=u.count||state.universe.length; state.market=m||{};
     state.universe.forEach(x=>state.meta.set(x.ticker,x));
     const restored=restoreScanCache();
-    els.systemMode.textContent=`V6 · ${u.source||'UNIVERSE'}`;
+    els.systemMode.textContent=`V7 · ${u.source||'UNIVERSE'}`;
     els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
     if(restored)updateRegime();
     renderTickerbar(); render(); setTimeout(()=>scanAll(false),restored?900:150);

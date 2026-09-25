@@ -18,9 +18,10 @@ from .model_governance import model_card
 from .portfolio_analytics import analyze_portfolio, compare_allocations
 from .analyst_engine import trusted_research
 from .opportunity_engine import start_radar, trigger_refresh, radar_snapshot, alerts_snapshot
+from .premium_engine import fair_value_health, volume_profile
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='6.0')
+app=FastAPI(title='BIST AI Terminal',version='7.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -115,6 +116,14 @@ def analysts(ticker:str):
     f=get_fundamentals(ticker)
     return trusted_research(ticker,current_price=f.get('current_price'),fundamentals=f)
 
+@app.get('/api/premium/{ticker}')
+def premium(ticker:str):
+    return fair_value_health(ticker)
+
+@app.get('/api/volume-profile/{ticker}')
+def volumeprofile(ticker:str,period:str='6mo',interval:str='1d',bins:int=28):
+    return volume_profile(ticker,period=period,interval=interval,bins=bins)
+
 @app.get('/api/opportunities')
 def opportunities(limit:int=60):
     return radar_snapshot(limit=limit)
@@ -174,4 +183,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'6.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'7.0','service':'bist-ai-terminal'}

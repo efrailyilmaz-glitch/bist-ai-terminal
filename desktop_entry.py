@@ -6,6 +6,7 @@ import traceback
 import app.advanced_indicators
 import app.analyst_engine
 import app.opportunity_engine
+import app.premium_engine
 import app.backtest
 import app.catalysts
 import app.data_provider

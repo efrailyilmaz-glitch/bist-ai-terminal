@@ -21,6 +21,7 @@ jobs:
       - run: node --check app/static/research.js
       - run: node --check app/static/v5.js
       - run: node --check app/static/v6.js
+      - run: node --check app/static/v7.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -78,4 +79,14 @@ jobs:
           assert abs(_num('1.057,19')-1057.19)<0.01
           print('V6 opportunity smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '6.0'; print(app.title, app.version)"
+      - name: V7 premium engine smoke test
+        run: |
+          python - <<'PY'
+          from app.premium_engine import _altman,_piotroski
+          f={'sector':'Industrials','market_cap':1000}
+          a={'latest':{'total_assets':1000,'total_liabilities':400,'current_assets':500,'current_liabilities':200,'retained_earnings':250,'ebit':120,'revenue':1400,'net_income':100,'operating_cash_flow':140,'long_term_debt':180,'shares':100,'gross_profit':450},'previous':{'total_assets':900,'total_liabilities':420,'current_assets':420,'current_liabilities':210,'retained_earnings':200,'ebit':100,'revenue':1200,'net_income':80,'operating_cash_flow':90,'long_term_debt':220,'shares':100,'gross_profit':360}}
+          assert _altman(f,a)['score'] is not None
+          p=_piotroski(a); assert p['score'] is not None and p['max_score']>=7
+          print('V7 premium smoke ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '7.0'; print(app.title, app.version)"
