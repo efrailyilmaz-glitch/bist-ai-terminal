@@ -63,4 +63,4 @@ jobs:
               assert 'cvar95_daily_pct' in st
           print('V5 research/portfolio smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '5.0'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '5.1'; print(app.title, app.version)"
