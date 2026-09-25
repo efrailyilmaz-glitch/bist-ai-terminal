@@ -16,9 +16,11 @@ from .market_internals import market_internals
 from .catalysts import catalyst_calendar
 from .model_governance import model_card
 from .portfolio_analytics import analyze_portfolio, compare_allocations
+from .analyst_engine import trusted_research
+from .opportunity_engine import start_radar, trigger_refresh, radar_snapshot, alerts_snapshot
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='5.1')
+app=FastAPI(title='BIST AI Terminal',version='6.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -108,6 +110,23 @@ def news(ticker:str,limit:int=15):
 def research(ticker:str):
     return research_snapshot(ticker)
 
+@app.get('/api/analysts/{ticker}')
+def analysts(ticker:str):
+    f=get_fundamentals(ticker)
+    return trusted_research(ticker,current_price=f.get('current_price'),fundamentals=f)
+
+@app.get('/api/opportunities')
+def opportunities(limit:int=60):
+    return radar_snapshot(limit=limit)
+
+@app.get('/api/alerts')
+def alerts(limit:int=50,since:int=0):
+    return alerts_snapshot(limit=limit,since=since)
+
+@app.post('/api/radar/refresh')
+def radar_refresh():
+    return trigger_refresh()
+
 @app.get('/api/portfolio-risk')
 def portfolio_risk(codes:str,method:str='equal'):
     selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
@@ -148,6 +167,11 @@ def kap():
     return {'status':'PUBLIC_SOURCE_READY','source':'KAP','url':'https://www.kap.org.tr/tr/bildirim-sorgu',
             'message':'KAP public profile/search katmanı aktiftir. Lisanslı REST veri yayını bağlanana kadar sahte eşzamanlı bildirim üretilmez.'}
 
+@app.on_event('startup')
+def desktop_background_radar():
+    import os
+    if os.getenv('BIST_AI_DESKTOP')=='1': start_radar()
+
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'5.1','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'6.0','service':'bist-ai-terminal'}

@@ -70,6 +70,8 @@ jobs:
             --paths "." `
             --collect-submodules app `
             --hidden-import app.advanced_indicators `
+            --hidden-import app.analyst_engine `
+            --hidden-import app.opportunity_engine `
             --hidden-import app.backtest `
             --hidden-import app.catalysts `
             --hidden-import app.data_provider `
@@ -97,6 +99,8 @@ jobs:
             --paths "." \
             --collect-submodules app \
             --hidden-import app.advanced_indicators \
+            --hidden-import app.analyst_engine \
+            --hidden-import app.opportunity_engine \
             --hidden-import app.backtest \
             --hidden-import app.catalysts \
             --hidden-import app.data_provider \
@@ -198,9 +202,9 @@ jobs:
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             TAG="${GITHUB_REF_NAME}"
             TITLE="BIST AI Terminal ${GITHUB_REF_NAME}"
-            gh release create "$TAG" release-artifacts/* --target "${GITHUB_SHA}" --title "$TITLE" --generate-notes
+            gh release create "$TAG" release-artifacts/* --repo "${GITHUB_REPOSITORY}" --target "${GITHUB_SHA}" --title "$TITLE" --generate-notes
           else
             TAG="desktop-latest"
-            gh release delete "$TAG" --cleanup-tag -y || true
-            gh release create "$TAG" release-artifacts/* --target "${GITHUB_SHA}" --title "BIST AI Terminal Desktop Latest" --prerelease --notes "Automated Windows and macOS desktop installers for the latest main build."
+            gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --cleanup-tag -y || true
+            gh release create "$TAG" release-artifacts/* --repo "${GITHUB_REPOSITORY}" --target "${GITHUB_SHA}" --title "BIST AI Terminal Desktop Latest" --prerelease --notes "Automated Windows and macOS desktop installers for the latest main build."
           fi

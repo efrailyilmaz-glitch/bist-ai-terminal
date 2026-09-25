@@ -4,6 +4,8 @@ import traceback
 
 # Explicit imports make PyInstaller analyze every local application module.
 import app.advanced_indicators
+import app.analyst_engine
+import app.opportunity_engine
 import app.backtest
 import app.catalysts
 import app.data_provider

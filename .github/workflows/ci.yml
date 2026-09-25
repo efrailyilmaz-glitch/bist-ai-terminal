@@ -20,6 +20,8 @@ jobs:
       - run: node --check app/static/app.js
       - run: node --check app/static/research.js
       - run: node --check app/static/v5.js
+      - run: node --check app/static/v6.js
+      - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
           python - <<'PY'
@@ -63,4 +65,17 @@ jobs:
               assert 'cvar95_daily_pct' in st
           print('V5 research/portfolio smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '5.1'; print(app.title, app.version)"
+      - name: V6 opportunity engine smoke test
+        run: |
+          python - <<'PY'
+          from app.opportunity_engine import score_opportunity
+          from app.analyst_engine import _num
+          tech={'ticker':'TEST','price':100,'short_score':84,'long_score':78,'smart_money_score':75,'relative_strength_20':8,'relative_strength_60':9,'volume_ratio':1.8,'risk':42,'anomaly_score':30,'avg_value_turnover_20':50000000,'breakout20':True,'supertrend':'BULLISH','ichimoku':'BULLISH','adx':31,'plus_di':30,'minus_di':15,'atr':3,'momentum_120':18,'resistances':[108,116],'supports':[96,91]}
+          fund={'fundamental_score':74,'quality_score':80,'growth_score':72,'coverage_pct':80,'target_mean_price':135}
+          analyst={'analyst_score':78,'coverage_count':3,'consensus_target':140,'consensus_upside_pct':40}
+          out=score_opportunity(tech,fund,analyst,{'global_score':62},{'items':[]},{'headline_sentiment':10})
+          assert out['opportunity_score']>=70 and out['targets']['long_target']>100
+          assert abs(_num('1.057,19')-1057.19)<0.01
+          print('V6 opportunity smoke ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '6.0'; print(app.title, app.version)"

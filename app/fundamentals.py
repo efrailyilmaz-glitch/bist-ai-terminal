@@ -180,7 +180,10 @@ def get_fundamentals(ticker:str,force:bool=False)->Dict:
           'fcf_yield':None if not market_cap or fcf is None else fcf/market_cap*100,
           'dividend_yield_pct':_pct(info.get('dividendYield')),'payout_ratio_pct':_pct(info.get('payoutRatio')),
           'beta':_clean(info.get('beta')),'shares_outstanding':_clean(info.get('sharesOutstanding')),
-          'target_mean_price':_clean(info.get('targetMeanPrice')),'analyst_count':_clean(info.get('numberOfAnalystOpinions')),
+          'current_price':_clean(info.get('currentPrice') or info.get('regularMarketPrice')),
+          'target_mean_price':_clean(info.get('targetMeanPrice')),'target_median_price':_clean(info.get('targetMedianPrice')),
+          'target_high_price':_clean(info.get('targetHighPrice')),'target_low_price':_clean(info.get('targetLowPrice')),
+          'analyst_count':_clean(info.get('numberOfAnalystOpinions')),'recommendation_mean':_clean(info.get('recommendationMean')),'recommendation_key':info.get('recommendationKey'),
           'updated':time.strftime('%d.%m.%Y %H:%M:%S')
         }
         q=_quarterly(t)

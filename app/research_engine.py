@@ -5,6 +5,8 @@ from .market_data import scan_codes, market_overview
 from .fundamentals import get_fundamentals
 from .kap_engine import company_profile, disclosures
 from .news_engine import headlines
+from .analyst_engine import trusted_research
+from .opportunity_engine import score_opportunity
 
 _CACHE={}
 _LOCK=threading.Lock()
@@ -40,13 +42,15 @@ def research_snapshot(ticker:str):
 
     tech_rows=scan_codes([code])
     tech=tech_rows[0] if tech_rows else {}
-    with ThreadPoolExecutor(max_workers=5) as ex:
+    with ThreadPoolExecutor(max_workers=6) as ex:
         f_fund=ex.submit(get_fundamentals,code)
         f_kap=ex.submit(disclosures,code)
         f_profile=ex.submit(company_profile,code)
         f_news=ex.submit(headlines,code)
         f_macro=ex.submit(market_overview)
-        fund=f_fund.result();kap=f_kap.result();profile=f_profile.result();news=f_news.result();macro=f_macro.result()
+        fund=f_fund.result()
+        f_analyst=ex.submit(trusted_research,code,_v(tech.get('price'),0),fund)
+        kap=f_kap.result();profile=f_profile.result();news=f_news.result();macro=f_macro.result();analyst=f_analyst.result()
 
     short_tech=_v(tech.get('short_score'))
     long_tech=_v(tech.get('long_score'))
@@ -54,14 +58,16 @@ def research_snapshot(ticker:str):
     news_score=50+_v(news.get('headline_sentiment'),0)/2
     kap_score,top_event=_kap_signal(kap)
     macro_score=_v(macro.get('global_score'))
+    analyst_score=_v(analyst.get('analyst_score'))
 
     fcoverage=_v(fund.get('coverage_pct'),0)
     fund_weight=.24 if fcoverage>=55 else (.14 if fcoverage>=25 else 0)
-    short_weights={'technical':.50,'fundamental':fund_weight,'kap':.10,'news':.08,'macro':.08}
-    long_weights={'technical':.30,'fundamental':.44 if fcoverage>=55 else (.25 if fcoverage>=25 else 0),'kap':.10,'news':.05,'macro':.11}
+    analyst_weight=.12 if analyst.get('coverage_count',0)>0 else 0
+    short_weights={'technical':.44,'fundamental':fund_weight,'kap':.10,'news':.06,'macro':.08,'analyst':analyst_weight}
+    long_weights={'technical':.24,'fundamental':.40 if fcoverage>=55 else (.24 if fcoverage>=25 else 0),'kap':.08,'news':.04,'macro':.08,'analyst':.20 if analyst.get('coverage_count',0)>0 else 0}
 
     def combine(weights,technical):
-        vals={'technical':technical,'fundamental':fundamental,'kap':kap_score,'news':news_score,'macro':macro_score}
+        vals={'technical':technical,'fundamental':fundamental,'kap':kap_score,'news':news_score,'macro':macro_score,'analyst':analyst_score}
         den=sum(weights[k] for k in weights if k!='fundamental' or weights[k]>0)
         return sum(vals[k]*weights[k] for k in weights)/den if den else 50
 
@@ -91,22 +97,25 @@ def research_snapshot(ticker:str):
     if tech.get('supertrend')=='BULLISH' and tech.get('ichimoku')=='BULLISH':strengths.append('Trend uyumu pozitif')
     if tech.get('rsi_divergence')=='BULLISH' or tech.get('macd_divergence')=='BULLISH':strengths.append('Bullish divergence')
     if top_event and top_event.get('sentiment_score',0)>0:strengths.append('Pozitif KAP olayı')
+    if analyst.get('consensus_upside_pct') is not None and analyst.get('consensus_upside_pct',0)>=20:strengths.append('Analist hedef konsensüsü pozitif')
+    if analyst.get('consensus_upside_pct') is not None and analyst.get('consensus_upside_pct',0)<0:flags.append('Analist konsensüs hedefi cari fiyatın altında')
 
     component_coverage={
       'technical':100 if tech else 0,'fundamental':fcoverage,
-      'kap':100 if kap.get('items') else 0,'news':100 if news.get('items') else 0,'macro':100 if macro.get('mode')!='DATA UNAVAILABLE' else 0
+      'kap':100 if kap.get('items') else 0,'news':100 if news.get('items') else 0,'macro':100 if macro.get('mode')!='DATA UNAVAILABLE' else 0,'analyst':100 if analyst.get('coverage_count',0)>0 else 0
     }
-    confidence=round(.35*component_coverage['technical']+.35*component_coverage['fundamental']+.12*component_coverage['kap']+.08*component_coverage['news']+.10*component_coverage['macro'])
+    confidence=round(.30*component_coverage['technical']+.25*component_coverage['fundamental']+.10*component_coverage['kap']+.08*component_coverage['news']+.10*component_coverage['macro']+.17*component_coverage['analyst'])
     data={
       'ticker':code,'updated':time.strftime('%d.%m.%Y %H:%M:%S'),
       'short_research_score':round(short),'long_research_score':round(long),
       'short_stance':_stance(short),'long_stance':_stance(long),'confidence':confidence,
       'components':{
         'technical_short':round(short_tech),'technical_long':round(long_tech),'fundamental':fund.get('fundamental_score'),
-        'kap':round(kap_score),'news':round(news_score),'macro':round(macro_score),'risk':round(risk),'anomaly':round(anomaly)
+        'kap':round(kap_score),'news':round(news_score),'macro':round(macro_score),'analyst':round(analyst_score),'risk':round(risk),'anomaly':round(anomaly)
       },
       'coverage':component_coverage,'strengths':strengths[:6],'flags':flags[:6],
-      'technical':tech,'fundamentals':fund,'kap_profile':profile,'kap':kap,'news':news,'macro':macro
+      'technical':tech,'fundamentals':fund,'kap_profile':profile,'kap':kap,'news':news,'macro':macro,'analyst':analyst,
+      'opportunity':score_opportunity(tech,fund,analyst,macro,kap,news)
     }
     with _LOCK:_CACHE[code]=(time.time(),data)
     return data
