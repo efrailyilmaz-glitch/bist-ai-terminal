@@ -79,6 +79,8 @@ jobs:
         if: matrix.platform == 'mac'
         run: |
           pyinstaller --noconfirm --clean --onedir --name bist-ai-backend \
+            --paths "." \
+            --collect-submodules app \
             --collect-all uvicorn --collect-all fastapi --collect-all starlette \
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml \
             --add-data "app/templates:app/templates" \
@@ -90,14 +92,17 @@ jobs:
         shell: pwsh
         run: |
           $env:BIST_AI_PORT="18765"
-          $log = Join-Path $env:RUNNER_TEMP "bist-ai-backend.log"
-          $p = Start-Process -FilePath ".\\dist\\bist-ai-backend\\bist-ai-backend.exe" -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $log
+          $outLog = Join-Path $env:RUNNER_TEMP "bist-ai-backend-out.log"
+          $errLog = Join-Path $env:RUNNER_TEMP "bist-ai-backend-err.log"
+          $p = Start-Process -FilePath ".\\dist\\bist-ai-backend\\bist-ai-backend.exe" -PassThru -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
           Start-Sleep -Seconds 5
           try {
             Invoke-RestMethod http://127.0.0.1:18765/health
           } catch {
-            Write-Host "----- BACKEND LOG -----"
-            if (Test-Path $log) { Get-Content $log }
+            Write-Host "----- BACKEND STDOUT -----"
+            if (Test-Path $outLog) { Get-Content $outLog }
+            Write-Host "----- BACKEND STDERR -----"
+            if (Test-Path $errLog) { Get-Content $errLog }
             throw
           } finally {
             if (!$p.HasExited) { Stop-Process -Id $p.Id -Force }
