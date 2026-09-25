@@ -3,6 +3,15 @@ name: Desktop Installers
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "electron/**"
+      - "scripts/**"
+      - "package.json"
+      - "requirements.txt"
+      - ".github/workflows/desktop-build.yml"
     tags:
       - "desktop-v*"
 
@@ -98,14 +107,29 @@ jobs:
 
       - name: Build Windows installer
         if: matrix.platform == 'win'
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: npm run dist:win
 
       - name: Build macOS Intel installer
         if: matrix.platform == 'mac' && matrix.arch == 'x64'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist:mac:x64
 
       - name: Build macOS Apple Silicon installer
         if: matrix.platform == 'mac' && matrix.arch == 'arm64'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist:mac:arm64
 
       - uses: actions/upload-artifact@v4
