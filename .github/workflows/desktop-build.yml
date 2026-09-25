@@ -87,8 +87,7 @@ jobs:
             --hidden-import app.universe `
             --collect-all uvicorn --collect-all fastapi --collect-all starlette `
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml `
-            --add-data "app/templates;app/templates" `
-            --add-data "app/static;app/static" `
+            --add-data "app;app" `
             desktop_entry.py
 
       - name: Build local Python engine (macOS)
@@ -115,8 +114,7 @@ jobs:
             --hidden-import app.universe \
             --collect-all uvicorn --collect-all fastapi --collect-all starlette \
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml \
-            --add-data "app/templates:app/templates" \
-            --add-data "app/static:app/static" \
+            --add-data "app:app" \
             desktop_entry.py
 
       - name: Smoke test backend (Windows)
