@@ -71,7 +71,7 @@ jobs:
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml `
             --add-data "app/templates;app/templates" `
             --add-data "app/static;app/static" `
-            app/desktop_server.py
+            desktop_entry.py
 
       - name: Build local Python engine (macOS)
         if: matrix.platform == 'mac'
@@ -81,28 +81,48 @@ jobs:
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml \
             --add-data "app/templates:app/templates" \
             --add-data "app/static:app/static" \
-            app/desktop_server.py
+            desktop_entry.py
 
       - name: Smoke test backend (Windows)
         if: matrix.platform == 'win'
         shell: pwsh
         run: |
           $env:BIST_AI_PORT="18765"
-          $p = Start-Process -FilePath ".\\dist\\bist-ai-backend\\bist-ai-backend.exe" -PassThru -WindowStyle Hidden
+          $log = Join-Path $env:RUNNER_TEMP "bist-ai-backend.log"
+          $p = Start-Process -FilePath ".\\dist\\bist-ai-backend\\bist-ai-backend.exe" -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $log
           Start-Sleep -Seconds 5
-          Invoke-RestMethod http://127.0.0.1:18765/health
-          Stop-Process -Id $p.Id -Force
+          try {
+            Invoke-RestMethod http://127.0.0.1:18765/health
+          } catch {
+            Write-Host "----- BACKEND LOG -----"
+            if (Test-Path $log) { Get-Content $log }
+            throw
+          } finally {
+            if (!$p.HasExited) { Stop-Process -Id $p.Id -Force }
+          }
 
       - name: Smoke test backend (macOS)
         if: matrix.platform == 'mac'
         run: |
           BIST_AI_PORT=18765 ./dist/bist-ai-backend/bist-ai-backend >/tmp/bist-ai.log 2>&1 &
           PID=$!
+          OK=0
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:18765/health; then break; fi
+            if curl -fsS http://127.0.0.1:18765/health; then
+              OK=1
+              break
+            fi
+            if ! kill -0 $PID 2>/dev/null; then
+              echo "Backend process exited early."
+              break
+            fi
             sleep 1
           done
-          curl -fsS http://127.0.0.1:18765/health
+          if [[ "$OK" != "1" ]]; then
+            echo "----- BACKEND LOG -----"
+            cat /tmp/bist-ai.log || true
+            exit 1
+          fi
           kill $PID || true
 
       - name: Build Windows installer
