@@ -18,7 +18,7 @@ from .model_governance import model_card
 from .portfolio_analytics import analyze_portfolio, compare_allocations
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='5.0')
+app=FastAPI(title='BIST AI Terminal',version='5.1')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -150,4 +150,4 @@ def kap():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'5.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'5.1','service':'bist-ai-terminal'}
