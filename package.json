@@ -14,18 +14,37 @@
   },
   "devDependencies": {
     "electron": "^38.1.2",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "@electron/notarize": "^3.1.0"
   },
   "build": {
     "appId": "com.bistai.terminal",
     "productName": "BIST AI Terminal",
     "copyright": "Copyright © 2026",
-    "directories": { "output": "desktop-dist", "buildResources": "build" },
-    "files": ["electron/**/*", "package.json"],
-    "extraResources": [{ "from": "dist/bist-ai-backend", "to": "backend" }],
+    "directories": {
+      "output": "desktop-dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/bist-ai-backend",
+        "to": "backend"
+      }
+    ],
     "win": {
       "icon": "build/icon.ico",
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "artifactName": "BIST-AI-Terminal-Setup-${version}-${arch}.${ext}"
     },
     "nsis": {
@@ -39,18 +58,39 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.finance",
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
       "artifactName": "BIST-AI-Terminal-${version}-${arch}.${ext}",
       "hardenedRuntime": false,
       "gatekeeperAssess": false
     },
     "dmg": {
       "title": "BIST AI Terminal ${version}",
-      "window": { "width": 540, "height": 380 },
+      "window": {
+        "width": 540,
+        "height": 380
+      },
       "contents": [
-        { "x": 150, "y": 190, "type": "file" },
-        { "x": 390, "y": 190, "type": "link", "path": "/Applications" }
+        {
+          "x": 150,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
-    }
+    },
+    "afterSign": "scripts/notarize.cjs"
   }
 }
