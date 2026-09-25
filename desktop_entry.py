@@ -2,6 +2,23 @@ from __future__ import annotations
 import os
 import traceback
 
+# Explicit imports make PyInstaller analyze every local application module.
+import app.advanced_indicators
+import app.backtest
+import app.catalysts
+import app.data_provider
+import app.fundamentals
+import app.kap_engine
+import app.market_data
+import app.market_internals
+import app.model_governance
+import app.news_engine
+import app.portfolio_analytics
+import app.providers
+import app.research_engine
+import app.scoring
+import app.universe
+
 def main():
     try:
         import uvicorn
