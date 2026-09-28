@@ -21,9 +21,10 @@ from .opportunity_engine import start_radar, trigger_refresh, radar_snapshot, al
 from .premium_engine import fair_value_health, volume_profile
 from .alpha_engine import validate_alpha, ensemble_signal, sector_rotation, event_study
 from .institutional_connectors import institutional_provider_status
+from .investment_committee import investment_committee
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='8.0')
+app=FastAPI(title='BIST AI Terminal',version='9.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -142,6 +143,10 @@ def sectorrotation(limit:int=40):
 def eventstudy(ticker:str,limit:int=25):
     return event_study(ticker,limit=max(5,min(limit,40)))
 
+@app.get('/api/committee/{ticker}')
+def committee(ticker:str,portfolio_value:float=1000000,risk_budget_pct:float=.75,max_position_pct:float=12.0):
+    return investment_committee(ticker,portfolio_value=max(0,portfolio_value),risk_budget_pct=max(.05,min(risk_budget_pct,5)),max_position_pct=max(1,min(max_position_pct,50)))
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -210,4 +215,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'8.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'9.0','service':'bist-ai-terminal'}

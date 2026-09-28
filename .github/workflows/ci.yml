@@ -23,6 +23,7 @@ jobs:
       - run: node --check app/static/v6.js
       - run: node --check app/static/v7.js
       - run: node --check app/static/v8.js
+      - run: node --check app/static/v9.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -101,4 +102,14 @@ jobs:
           assert s['n']==3 and 60<s['hit_rate_pct']<70
           print('V8 alpha calibration smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '8.0'; print(app.title, app.version)"
+      - name: V9 investment committee formula smoke test
+        run: |
+          python - <<'PY'
+          from app.investment_committee import _cap,_empirical
+          a={'horizons':{'20d':{'n':30,'hit_rate_pct':63,'median_excess_pct':2.5,'p10_excess_pct':-6,'p90_excess_pct':11}},'regimes':{}}
+          e=_empirical(a,'BULL')
+          assert e['sample']==30 and abs(e['hit_probability']-.63)<1e-9
+          assert _cap(120)==100
+          print('V9 committee smoke ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '9.0'; print(app.title, app.version)"

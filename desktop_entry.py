@@ -9,6 +9,7 @@ import app.opportunity_engine
 import app.premium_engine
 import app.alpha_engine
 import app.institutional_connectors
+import app.investment_committee
 import app.backtest
 import app.catalysts
 import app.data_provider

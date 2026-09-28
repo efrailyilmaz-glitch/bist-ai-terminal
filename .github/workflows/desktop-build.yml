@@ -75,6 +75,7 @@ jobs:
             --hidden-import app.premium_engine `
             --hidden-import app.alpha_engine `
             --hidden-import app.institutional_connectors `
+            --hidden-import app.investment_committee `
             --hidden-import app.backtest `
             --hidden-import app.catalysts `
             --hidden-import app.data_provider `
@@ -107,6 +108,7 @@ jobs:
             --hidden-import app.premium_engine \
             --hidden-import app.alpha_engine \
             --hidden-import app.institutional_connectors \
+            --hidden-import app.investment_committee \
             --hidden-import app.backtest \
             --hidden-import app.catalysts \
             --hidden-import app.data_provider \
