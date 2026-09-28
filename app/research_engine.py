@@ -7,7 +7,6 @@ from .kap_engine import company_profile, disclosures
 from .news_engine import headlines
 from .analyst_engine import trusted_research
 from .opportunity_engine import score_opportunity
-from .investment_committee import investment_committee
 from .premium_engine import fair_value_health
 
 _CACHE={}
@@ -118,8 +117,7 @@ def research_snapshot(ticker:str):
       'coverage':component_coverage,'strengths':strengths[:6],'flags':flags[:6],
       'technical':tech,'fundamentals':fund,'kap_profile':profile,'kap':kap,'news':news,'macro':macro,'analyst':analyst,
       'opportunity':score_opportunity(tech,fund,analyst,macro,kap,news),
-      'premium':fair_value_health(code),
-      'committee':investment_committee(code)
+      'premium':fair_value_health(code)
     }
     with _LOCK:_CACHE[code]=(time.time(),data)
     return data
