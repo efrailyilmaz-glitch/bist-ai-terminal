@@ -120,7 +120,8 @@ def disclosures(ticker:str,limit:int=12):
             if code.lower() not in low and name.lower()[:12] not in low:continue
             title=_norm(a.get_text(' ',strip=True)) or text[:150]
             analysis=classify(text)
-            items.append({'title':title[:220],'summary':text[:500],'url':'https://www.kap.org.tr'+href if href.startswith('/') else href,**analysis})
+            dm=re.search(r'\b(\d{1,2}\.\d{1,2}\.\d{4})\b',text)
+            items.append({'title':title[:220],'summary':text[:500],'date':dm.group(1) if dm else None,'url':'https://www.kap.org.tr'+href if href.startswith('/') else href,**analysis})
             if len(items)>=limit:break
     except Exception:
         pass

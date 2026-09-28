@@ -7,6 +7,8 @@ import app.advanced_indicators
 import app.analyst_engine
 import app.opportunity_engine
 import app.premium_engine
+import app.alpha_engine
+import app.institutional_connectors
 import app.backtest
 import app.catalysts
 import app.data_provider

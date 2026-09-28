@@ -4,6 +4,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from .market_data import scan_codes
 
 TRADING_DAYS=252
 _CACHE={}
@@ -141,3 +142,32 @@ def compare_allocations(codes:List[str]):
         if r.get('status')=='OK':
             rows.append({k:v for k,v in r.items() if k in ['method','annual_return_pct','annual_volatility_pct','sharpe_proxy','max_drawdown_pct','var95_daily_pct','cvar95_daily_pct','diversification_score']})
     return {'rows':rows}
+
+
+def optimize_alpha_portfolio(codes:List[str],risk_aversion=5.0,turnover_penalty=.8,max_weight=.30):
+    codes=list(dict.fromkeys([x.upper().replace('.IS','') for x in codes if x]))[:12]
+    if not codes:return {'status':'NO_CODES'}
+    rets,bench=_load(codes)
+    if rets is None:return {'status':'NO_DATA'}
+    valid=list(rets.columns);n=len(valid);cov=rets.cov().values*TRADING_DAYS
+    hist_mu=rets.mean().values*TRADING_DAYS
+    scan={x['ticker']:x for x in scan_codes(valid)}
+    alpha=np.array([(scan.get(c,{}).get('alpha_score',50)-50)/100 for c in valid],float)
+    expected=.55*hist_mu+.45*alpha
+    w=np.ones(n)/n;prev=w.copy();lr=.08
+    cap=max(1/n,min(float(max_weight),1.0))
+    for _ in range(800):
+        grad=expected-2*float(risk_aversion)*(cov@w)-float(turnover_penalty)*np.sign(w-prev)
+        nw=w+lr*grad
+        nw=np.clip(nw,0,cap)
+        if nw.sum()<=0:nw=np.ones(n)/n
+        else:nw=nw/nw.sum()
+        if np.max(np.abs(nw-w))<1e-7:break
+        w=.75*w+.25*nw
+    s=_portfolio_stats(rets,w)
+    rows=[{'ticker':c,'weight_pct':round(float(w[i]*100),1),'expected_return_proxy_pct':round(float(expected[i]*100),1),'alpha_score':scan.get(c,{}).get('alpha_score')} for i,c in enumerate(valid)]
+    rows.sort(key=lambda x:x['weight_pct'],reverse=True)
+    return {'status':'OK','method':'alpha_risk_turnover','rows':rows,'annual_return_proxy_pct':round(s['annual_return_pct'],1),
+            'annual_volatility_pct':round(s['annual_volatility_pct'],1),'sharpe_proxy':round(s['sharpe_proxy'],2),'max_drawdown_pct':round(s['max_drawdown_pct'],1),
+            'risk_aversion':risk_aversion,'turnover_penalty':turnover_penalty,'max_weight':max_weight,
+            'note':'Expected-return proxy blends trailing historical mean and current alpha score; not a forecast.'}

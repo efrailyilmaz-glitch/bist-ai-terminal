@@ -15,13 +15,15 @@ from .providers import data_health, provider_registry
 from .market_internals import market_internals
 from .catalysts import catalyst_calendar
 from .model_governance import model_card
-from .portfolio_analytics import analyze_portfolio, compare_allocations
+from .portfolio_analytics import analyze_portfolio, compare_allocations, optimize_alpha_portfolio
 from .analyst_engine import trusted_research
 from .opportunity_engine import start_radar, trigger_refresh, radar_snapshot, alerts_snapshot
 from .premium_engine import fair_value_health, volume_profile
+from .alpha_engine import validate_alpha, ensemble_signal, sector_rotation, event_study
+from .institutional_connectors import institutional_provider_status
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='7.0')
+app=FastAPI(title='BIST AI Terminal',version='8.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -124,6 +126,26 @@ def premium(ticker:str):
 def volumeprofile(ticker:str,period:str='6mo',interval:str='1d',bins:int=28):
     return volume_profile(ticker,period=period,interval=interval,bins=bins)
 
+@app.get('/api/alpha-validation/{ticker}')
+def alpha_validation(ticker:str,period:str='10y',step:int=5,min_score:int=60):
+    return validate_alpha(ticker,period=period,step=max(1,min(step,20)),min_score=max(50,min(min_score,95)))
+
+@app.get('/api/ensemble/{ticker}')
+def ensemble(ticker:str):
+    return ensemble_signal(ticker)
+
+@app.get('/api/sector-rotation')
+def sectorrotation(limit:int=40):
+    return sector_rotation(limit=limit)
+
+@app.get('/api/event-study/{ticker}')
+def eventstudy(ticker:str,limit:int=25):
+    return event_study(ticker,limit=max(5,min(limit,40)))
+
+@app.get('/api/institutional-providers')
+def institutional_providers():
+    return institutional_provider_status()
+
 @app.get('/api/opportunities')
 def opportunities(limit:int=60):
     return radar_snapshot(limit=limit)
@@ -140,6 +162,11 @@ def radar_refresh():
 def portfolio_risk(codes:str,method:str='equal'):
     selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
     return analyze_portfolio(selected,method=method)
+
+@app.get('/api/portfolio-optimize')
+def portfolio_optimize(codes:str,risk_aversion:float=5.0,turnover_penalty:float=.8,max_weight:float=.30):
+    selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
+    return optimize_alpha_portfolio(selected,risk_aversion=max(.1,min(risk_aversion,20)),turnover_penalty=max(0,min(turnover_penalty,5)),max_weight=max(.10,min(max_weight,.60)))
 
 @app.get('/api/portfolio-allocations')
 def portfolio_allocations(codes:str):
@@ -183,4 +210,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'7.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'8.0','service':'bist-ai-terminal'}

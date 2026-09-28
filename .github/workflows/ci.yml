@@ -22,6 +22,7 @@ jobs:
       - run: node --check app/static/v5.js
       - run: node --check app/static/v6.js
       - run: node --check app/static/v7.js
+      - run: node --check app/static/v8.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -89,4 +90,15 @@ jobs:
           p=_piotroski(a); assert p['score'] is not None and p['max_score']>=7
           print('V7 premium smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '7.0'; print(app.title, app.version)"
+      - name: V8 alpha engine smoke test
+        run: |
+          python - <<'PY'
+          import numpy as np, pandas as pd
+          from app.alpha_engine import _summ
+          from app.portfolio_analytics import optimize_alpha_portfolio
+          ev=[{'excess_20':1.0,'return_20':2.0},{'excess_20':-1.0,'return_20':0.0},{'excess_20':3.0,'return_20':4.0}]
+          s=_summ(ev,20)
+          assert s['n']==3 and 60<s['hit_rate_pct']<70
+          print('V8 alpha calibration smoke ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '8.0'; print(app.title, app.version)"
