@@ -8,6 +8,7 @@ from .alpha_engine import validate_alpha, ensemble_signal
 from .opportunity_engine import score_opportunity
 from .kap_engine import disclosures
 from .news_engine import headlines
+from .pro_tools import technical_pro, forensic_models
 
 def _v(x,d=None):
     try:
@@ -46,7 +47,7 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
     rows=scan_codes([code]);tech=rows[0] if rows else {}
     if not tech:return {'ticker':code,'status':'NO_DATA'}
     price=_v(tech.get('price'),0);fund=get_fundamentals(code);analyst=trusted_research(code,current_price=price,fundamentals=fund)
-    premium=fair_value_health(code);alpha=validate_alpha(code,period='10y',step=5,min_score=60);ensemble=ensemble_signal(code)
+    premium=fair_value_health(code);protech=technical_pro(code);forensic=forensic_models(code);alpha=validate_alpha(code,period='10y',step=5,min_score=60);ensemble=ensemble_signal(code)
     macro=market_overview();kap=disclosures(code,limit=10);news=headlines(code,limit=12);opp=score_opportunity(tech,fund,analyst,macro,kap,news)
     regime=_current_regime();emp=_empirical(alpha,regime) if alpha.get('status')=='OK' else {'sample':0,'hit_probability':.5,'median_excess_pct':0,'p10_excess_pct':-10,'p90_excess_pct':10,'source':'NONE'}
 
@@ -68,6 +69,9 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
     gate('Değerleme marjı',fv_up is None or fv_up>=5,'Fair value potansiyeli '+('—' if fv_up is None else f'{fv_up:.1f}%'),False)
     gate('Bilanço stres veto',alt!='DISTRESS',f'Altman {alt or "—"}',True)
     if piot is not None:gate('Piotroski',piot>=4,f'{piot}/9',False)
+    gate('VWAP/AVWAP teknik teyit',_v(protech.get('alignment_score'),50)>=40,f"Pro teknik teyit {protech.get('alignment_score','—')}/100",False)
+    beneish=(forensic.get('beneish') or {})
+    gate('Beneish muhasebe riski',beneish.get('status')!='ELEVATED_RISK',f"Beneish {beneish.get('score','—')} · {beneish.get('status','—')}",False)
 
     target=(opp.get('targets') or {}).get('short_target_1') or (opp.get('targets') or {}).get('medium_target')
     stop=(opp.get('targets') or {}).get('short_stop')
@@ -98,9 +102,9 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
       'alpha':_cap(50+(emp.get('hit_probability',.5)-.5)*120+emp.get('median_excess_pct',0)*2),
       'fundamental':_v(fund.get('fundamental_score'),50),'health':health if health is not None else 50,
       'valuation':_cap(50+(fv_up or 0)*1.2),'analyst':_v(analyst.get('analyst_score'),50),
-      'macro':_v(macro.get('global_score'),50),'risk_quality':_cap(100-risk*.7-anom*.3)
+      'macro':_v(macro.get('global_score'),50),'risk_quality':_cap(100-risk*.7-anom*.3),'pro_technical':_v(protech.get('alignment_score'),50)
     }
-    weights={'opportunity':.18,'ensemble':.15,'alpha':.18,'fundamental':.12,'health':.10,'valuation':.08,'analyst':.07,'macro':.05,'risk_quality':.07}
+    weights={'opportunity':.18,'ensemble':.15,'alpha':.18,'fundamental':.12,'health':.10,'valuation':.08,'analyst':.07,'macro':.05,'risk_quality':.05,'pro_technical':.02}
     composite=round(sum(evidence[k]*weights[k] for k in weights))
     soft_pass=sum(1 for x in gates if x['pass']);gate_ratio=soft_pass/max(1,len(gates))
     composite=round(_cap(composite*(.85+.15*gate_ratio)))
@@ -124,5 +128,5 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
                 'quarter_kelly_pct':round(quarter_kelly*100,2),'max_position_pct':max_position_pct,
                 'liquidity_cap_5pct_adv':round(liquidity_cap,2),'research_position_value':round(research_position,2),'research_position_pct':round(position_pct,2),
                 'note':'Research sizing proxy only; combines stop-distance risk budget, 5% ADV liquidity cap, max-position cap and quarter-Kelly cap.'
-            },'invalidation':invalidation,'opportunity':opp,'alpha_validation':alpha,'ensemble':ensemble,'premium':premium,
+            },'invalidation':invalidation,'opportunity':opp,'alpha_validation':alpha,'ensemble':ensemble,'premium':premium,'pro_technical':protech,'forensics':forensic,
             'note':'Committee can veto strong signals. This is a research decision framework, not an instruction to transact.'}

@@ -1,5 +1,5 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Body
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -22,9 +22,11 @@ from .premium_engine import fair_value_health, volume_profile
 from .alpha_engine import validate_alpha, ensemble_signal, sector_rotation, event_study
 from .institutional_connectors import institutional_provider_status
 from .investment_committee import investment_committee
+from .pro_tools import technical_pro, forensic_models, peer_comparison, compare_symbols
+from .pro_alert_engine import start_alert_engine, add_rule, delete_rule, list_rules, events as pro_alert_events, evaluate_once as evaluate_pro_alerts
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='9.0')
+app=FastAPI(title='BIST AI Terminal',version='10.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -147,6 +149,60 @@ def eventstudy(ticker:str,limit:int=25):
 def committee(ticker:str,portfolio_value:float=1000000,risk_budget_pct:float=.75,max_position_pct:float=12.0):
     return investment_committee(ticker,portfolio_value=max(0,portfolio_value),risk_budget_pct=max(.05,min(risk_budget_pct,5)),max_position_pct=max(1,min(max_position_pct,50)))
 
+@app.get('/api/pro-technical/{ticker}')
+def pro_technical(ticker:str):
+    return technical_pro(ticker)
+
+@app.get('/api/forensics/{ticker}')
+def forensics(ticker:str):
+    return forensic_models(ticker)
+
+@app.get('/api/peers/{ticker}')
+def peers(ticker:str,peer_count:int=5):
+    return peer_comparison(ticker,peer_count=max(3,min(peer_count,8)))
+
+@app.get('/api/compare')
+def compare(codes:str):
+    return compare_symbols([x.strip() for x in codes.split(',') if x.strip()])
+
+@app.get('/api/export/chart/{ticker}')
+def export_chart(ticker:str,period:str='2y',interval:str='1d'):
+    from .market_data import yahoo_rows
+    import csv, io
+    rows=yahoo_rows(ticker,period=period,interval=interval).get('candles') or []
+    s=io.StringIO();w=csv.DictWriter(s,fieldnames=['time','open','high','low','close','volume']);w.writeheader()
+    for x in rows:w.writerow({k:x.get(k) for k in w.fieldnames})
+    return Response(content=s.getvalue(),media_type='text/csv',headers={'Content-Disposition':f'attachment; filename={ticker.upper()}_{interval}.csv'})
+
+@app.get('/api/export/fundamentals/{ticker}')
+def export_fundamentals(ticker:str):
+    import csv, io
+    f=get_fundamentals(ticker);s=io.StringIO();w=csv.writer(s);w.writerow(['metric','value'])
+    for k,v in sorted(f.items()):
+        if isinstance(v,(str,int,float,bool)) or v is None:w.writerow([k,v])
+    return Response(content=s.getvalue(),media_type='text/csv',headers={'Content-Disposition':f'attachment; filename={ticker.upper()}_fundamentals.csv'})
+
+@app.get('/api/pro-alert-rules')
+def pro_alert_rules():
+    return list_rules()
+
+@app.post('/api/pro-alert-rules')
+def pro_alert_create(payload:dict=Body(...)):
+    try:return add_rule(payload)
+    except ValueError as e:return {'error':str(e)}
+
+@app.delete('/api/pro-alert-rules/{rule_id}')
+def pro_alert_delete(rule_id:str):
+    return delete_rule(rule_id)
+
+@app.get('/api/pro-alert-events')
+def pro_alert_events_api(limit:int=100,since:int=0):
+    return pro_alert_events(limit=limit,since=since)
+
+@app.post('/api/pro-alert-evaluate')
+def pro_alert_evaluate():
+    return evaluate_pro_alerts()
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -211,8 +267,9 @@ def kap():
 @app.on_event('startup')
 def desktop_background_radar():
     import os
-    if os.getenv('BIST_AI_DESKTOP')=='1': start_radar()
+    if os.getenv('BIST_AI_DESKTOP')=='1':
+        start_radar(); start_alert_engine()
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'9.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'10.0','service':'bist-ai-terminal'}

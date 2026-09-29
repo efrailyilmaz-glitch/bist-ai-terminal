@@ -24,6 +24,7 @@ jobs:
       - run: node --check app/static/v7.js
       - run: node --check app/static/v8.js
       - run: node --check app/static/v9.js
+      - run: node --check app/static/v10.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -112,4 +113,12 @@ jobs:
           assert _cap(120)==100
           print('V9 committee smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '9.0'; print(app.title, app.version)"
+      - name: V10 pro tools smoke test
+        run: |
+          python - <<'PY'
+          from app.pro_alert_engine import _condition
+          assert _condition({'field':'rsi','op':'>=','value':50},{'rsi':60})
+          assert not _condition({'field':'rsi','op':'<','value':50},{'rsi':60})
+          print('V10 alert condition smoke ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '10.0'; print(app.title, app.version)"
