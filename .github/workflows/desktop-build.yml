@@ -78,6 +78,7 @@ jobs:
             --hidden-import app.investment_committee `
             --hidden-import app.pro_tools `
             --hidden-import app.pro_alert_engine `
+            --hidden-import app.market_intelligence `
             --hidden-import app.backtest `
             --hidden-import app.catalysts `
             --hidden-import app.data_provider `
@@ -113,6 +114,7 @@ jobs:
             --hidden-import app.investment_committee \
             --hidden-import app.pro_tools \
             --hidden-import app.pro_alert_engine \
+            --hidden-import app.market_intelligence \
             --hidden-import app.backtest \
             --hidden-import app.catalysts \
             --hidden-import app.data_provider \

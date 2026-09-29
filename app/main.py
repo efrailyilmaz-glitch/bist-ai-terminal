@@ -24,9 +24,10 @@ from .institutional_connectors import institutional_provider_status
 from .investment_committee import investment_committee
 from .pro_tools import technical_pro, forensic_models, peer_comparison, compare_symbols
 from .pro_alert_engine import start_alert_engine, add_rule, delete_rule, list_rules, events as pro_alert_events, evaluate_once as evaluate_pro_alerts
+from .market_intelligence import seasonality, rolling_risk, relative_rotation, watchlist_heatmap, market_regime_dashboard
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='10.0')
+app=FastAPI(title='BIST AI Terminal',version='11.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -203,6 +204,26 @@ def pro_alert_events_api(limit:int=100,since:int=0):
 def pro_alert_evaluate():
     return evaluate_pro_alerts()
 
+@app.get('/api/seasonality/{ticker}')
+def seasonality_api(ticker:str,period:str='10y'):
+    return seasonality(ticker,period=period)
+
+@app.get('/api/risk-intelligence/{ticker}')
+def risk_intelligence(ticker:str,period:str='5y'):
+    return rolling_risk(ticker,period=period)
+
+@app.get('/api/relative-rotation')
+def relative_rotation_api(codes:str):
+    return relative_rotation([x.strip() for x in codes.split(',') if x.strip()])
+
+@app.get('/api/watchlist-heatmap')
+def watchlist_heatmap_api(codes:str):
+    return watchlist_heatmap([x.strip() for x in codes.split(',') if x.strip()])
+
+@app.get('/api/market-regime')
+def market_regime():
+    return market_regime_dashboard()
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -272,4 +293,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'10.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'11.0','service':'bist-ai-terminal'}
