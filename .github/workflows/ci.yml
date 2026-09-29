@@ -27,6 +27,7 @@ jobs:
       - run: node --check app/static/v10.js
       - run: node --check app/static/v11.js
       - run: node --check app/static/v12.js
+      - run: node --check app/static/v13.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -141,4 +142,16 @@ jobs:
           set_kill_switch(False)
           print('V12 broker safety smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '12.0'; print(app.title, app.version)"
+      - name: V13 experience engine smoke test
+        run: |
+          python - <<'PY'
+          import tempfile, os
+          from app.background_supervisor import market_phase
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          tr=ZoneInfo('Europe/Istanbul')
+          assert market_phase(datetime(2026,9,29,12,0,tzinfo=tr))=='CONTINUOUS'
+          assert market_phase(datetime(2026,9,27,12,0,tzinfo=tr))=='CLOSED_WEEKEND'
+          print('V13 supervisor market-hours smoke ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '13.0'; print(app.title, app.version)"

@@ -26,10 +26,11 @@ from .pro_tools import technical_pro, forensic_models, peer_comparison, compare_
 from .pro_alert_engine import start_alert_engine, add_rule, delete_rule, list_rules, events as pro_alert_events, evaluate_once as evaluate_pro_alerts
 from .market_intelligence import seasonality, rolling_risk, relative_rotation, watchlist_heatmap, market_regime_dashboard
 from .broker_bridge import broker_status, order_preview, paper_order, orders as broker_orders, set_kill_switch, update_risk
-from .background_supervisor import start_background_supervisor, status as background_status
+from .background_supervisor import start_background_supervisor, status as background_status, alerts as background_alerts
+from .experience_engine import history as experience_history, calibration as experience_calibration, settle_due as experience_settle
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='12.0')
+app=FastAPI(title='BIST AI Terminal',version='13.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -254,6 +255,22 @@ def broker_risk(payload:dict=Body(...)):
 def background_status_api():
     return background_status()
 
+@app.get('/api/background/alerts')
+def background_alerts_api(limit:int=50,since:int=0):
+    return background_alerts(limit=limit,since=since)
+
+@app.get('/api/experience/history')
+def experience_history_api(limit:int=200):
+    return experience_history(limit)
+
+@app.get('/api/experience/calibration')
+def experience_calibration_api():
+    return experience_calibration()
+
+@app.post('/api/experience/settle')
+def experience_settle_api():
+    return experience_settle()
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -323,4 +340,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'12.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'13.0','service':'bist-ai-terminal'}

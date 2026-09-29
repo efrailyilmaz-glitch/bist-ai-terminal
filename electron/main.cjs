@@ -11,6 +11,7 @@ let quitting = false;
 let tray = null;
 let alertTimer = null;
 let lastAlertId = null;
+let lastCommitteeAlertId = 0;
 
 app.setName('BIST AI Terminal');
 if (process.platform === 'win32') app.setAppUserModelId('com.bistai.terminal');
@@ -107,7 +108,18 @@ function backendJSON(pathname, method = 'GET') {
 }
 function startAlertPolling() {
   if (alertTimer) clearInterval(alertTimer);
-  const poll=async()=>{try{const data=await backendJSON('/api/alerts?limit=30'),rows=data.alerts||[];if(lastAlertId===null){lastAlertId=rows.length?rows[0].id:0;return}const fresh=rows.filter(x=>Number(x.id)>Number(lastAlertId)).sort((a,b)=>a.id-b.id);for(const x of fresh){if(x.grade!=='MEGA'&&!(x.grade==='STRONG'&&Number(x.score||0)>=84))continue;if(Notification.isSupported()){const t=x.targets||{},n=new Notification({title:'BIST AI · '+(x.grade==='MEGA'?'BÜYÜK FIRSAT':'GÜÇLÜ FIRSAT')+' · '+x.ticker,body:'Skor '+x.score+'/100 · Kısa '+x.short_score+' · Uzun '+x.long_score+(t.short_target_1?' · T1 ₺'+t.short_target_1:'')});n.on('click',showMainWindow);n.show()}}if(fresh.length)lastAlertId=Math.max(...fresh.map(x=>Number(x.id)||0),Number(lastAlertId)||0)}catch(_){}};poll();alertTimer=setInterval(poll,60000);
+  const poll=async()=>{try{const data=await backendJSON('/api/alerts?limit=30'),rows=data.alerts||[];if(lastAlertId===null){lastAlertId=rows.length?rows[0].id:0;return}const fresh=rows.filter(x=>Number(x.id)>Number(lastAlertId)).sort((a,b)=>a.id-b.id);for(const x of fresh){if(x.grade!=='MEGA'&&!(x.grade==='STRONG'&&Number(x.score||0)>=84))continue;if(Notification.isSupported()){const t=x.targets||{},n=new Notification({title:'BIST AI · '+(x.grade==='MEGA'?'BÜYÜK FIRSAT':'GÜÇLÜ FIRSAT')+' · '+x.ticker,body:'Skor '+x.score+'/100 · Kısa '+x.short_score+' · Uzun '+x.long_score+(t.short_target_1?' · T1 ₺'+t.short_target_1:'')});n.on('click',showMainWindow);n.show()}}if(fresh.length)lastAlertId=Math.max(...fresh.map(x=>Number(x.id)||0),Number(lastAlertId)||0)}catch(_){}
+    try{
+      const d=await backendJSON('/api/background/alerts?limit=30&since='+lastCommitteeAlertId),rows=d.alerts||[];
+      for(const x of rows.slice().reverse()){
+        lastCommitteeAlertId=Math.max(lastCommitteeAlertId,Number(x.id)||0);
+        if(x.type==='COMMITTEE_PASS'&&Notification.isSupported()){
+          const n=new Notification({title:'BIST AI · KOMİTE ONAYI · '+x.ticker,body:x.message||('Komite skoru '+x.score)});
+          n.on('click',showMainWindow);n.show();
+        }
+      }
+    }catch(_){}
+  };poll();alertTimer=setInterval(poll,60000);
 }
 function buildTray() {
   try{let icon=nativeImage.createFromPath(path.join(__dirname,'..','build','icon.png'));if(!icon.isEmpty())icon=icon.resize({width:18,height:18});tray=new Tray(icon);tray.setToolTip('BIST AI Terminal · Fırsat Avcısı');const login=app.getLoginItemSettings().openAtLogin;tray.setContextMenu(Menu.buildFromTemplate([{label:'BIST AI Terminal’i Aç',click:showMainWindow},{label:'Fırsat Radarını Şimdi Tara',click:()=>backendJSON('/api/radar/refresh','POST').catch(()=>{})},{type:'separator'},{label:'Oturum açılışında başlat',type:'checkbox',checked:login,click:item=>app.setLoginItemSettings({openAtLogin:item.checked})},{type:'separator'},{label:'Tamamen Çık',click:()=>{quitting=true;app.quit()}}]));tray.on('click',showMainWindow)}catch(_){}
