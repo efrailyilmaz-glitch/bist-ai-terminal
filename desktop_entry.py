@@ -13,6 +13,8 @@ import app.investment_committee
 import app.pro_tools
 import app.pro_alert_engine
 import app.market_intelligence
+import app.broker_bridge
+import app.background_supervisor
 import app.backtest
 import app.catalysts
 import app.data_provider

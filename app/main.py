@@ -25,9 +25,11 @@ from .investment_committee import investment_committee
 from .pro_tools import technical_pro, forensic_models, peer_comparison, compare_symbols
 from .pro_alert_engine import start_alert_engine, add_rule, delete_rule, list_rules, events as pro_alert_events, evaluate_once as evaluate_pro_alerts
 from .market_intelligence import seasonality, rolling_risk, relative_rotation, watchlist_heatmap, market_regime_dashboard
+from .broker_bridge import broker_status, order_preview, paper_order, orders as broker_orders, set_kill_switch, update_risk
+from .background_supervisor import start_background_supervisor, status as background_status
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='11.0')
+app=FastAPI(title='BIST AI Terminal',version='12.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -224,6 +226,34 @@ def watchlist_heatmap_api(codes:str):
 def market_regime():
     return market_regime_dashboard()
 
+@app.get('/api/broker/status')
+def broker_status_api():
+    return broker_status()
+
+@app.post('/api/broker/order-preview')
+def broker_preview(payload:dict=Body(...)):
+    return order_preview(payload)
+
+@app.post('/api/broker/paper-order')
+def broker_paper(payload:dict=Body(...)):
+    return paper_order(payload)
+
+@app.get('/api/broker/orders')
+def broker_order_list(limit:int=100):
+    return broker_orders(limit)
+
+@app.post('/api/broker/kill-switch')
+def broker_kill(payload:dict=Body(...)):
+    return set_kill_switch(bool(payload.get('enabled')))
+
+@app.post('/api/broker/risk')
+def broker_risk(payload:dict=Body(...)):
+    return update_risk(payload)
+
+@app.get('/api/background/status')
+def background_status_api():
+    return background_status()
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -288,9 +318,9 @@ def kap():
 @app.on_event('startup')
 def desktop_background_radar():
     import os
-    if os.getenv('BIST_AI_DESKTOP')=='1':
-        start_radar(); start_alert_engine()
+    if os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND')=='1':
+        start_radar(); start_alert_engine(); start_background_supervisor()
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'11.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'12.0','service':'bist-ai-terminal'}

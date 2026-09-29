@@ -26,6 +26,7 @@ jobs:
       - run: node --check app/static/v9.js
       - run: node --check app/static/v10.js
       - run: node --check app/static/v11.js
+      - run: node --check app/static/v12.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -130,4 +131,14 @@ jobs:
           assert _v('1.5')==1.5 and _v(None,7)==7
           print('V11 market intelligence smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '11.0'; print(app.title, app.version)"
+      - name: V12 execution safety smoke test
+        run: |
+          python - <<'PY'
+          from app.broker_bridge import order_preview,set_kill_switch
+          set_kill_switch(True)
+          p=order_preview({'ticker':'TEST','side':'BUY','quantity':10,'limit_price':10,'order_type':'LIMIT','portfolio_value':100000})
+          assert p['blocked'] and any('KILL SWITCH' in x for x in p['issues'])
+          set_kill_switch(False)
+          print('V12 broker safety smoke ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '12.0'; print(app.title, app.version)"
