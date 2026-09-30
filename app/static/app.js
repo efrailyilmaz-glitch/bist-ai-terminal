@@ -279,18 +279,22 @@ async function loadChart(){
       (d.structure.resistances||[]).forEach(function(x,i){addGuide(candle,x,'rgba(255,94,114,.5)','R'+(i+1));});
     }
     const sp=$('#structurePanel'); if(sp)sp.innerHTML=structureHtml(d.structure);
-    let pane=1,rsiPane=null,stochPane=null,macdPane=null;
-    if(state.indicators.rsi){
-      rsiPane=pane;
-      const rs=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#49d7ff',priceLineVisible:false,title:'RSI'},pane);rs.setData(d.rsi||[]);
-      rs.priceScale().applyOptions({autoScale:false,scaleMargins:{top:.08,bottom:.08}});addGuide(rs,70,'rgba(255,185,74,.5)','70');addGuide(rs,30,'rgba(255,94,114,.45)','30');
-      pane++;
-    }
-    if(state.indicators.stoch){
-      stochPane=pane;
-      const sk=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Stoch K'},pane);sk.setData(d.stoch_k||[]);
-      const sd=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#a77cff',priceLineVisible:false,title:'Stoch D'},pane);sd.setData(d.stoch_d||[]);
-      sk.priceScale().applyOptions({autoScale:false,scaleMargins:{top:.08,bottom:.08}});addGuide(sk,80,'rgba(255,185,74,.4)','80');addGuide(sk,20,'rgba(255,94,114,.4)','20');
+    let pane=1,rsiStochPane=null,macdPane=null;
+    if(state.indicators.rsi||state.indicators.stoch){
+      rsiStochPane=pane;
+      let guide=null;
+      if(state.indicators.rsi){
+        const rs=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#49d7ff',priceLineVisible:false,title:'RSI'},pane);rs.setData(d.rsi||[]);
+        guide=rs;
+        addGuide(rs,70,'rgba(255,185,74,.5)','70');addGuide(rs,30,'rgba(255,94,114,.45)','30');
+      }
+      if(state.indicators.stoch){
+        const sk=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Stoch K'},pane);sk.setData(d.stoch_k||[]);
+        const sd=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#a77cff',priceLineVisible:false,title:'Stoch D'},pane);sd.setData(d.stoch_d||[]);
+        if(!guide)guide=sk;
+        addGuide(sk,80,'rgba(255,185,74,.4)','80');addGuide(sk,20,'rgba(255,94,114,.4)','20');
+      }
+      if(guide)guide.priceScale().applyOptions({autoScale:false,scaleMargins:{top:.08,bottom:.08}});
       pane++;
     }
 
@@ -306,9 +310,8 @@ async function loadChart(){
       const panes=chart.panes();
       if(panes[0])panes[0].setHeight(390);
       for(let i=1;i<panes.length;i++)panes[i].setHeight(140);
-      if(rsiPane!==null&&panes[rsiPane])panes[rsiPane].setHeight(175);
+      if(rsiStochPane!==null&&panes[rsiStochPane])panes[rsiStochPane].setHeight(175);
       if(macdPane!==null&&panes[macdPane])panes[macdPane].setHeight(175);
-      if(stochPane!==null&&panes[stochPane])panes[stochPane].setHeight(135);
     }catch(e){}
     chart.timeScale().fitContent();
   }catch(e){
