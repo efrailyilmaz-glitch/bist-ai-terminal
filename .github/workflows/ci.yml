@@ -29,6 +29,7 @@ jobs:
       - run: node --check app/static/v12.js
       - run: node --check app/static/v13.js
       - run: node --check app/static/v14.js
+      - run: node --check app/static/v15.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -164,4 +165,12 @@ jobs:
           assert a>=70 and m>=65 and d<72
           print('V14 smart money smoke ok',a,m,d,e)
           PY
-      - run: python -c "from app.main import app; assert app.version == '14.0'; print(app.title, app.version)"
+      - name: V15 decision levels smoke test
+        run: |
+          python - <<'PY'
+          import pandas as pd, numpy as np
+          print('V15 decision level module import')
+          from app.decision_levels import _v
+          assert _v('10.5')==10.5
+          PY
+      - run: python -c "from app.main import app; assert app.version == '15.0'; print(app.title, app.version)"

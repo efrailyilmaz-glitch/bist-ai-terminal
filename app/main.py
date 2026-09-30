@@ -29,10 +29,11 @@ from .broker_bridge import broker_status, order_preview, paper_order, orders as 
 from .background_supervisor import start_background_supervisor, status as background_status, alerts as background_alerts
 from .experience_engine import history as experience_history, calibration as experience_calibration, settle_due as experience_settle
 from .smart_money_engine import smart_money_snapshot, smart_money_radar
+from .decision_levels import decision_levels
 from .opportunity_engine import smart_money_candidates
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='14.0')
+app=FastAPI(title='BIST AI Terminal',version='15.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -285,6 +286,10 @@ def smart_money_radar_api(limit:int=25,universe_limit:int=160):
 def smart_money_candidates_api(limit:int=40):
     return smart_money_candidates(limit)
 
+@app.get('/api/decision-levels/{ticker}')
+def decision_levels_api(ticker:str):
+    return decision_levels(ticker)
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -354,4 +359,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'14.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'15.0','service':'bist-ai-terminal'}

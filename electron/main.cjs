@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, dialog, Tray, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, Tray, nativeImage, screen } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const net = require('net');
@@ -12,6 +12,7 @@ let tray = null;
 let alertTimer = null;
 let lastAlertId = null;
 let lastCommitteeAlertId = 0;
+let toastWindow = null;
 
 app.setName('BIST AI Terminal');
 if (process.platform === 'win32') app.setAppUserModelId('com.bistai.terminal');
@@ -106,23 +107,29 @@ function backendJSON(pathname, method = 'GET') {
     req.on('error',reject);req.on('timeout',()=>{req.destroy();reject(new Error('timeout'))});req.end();
   });
 }
+
+function showDesktopToast(title, body, tone='info') {
+  try {
+    if (toastWindow && !toastWindow.isDestroyed()) toastWindow.destroy();
+    const wa=screen.getPrimaryDisplay().workArea;
+    toastWindow=new BrowserWindow({width:390,height:118,x:wa.x+wa.width-410,y:wa.y+18,frame:false,transparent:true,resizable:false,alwaysOnTop:true,skipTaskbar:true,focusable:false,show:false,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});
+    const border=tone==='risk'?'#ff5e72':tone==='money'?'#f6b94a':'#28d17c';
+    const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const html='<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#edf6fb}.box{margin:7px;background:#091722;border:1px solid #204258;border-left:5px solid '+border+';border-radius:12px;padding:14px 16px;box-shadow:0 18px 44px #0009}b{display:block;font-size:13px}p{margin:7px 0 0;color:#a4b7c3;font-size:11px;line-height:1.4}</style><div class="box"><b>'+esc(title)+'</b><p>'+esc(body)+'</p></div>';
+    toastWindow.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(html));toastWindow.once('ready-to-show',()=>toastWindow.showInactive());
+    toastWindow.webContents.on('before-input-event',()=>showMainWindow());
+    setTimeout(()=>{try{if(toastWindow&&!toastWindow.isDestroyed())toastWindow.destroy()}catch(_){}},9000);
+  } catch (_) {}
+}
+
 function startAlertPolling() {
   if (alertTimer) clearInterval(alertTimer);
-  const poll=async()=>{try{const data=await backendJSON('/api/alerts?limit=30'),rows=data.alerts||[];if(lastAlertId===null){lastAlertId=rows.length?rows[0].id:0;return}const fresh=rows.filter(x=>Number(x.id)>Number(lastAlertId)).sort((a,b)=>a.id-b.id);for(const x of fresh){if(x.grade!=='MEGA'&&!(x.grade==='STRONG'&&Number(x.score||0)>=84))continue;if(Notification.isSupported()){const t=x.targets||{},n=new Notification({title:'BIST AI · '+(x.grade==='MEGA'?'BÜYÜK FIRSAT':'GÜÇLÜ FIRSAT')+' · '+x.ticker,body:'Skor '+x.score+'/100 · Kısa '+x.short_score+' · Uzun '+x.long_score+(t.short_target_1?' · T1 ₺'+t.short_target_1:'')});n.on('click',showMainWindow);n.show()}}if(fresh.length)lastAlertId=Math.max(...fresh.map(x=>Number(x.id)||0),Number(lastAlertId)||0)}catch(_){}
+  const poll=async()=>{try{const data=await backendJSON('/api/alerts?limit=30'),rows=data.alerts||[];if(lastAlertId===null){lastAlertId=rows.length?rows[0].id:0;return}const fresh=rows.filter(x=>Number(x.id)>Number(lastAlertId)).sort((a,b)=>a.id-b.id);for(const x of fresh){if(x.grade!=='MEGA'&&!(x.grade==='STRONG'&&Number(x.score||0)>=84))continue;const t=x.targets||{};showDesktopToast('BIST AI · '+(x.grade==='MEGA'?'BÜYÜK FIRSAT':'GÜÇLÜ FIRSAT')+' · '+x.ticker,'Skor '+x.score+'/100 · Kısa '+x.short_score+' · Uzun '+x.long_score+(t.short_target_1?' · T1 ₺'+t.short_target_1:''),'good')}if(fresh.length)lastAlertId=Math.max(...fresh.map(x=>Number(x.id)||0),Number(lastAlertId)||0)}catch(_){}
     try{
       const d=await backendJSON('/api/background/alerts?limit=30&since='+lastCommitteeAlertId),rows=d.alerts||[];
       for(const x of rows.slice().reverse()){
         lastCommitteeAlertId=Math.max(lastCommitteeAlertId,Number(x.id)||0);
-        if(x.type==='COMMITTEE_PASS'&&Notification.isSupported()){
-          const n=new Notification({title:'BIST AI · KOMİTE ONAYI · '+x.ticker,body:x.message||('Komite skoru '+x.score)});
-          n.on('click',showMainWindow);n.show();
-        } else if(x.type==='PRE_MARKUP_WATCH'&&Notification.isSupported()){
-          const n=new Notification({title:'BIST AI · PRE-MARKUP WATCH · '+x.ticker,body:x.message||('Birikim skoru '+x.score)});
-          n.on('click',showMainWindow);n.show();
-        } else if(x.type==='DISTRIBUTION_RISK'&&Notification.isSupported()){
-          const n=new Notification({title:'BIST AI · DISTRIBUTION RISK · '+x.ticker,body:x.message||('Dağıtım riski '+x.score)});
-          n.on('click',showMainWindow);n.show();
-        }
+        if(x.type==='COMMITTEE_PASS'){showDesktopToast('BIST AI · KOMİTE ONAYI · '+x.ticker,x.message||('Komite skoru '+x.score),'good')} else if(x.type==='PRE_MARKUP_WATCH'){showDesktopToast('BIST AI · PRE-MARKUP WATCH · '+x.ticker,x.message||('Birikim skoru '+x.score),'money')} else if(x.type==='DISTRIBUTION_RISK'){showDesktopToast('BIST AI · DISTRIBUTION RISK · '+x.ticker,x.message||('Dağıtım riski '+x.score),'risk')}
       }
     }catch(_){}
   };poll();alertTimer=setInterval(poll,60000);
