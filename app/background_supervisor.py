@@ -6,6 +6,7 @@ from .opportunity_engine import trigger_refresh, radar_snapshot
 from .pro_alert_engine import evaluate_once, list_rules
 from .investment_committee import investment_committee
 from .experience_engine import record_signal, settle_due
+from .smart_money_engine import smart_money_snapshot
 
 _THREAD=None
 _STATE={'running':False,'last_fast_check':None,'last_heavy_refresh':None,'last_committee_run':None,'last_settlement':None,'cycles':0,'error':None,'market_phase':'UNKNOWN','committee_reviews':[],'alerts':[]}
@@ -48,6 +49,21 @@ def _review_top():
                 _STATE['alerts'].insert(0,evt);_STATE['alerts']=_STATE['alerts'][:200]
         except Exception as e:
             reviews.append({'ticker':code,'decision':'ERROR','error':str(e)[:120],'time':time.strftime('%d.%m.%Y %H:%M:%S')})
+    # Smart-money deep check on strongest current candidates.
+    for s in (snap.get('opportunities') or [])[:8]:
+        code=s.get('ticker')
+        try:
+            sm=smart_money_snapshot(code,calibrate=False)
+            if sm.get('phase')=='PRE_MARKUP_WATCH' and sm.get('accumulation_probability',0)>=78 and sm.get('markup_probability',0)>=72:
+                evt={'id':int(time.time()*1000)+len(_STATE['alerts']),'type':'PRE_MARKUP_WATCH','ticker':code,'score':sm.get('accumulation_probability'),
+                     'message':f"{code} · Birikim {sm.get('accumulation_probability')} · Markup {sm.get('markup_probability')}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
+                _STATE['alerts'].insert(0,evt)
+            elif sm.get('distribution_risk',0)>=82:
+                evt={'id':int(time.time()*1000)+len(_STATE['alerts']),'type':'DISTRIBUTION_RISK','ticker':code,'score':sm.get('distribution_risk'),
+                     'message':f"{code} · Dağıtım riski {sm.get('distribution_risk')} · Exit {sm.get('exit_risk')}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
+                _STATE['alerts'].insert(0,evt)
+            _STATE['alerts']=_STATE['alerts'][:200]
+        except Exception:pass
     if reviews:
         _STATE['committee_reviews']=(reviews+_STATE['committee_reviews'])[:50]
         _STATE['last_committee_run']=time.strftime('%d.%m.%Y %H:%M:%S')

@@ -28,6 +28,7 @@ jobs:
       - run: node --check app/static/v11.js
       - run: node --check app/static/v12.js
       - run: node --check app/static/v13.js
+      - run: node --check app/static/v14.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -154,4 +155,13 @@ jobs:
           assert market_phase(datetime(2026,9,27,12,0,tzinfo=tr))=='CLOSED_WEEKEND'
           print('V13 supervisor market-hours smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '13.0'; print(app.title, app.version)"
+      - name: V14 smart money smoke test
+        run: |
+          python - <<'PY'
+          from app.smart_money_engine import _scores
+          r={'VOL_RATIO':1.5,'CMF20':.18,'OBV_SLOPE20':.08,'BB_PCTL':15,'DIST_HI20':-2,'UP_DOWN_VOL':1.7,'CLV':.5,'POS_CLV_RATE':70,'UPPER_WICK5':12,'LOWER_WICK5':20,'VOL_ACCEL':1.3,'RET5':.02,'RET20':.06,'ABSORPTION':.5}
+          a,m,d,e=_scores(r,6)
+          assert a>=70 and m>=65 and d<72
+          print('V14 smart money smoke ok',a,m,d,e)
+          PY
+      - run: python -c "from app.main import app; assert app.version == '14.0'; print(app.title, app.version)"

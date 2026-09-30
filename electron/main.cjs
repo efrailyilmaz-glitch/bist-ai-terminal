@@ -116,6 +116,12 @@ function startAlertPolling() {
         if(x.type==='COMMITTEE_PASS'&&Notification.isSupported()){
           const n=new Notification({title:'BIST AI · KOMİTE ONAYI · '+x.ticker,body:x.message||('Komite skoru '+x.score)});
           n.on('click',showMainWindow);n.show();
+        } else if(x.type==='PRE_MARKUP_WATCH'&&Notification.isSupported()){
+          const n=new Notification({title:'BIST AI · PRE-MARKUP WATCH · '+x.ticker,body:x.message||('Birikim skoru '+x.score)});
+          n.on('click',showMainWindow);n.show();
+        } else if(x.type==='DISTRIBUTION_RISK'&&Notification.isSupported()){
+          const n=new Notification({title:'BIST AI · DISTRIBUTION RISK · '+x.ticker,body:x.message||('Dağıtım riski '+x.score)});
+          n.on('click',showMainWindow);n.show();
         }
       }
     }catch(_){}

@@ -10,7 +10,7 @@ from .news_engine import headlines
 from .analyst_engine import trusted_research
 
 _LOCK=threading.Lock();_WAKE=threading.Event();_THREAD=None;INTERVAL=15*60
-_STATE={'status':'IDLE','running':False,'last_scan':None,'duration_sec':None,'universe_count':0,'analyzed_count':0,'opportunities':[],'alerts':[],'error':None}
+_STATE={'status':'IDLE','running':False,'last_scan':None,'duration_sec':None,'universe_count':0,'analyzed_count':0,'opportunities':[],'smart_money_candidates':[],'alerts':[],'error':None}
 def _v(x,d=50.0):
     try:
         v=float(x);return d if math.isnan(v) or math.isinf(v) else v
@@ -96,6 +96,9 @@ def run_radar_once():
                 try:rich.append(q.result())
                 except Exception:pass
         rich.sort(key=lambda x:x['opportunity_score'],reverse=True);ops=(rich+[x for x in basic if x.get('ticker') not in top])[:80]
+        smc=sorted([{'ticker':r.get('ticker'),'price':r.get('price'),'smart_money_score':r.get('smart_money_score'),'short_score':r.get('short_score'),'long_score':r.get('long_score'),
+                     'rs20':r.get('relative_strength_20'),'volume_ratio':r.get('volume_ratio'),'cmf20':r.get('cmf20'),'up_down_volume_ratio':r.get('up_down_volume_ratio'),'upper_wick_5d_pct':r.get('upper_wick_5d_pct'),
+                     'risk':r.get('risk'),'anomaly_score':r.get('anomaly_score')} for r in rows],key=lambda x:x.get('smart_money_score') or 0,reverse=True)[:40]
         with _LOCK:
             old={x.get('ticker'):x for x in _STATE['opportunities']};alerts=list(_STATE['alerts'])
             for o in ops:
@@ -103,7 +106,7 @@ def run_radar_once():
                 p=old.get(o.get('ticker')) or {}
                 if p.get('grade')==o.get('grade') and abs(_v(p.get('opportunity_score'),0)-_v(o.get('opportunity_score'),0))<5:continue
                 alerts.insert(0,_alert(o))
-            _STATE.update({'status':'OK','running':False,'last_scan':time.strftime('%d.%m.%Y %H:%M:%S'),'duration_sec':round(time.time()-st,1),'universe_count':len(codes),'analyzed_count':len(rows),'opportunities':ops,'alerts':alerts[:250]})
+            _STATE.update({'status':'OK','running':False,'last_scan':time.strftime('%d.%m.%Y %H:%M:%S'),'duration_sec':round(time.time()-st,1),'universe_count':len(codes),'analyzed_count':len(rows),'opportunities':ops,'smart_money_candidates':smc,'alerts':alerts[:250]})
         _save()
     except Exception as e:
         with _LOCK:_STATE.update({'status':'ERROR','running':False,'duration_sec':round(time.time()-st,1),'error':str(e)[:250]})
@@ -118,5 +121,7 @@ def start_radar():
 def trigger_refresh():_WAKE.set();return {'queued':True,'status':_STATE.get('status')}
 def radar_snapshot(limit=60):
     with _LOCK:return {'status':_STATE['status'],'running':_STATE['running'],'last_scan':_STATE['last_scan'],'duration_sec':_STATE['duration_sec'],'universe_count':_STATE['universe_count'],'analyzed_count':_STATE['analyzed_count'],'error':_STATE['error'],'opportunities':list(_STATE['opportunities'])[:max(1,min(limit,100))]}
+def smart_money_candidates(limit=40):
+    with _LOCK:return {'rows':list(_STATE.get('smart_money_candidates') or [])[:max(1,min(limit,80))],'last_scan':_STATE.get('last_scan'),'status':_STATE.get('status')}
 def alerts_snapshot(limit=50,since=0):
     with _LOCK:return {'alerts':[x for x in _STATE['alerts'] if int(x.get('id',0))>int(since or 0)][:max(1,min(limit,100))],'last_scan':_STATE['last_scan'],'status':_STATE['status']}

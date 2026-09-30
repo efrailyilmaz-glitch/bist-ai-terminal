@@ -84,6 +84,12 @@ def indicator_frame(df: pd.DataFrame):
     out['OBV']=(signed*v).cumsum()
     vol20=v.rolling(20).mean().replace(0,np.nan)
     out['OBV_TREND20']=(out['OBV']-out['OBV'].shift(20))/(vol20*20)
+    rng=(h-l).replace(0,np.nan)
+    out['CLV']=((c-l)-(h-c))/rng
+    out['CMF20']=(out['CLV']*v).rolling(20).sum()/v.rolling(20).sum().replace(0,np.nan)
+    upv=pd.Series(np.where(c.pct_change()>0,v,0.0),index=out.index);dnv=pd.Series(np.where(c.pct_change()<0,v,0.0),index=out.index)
+    out['UP_DOWN_VOL10']=upv.rolling(10).sum()/dnv.rolling(10).sum().replace(0,np.nan)
+    out['UPPER_WICK5']=((h-np.maximum(out['Open'].astype(float),c))/rng).rolling(5).mean()*100
 
     return out
 
@@ -122,6 +128,7 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     bbpct=_num(x['BB_PCT'].iloc[-1],50)
     bbwidth=_num(x['BB_WIDTH'].iloc[-1],0)
     obvt=_num(x['OBV_TREND20'].iloc[-1],0)
+    cmf=_num(x['CMF20'].iloc[-1],0);udv=_num(x['UP_DOWN_VOL10'].iloc[-1],1);uw5=_num(x['UPPER_WICK5'].iloc[-1],0)
     vr=_num(v.iloc[-1]/vol20.iloc[-1],1) if len(vol20) else 1
     hi20=_num(c.shift(1).rolling(20).max().iloc[-1],last)
     breakout=last>hi20 if hi20 else False
@@ -177,7 +184,11 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     risk=int(max(0,min(100,round(volat*1.15+atrpct*4))))
     gap=abs((last/prev-1)*100) if prev else 0
     anomaly=int(max(0,min(100,round(max(0,vr-1)*24+max(0,gap-3)*6+max(0,volat-45)*.7))))
-    smart=int(max(0,min(100,round(50+(10 if last>_num(ema20.iloc[-1]) else -9)+max(-12,min(18,(vr-1)*12))+max(-10,min(15,mom20*.35))+max(-7,min(7,obvt*18))))))
+    smart_base=48+(8 if last>_num(ema20.iloc[-1]) else -7)+max(-10,min(14,(vr-1)*10))+max(-8,min(12,mom20*.25))+max(-8,min(9,obvt*20))
+    smart_base+=8 if cmf>.10 else 4 if cmf>0 else -8 if cmf<-.10 else 0
+    smart_base+=7 if udv>1.35 else 3 if udv>1.05 else -5 if udv<.75 else 0
+    smart_base-=7 if uw5>35 and mom20>8 else 0
+    smart=int(max(0,min(100,round(smart_base))))
     alpha=int(max(0,min(100,round(short*.50+long*.42+max(-8,min(8,rs20*.2))-risk*.10))))
 
     high252=_num(c.tail(252).max(),last)
@@ -215,7 +226,7 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
       'macd':round(macd,4),'macd_signal':round(macds,4),'macd_hist':round(mach,4),
       'adx':round(adx,1),'plus_di':round(pdi,1),'minus_di':round(mdi,1),
       'mfi':round(mfi,1),'atr':round(atrv,4),'atr_pct':round(atrpct,2),
-      'bb_pct':round(bbpct,1),'bb_width':round(bbwidth,2),'obv_trend':round(obvt,3),
+      'bb_pct':round(bbpct,1),'bb_width':round(bbwidth,2),'obv_trend':round(obvt,3),'cmf20':round(cmf,3),'up_down_volume_ratio':round(udv,2),'upper_wick_5d_pct':round(uw5,1),
       'relative_strength_20':round(rs20,2),'relative_strength_60':round(rs60,2),
       'volume_ratio':round(vr,2),'momentum_5':round(mom5,2),'momentum_20':round(mom20,2),
       'momentum_60':round(mom60,2),'momentum_120':round(mom120,2),
