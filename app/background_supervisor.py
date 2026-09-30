@@ -2,7 +2,7 @@ from __future__ import annotations
 import threading,time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from .opportunity_engine import trigger_refresh, radar_snapshot
+from .opportunity_engine import trigger_refresh, radar_snapshot, smart_money_candidates
 from .pro_alert_engine import evaluate_once, list_rules
 from .investment_committee import investment_committee
 from .experience_engine import record_signal, settle_due
@@ -10,7 +10,7 @@ from .smart_money_engine import smart_money_snapshot
 
 _THREAD=None
 _STATE={'running':False,'last_fast_check':None,'last_heavy_refresh':None,'last_committee_run':None,'last_settlement':None,'cycles':0,'error':None,'market_phase':'UNKNOWN','committee_reviews':[],'alerts':[]}
-_LAST_RADAR_SCAN=None;_LAST_COMMITTEE={}
+_LAST_RADAR_SCAN=None;_LAST_COMMITTEE={};_LAST_SM_ALERT={}
 
 def _now_tr():return datetime.now(ZoneInfo('Europe/Istanbul'))
 def market_phase(dt=None):
@@ -49,20 +49,28 @@ def _review_top():
                 _STATE['alerts'].insert(0,evt);_STATE['alerts']=_STATE['alerts'][:200]
         except Exception as e:
             reviews.append({'ticker':code,'decision':'ERROR','error':str(e)[:120],'time':time.strftime('%d.%m.%Y %H:%M:%S')})
-    # Smart-money deep check on strongest current candidates.
-    for s in (snap.get('opportunities') or [])[:8]:
+    # Smart-money deep check is independent from opportunity rank: pre-markup often appears before classic momentum.
+    sm_candidates=(smart_money_candidates(limit=16).get('rows') or [])
+    for s in sm_candidates:
         code=s.get('ticker')
         try:
             sm=smart_money_snapshot(code,calibrate=False)
+            typ=None
             if sm.get('phase')=='PRE_MARKUP_WATCH' and sm.get('accumulation_probability',0)>=78 and sm.get('markup_probability',0)>=72:
-                evt={'id':int(time.time()*1000)+len(_STATE['alerts']),'type':'PRE_MARKUP_WATCH','ticker':code,'score':sm.get('accumulation_probability'),
-                     'message':f"{code} · Birikim {sm.get('accumulation_probability')} · Markup {sm.get('markup_probability')}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
-                _STATE['alerts'].insert(0,evt)
+                typ='PRE_MARKUP_WATCH'
             elif sm.get('distribution_risk',0)>=82:
-                evt={'id':int(time.time()*1000)+len(_STATE['alerts']),'type':'DISTRIBUTION_RISK','ticker':code,'score':sm.get('distribution_risk'),
+                typ='DISTRIBUTION_RISK'
+            if not typ: continue
+            key=f"{code}:{typ}";now=time.time()
+            if now-_LAST_SM_ALERT.get(key,0)<6*3600: continue
+            _LAST_SM_ALERT[key]=now
+            if typ=='PRE_MARKUP_WATCH':
+                evt={'id':int(now*1000)+len(_STATE['alerts']),'type':typ,'ticker':code,'score':sm.get('accumulation_probability'),
+                     'message':f"{code} · Birikim {sm.get('accumulation_probability')} · Markup {sm.get('markup_probability')}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
+            else:
+                evt={'id':int(now*1000)+len(_STATE['alerts']),'type':typ,'ticker':code,'score':sm.get('distribution_risk'),
                      'message':f"{code} · Dağıtım riski {sm.get('distribution_risk')} · Exit {sm.get('exit_risk')}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
-                _STATE['alerts'].insert(0,evt)
-            _STATE['alerts']=_STATE['alerts'][:200]
+            _STATE['alerts'].insert(0,evt);_STATE['alerts']=_STATE['alerts'][:200]
         except Exception:pass
     if reviews:
         _STATE['committee_reviews']=(reviews+_STATE['committee_reviews'])[:50]
