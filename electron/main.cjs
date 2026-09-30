@@ -129,7 +129,7 @@ function startAlertPolling() {
       const d=await backendJSON('/api/background/alerts?limit=30&since='+lastCommitteeAlertId),rows=d.alerts||[];
       for(const x of rows.slice().reverse()){
         lastCommitteeAlertId=Math.max(lastCommitteeAlertId,Number(x.id)||0);
-        if(x.type==='COMMITTEE_PASS'){showDesktopToast('BIST AI · KOMİTE ONAYI · '+x.ticker,x.message||('Komite skoru '+x.score),'good')} else if(x.type==='PRE_MARKUP_WATCH'){showDesktopToast('BIST AI · PRE-MARKUP WATCH · '+x.ticker,x.message||('Birikim skoru '+x.score),'money')} else if(x.type==='DISTRIBUTION_RISK'){showDesktopToast('BIST AI · DISTRIBUTION RISK · '+x.ticker,x.message||('Dağıtım riski '+x.score),'risk')}
+        if(x.type==='COMMITTEE_PASS'){showDesktopToast('BIST AI · KOMİTE ONAYI · '+x.ticker,x.message||('Komite skoru '+x.score),'good')} else if(x.type==='PRE_MARKUP_WATCH'){showDesktopToast('BIST AI · PRE-MARKUP WATCH · '+x.ticker,x.message||('Birikim skoru '+x.score),'money')} else if(x.type==='DISTRIBUTION_RISK'){showDesktopToast('BIST AI · DISTRIBUTION RISK · '+x.ticker,x.message||('Dağıtım riski '+x.score),'risk')} else if(x.type==='CYCLE_BUY_WINDOW'){showDesktopToast('BIST AI · ALIM PENCERESİ · '+x.ticker,x.message||('Döngü güveni '+x.score),'good')} else if(x.type==='CYCLE_SELL_RISK'){showDesktopToast('BIST AI · SATIŞ RİSKİ · '+x.ticker,x.message||('Döngü riski '+x.score),'risk')}
       }
     }catch(_){}
   };poll();alertTimer=setInterval(poll,60000);
