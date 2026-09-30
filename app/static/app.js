@@ -279,22 +279,23 @@ async function loadChart(){
       (d.structure.resistances||[]).forEach(function(x,i){addGuide(candle,x,'rgba(255,94,114,.5)','R'+(i+1));});
     }
     const sp=$('#structurePanel'); if(sp)sp.innerHTML=structureHtml(d.structure);
-    let pane=1;
-    if(state.indicators.rsi||state.indicators.stoch){
-      let guide=null;
-      if(state.indicators.rsi){
-        const rs=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#49d7ff',priceLineVisible:false,title:'RSI'},pane);rs.setData(d.rsi||[]);guide=rs;
-      }
-      if(state.indicators.stoch){
-        const sk=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Stoch K'},pane);sk.setData(d.stoch_k||[]);
-        const sd=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#a77cff',priceLineVisible:false,title:'Stoch D'},pane);sd.setData(d.stoch_d||[]);
-        if(!guide)guide=sk;
-      }
-      if(guide){guide.priceScale().applyOptions({autoScale:false,scaleMargins:{top:.08,bottom:.08}});addGuide(guide,70,'rgba(255,185,74,.5)','70');addGuide(guide,30,'rgba(255,94,114,.45)','30');}
+    let pane=1,rsiPane=null,stochPane=null,macdPane=null;
+    if(state.indicators.rsi){
+      rsiPane=pane;
+      const rs=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#49d7ff',priceLineVisible:false,title:'RSI'},pane);rs.setData(d.rsi||[]);
+      rs.priceScale().applyOptions({autoScale:false,scaleMargins:{top:.08,bottom:.08}});addGuide(rs,70,'rgba(255,185,74,.5)','70');addGuide(rs,30,'rgba(255,94,114,.45)','30');
+      pane++;
+    }
+    if(state.indicators.stoch){
+      stochPane=pane;
+      const sk=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Stoch K'},pane);sk.setData(d.stoch_k||[]);
+      const sd=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#a77cff',priceLineVisible:false,title:'Stoch D'},pane);sd.setData(d.stoch_d||[]);
+      sk.priceScale().applyOptions({autoScale:false,scaleMargins:{top:.08,bottom:.08}});addGuide(sk,80,'rgba(255,185,74,.4)','80');addGuide(sk,20,'rgba(255,94,114,.4)','20');
       pane++;
     }
 
     if(state.indicators.macd){
+      macdPane=pane;
       const mh=chart.addSeries(LightweightCharts.HistogramSeries,{priceLineVisible:false,title:'MACD Hist'},pane);
       mh.setData((d.macd_hist||[]).map(x=>({time:x.time,value:x.value,color:x.value>=0?'rgba(40,209,124,.55)':'rgba(255,94,114,.55)'})));
       const ml=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#49d7ff',priceLineVisible:false,title:'MACD'},pane);ml.setData(d.macd||[]);
@@ -304,7 +305,10 @@ async function loadChart(){
     try{
       const panes=chart.panes();
       if(panes[0])panes[0].setHeight(390);
-      for(let i=1;i<panes.length;i++)panes[i].setHeight(145);
+      for(let i=1;i<panes.length;i++)panes[i].setHeight(140);
+      if(rsiPane!==null&&panes[rsiPane])panes[rsiPane].setHeight(175);
+      if(macdPane!==null&&panes[macdPane])panes[macdPane].setHeight(175);
+      if(stochPane!==null&&panes[stochPane])panes[stochPane].setHeight(135);
     }catch(e){}
     chart.timeScale().fitContent();
   }catch(e){

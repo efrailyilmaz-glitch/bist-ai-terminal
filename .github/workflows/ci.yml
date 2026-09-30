@@ -30,6 +30,7 @@ jobs:
       - run: node --check app/static/v13.js
       - run: node --check app/static/v14.js
       - run: node --check app/static/v15.js
+      - run: node --check app/static/v16.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -173,4 +174,14 @@ jobs:
           from app.decision_levels import _v
           assert _v('10.5')==10.5
           PY
-      - run: python -c "from app.main import app; assert app.version == '15.0'; print(app.title, app.version)"
+      - name: V16 cycle engine smoke test
+        run: |
+          python - <<'PY'
+          import numpy as np,pandas as pd
+          from app.cycle_engine import _regularity
+          s=[{'positive':75}]
+          c=[{'autocorr':.25,'median_return_pct':4},{'autocorr':.1,'median_return_pct':-1},{'autocorr':.05,'median_return_pct':2}]
+          assert _regularity(s,c)>=30
+          print('V16 cycle smoke ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '16.0'; print(app.title, app.version)"

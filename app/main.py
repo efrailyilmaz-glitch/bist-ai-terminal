@@ -30,10 +30,11 @@ from .background_supervisor import start_background_supervisor, status as backgr
 from .experience_engine import history as experience_history, calibration as experience_calibration, settle_due as experience_settle
 from .smart_money_engine import smart_money_snapshot, smart_money_radar
 from .decision_levels import decision_levels
+from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .opportunity_engine import smart_money_candidates
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='15.0')
+app=FastAPI(title='BIST AI Terminal',version='16.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -290,6 +291,18 @@ def smart_money_candidates_api(limit:int=40):
 def decision_levels_api(ticker:str):
     return decision_levels(ticker)
 
+@app.get('/api/cycle-profile/{ticker}')
+def cycle_profile_api(ticker:str,force:bool=False):
+    return cycle_profile(ticker,force=force)
+
+@app.get('/api/cycle-radar')
+def cycle_radar_api(limit:int=50):
+    return cycle_radar(limit=limit)
+
+@app.post('/api/cycle-scan')
+def cycle_scan_api(batch:int=24):
+    return scan_cycle_batch(batch=batch)
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -359,4 +372,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'15.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'16.0','service':'bist-ai-terminal'}

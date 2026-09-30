@@ -18,6 +18,7 @@ import app.background_supervisor
 import app.experience_engine
 import app.smart_money_engine
 import app.decision_levels
+import app.cycle_engine
 import app.backtest
 import app.catalysts
 import app.data_provider
