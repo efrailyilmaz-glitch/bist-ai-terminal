@@ -88,8 +88,8 @@ def _loop():
             _review_top()
             if now-last_settle>=6*3600:
                 settle_due();last_settle=now;_STATE['last_settlement']=time.strftime('%d.%m.%Y %H:%M:%S')
-            if now-last_cycle>=10*60:
-                cr=scan_cycle_batch(20);last_cycle=now;_STATE['last_cycle_scan']=time.strftime('%d.%m.%Y %H:%M:%S')
+            if now-last_cycle>=5*60:
+                cr=scan_cycle_batch(25);last_cycle=now;_STATE['last_cycle_scan']=time.strftime('%d.%m.%Y %H:%M:%S')
                 rd=cycle_radar(limit=20);_STATE['cycle_analyzed']=rd.get('analyzed',0)
                 for x in (rd.get('rows') or [])[:8]:
                     if x.get('confidence',0)<65 or x.get('regularity_score',0)<45: continue
