@@ -142,11 +142,21 @@ def smart_money_snapshot(ticker,calibrate=True):
     with _LOCK:_CACHE[key]=(now,out)
     return out
 
-def smart_money_radar(limit=25,universe_limit=160):
-    codes=[x['ticker'] for x in get_universe()[:max(40,min(int(universe_limit),300))]]
-    scan=scan_codes(codes)
-    # broad prefilter keeps deep requests bounded
-    pre=sorted(scan,key=lambda x:(x.get('smart_money_score',0),x.get('relative_strength_20',0)),reverse=True)[:40]
+def smart_money_radar(limit=25,universe_limit=0):
+    # Prefer the candidate set already produced by the full-universe background radar.
+    try:
+        from .opportunity_engine import smart_money_candidates as _candidate_snapshot
+        cached=(_candidate_snapshot(limit=60).get('rows') or [])
+    except Exception:
+        cached=[]
+    if cached:
+        pre=cached[:50]; scan_count=-1
+    else:
+        universe=get_universe()
+        cap=len(universe) if int(universe_limit or 0)<=0 else max(40,min(int(universe_limit),len(universe)))
+        codes=[x['ticker'] for x in universe[:cap]]
+        scan=scan_codes(codes);scan_count=len(scan)
+        pre=sorted(scan,key=lambda x:(x.get('smart_money_score',0),x.get('relative_strength_20',0)),reverse=True)[:50]
     rows=[]
     def one(code):
         return smart_money_snapshot(code,calibrate=False)
@@ -158,5 +168,6 @@ def smart_money_radar(limit=25,universe_limit=160):
                 if s.get('status')=='OK':rows.append(s)
             except Exception:pass
     rows.sort(key=lambda x:(max(x['accumulation_probability'],x['distribution_risk']),x['markup_probability']),reverse=True)
-    return {'rows':rows[:max(5,min(int(limit),50))],'scanned':len(scan),'deep_analyzed':len(rows),
-            'note':'Radar deep-analyzes the strongest price/volume candidates from the available universe sample.'}
+    return {'rows':rows[:max(5,min(int(limit),50))],'scanned':scan_count,'deep_analyzed':len(rows),
+            'source':'FULL_UNIVERSE_BACKGROUND_CANDIDATES' if cached else 'ON_DEMAND_SCAN',
+            'note':'Radar deep-analyzes the strongest price/volume candidates. When the background radar has run, candidates originate from its full-universe scan.'}
