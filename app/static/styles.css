@@ -72,3 +72,5 @@ html,body{height:100%;overflow:hidden}.shell{height:100vh;min-height:0}.sidebar{
 @media(max-width:1200px){.decisionGrid{grid-template-columns:repeat(3,1fr)}.toastStack{width:320px}}
 
 .cycleSummary{display:flex;gap:7px;align-items:baseline;margin-bottom:10px;padding:9px 11px;border:1px solid #173040;border-radius:9px;background:#08151f}.cycleSummary b{font-size:19px;color:#49d7ff}.cycleSummary span{color:#8198a9;font-size:10px}
+
+.wrLegend{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}.wrLegend span{padding:7px 9px;border:1px solid #173040;border-radius:8px;background:#08151f;color:#8097a7;font-size:9px}.wrLegend b{color:#dce8ee}

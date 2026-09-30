@@ -31,10 +31,11 @@ from .experience_engine import history as experience_history, calibration as exp
 from .smart_money_engine import smart_money_snapshot, smart_money_radar
 from .decision_levels import decision_levels
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
+from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .opportunity_engine import smart_money_candidates
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='16.0')
+app=FastAPI(title='BIST AI Terminal',version='17.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -303,6 +304,14 @@ def cycle_radar_api(limit:int=50):
 def cycle_scan_api(batch:int=24):
     return scan_cycle_batch(batch=batch)
 
+@app.get('/api/weekly-reversal/{ticker}')
+def weekly_reversal_api(ticker:str,with_history:bool=True):
+    return weekly_reversal(ticker,with_history=with_history)
+
+@app.get('/api/weekly-reversal-radar')
+def weekly_reversal_radar_api(limit:int=80,universe_limit:int=0):
+    return weekly_reversal_radar(limit=limit,universe_limit=universe_limit)
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -372,4 +381,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'16.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'17.0','service':'bist-ai-terminal'}

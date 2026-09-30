@@ -85,6 +85,7 @@ jobs:
             --hidden-import app.smart_money_engine `
             --hidden-import app.decision_levels `
             --hidden-import app.cycle_engine `
+            --hidden-import app.weekly_reversal `
             --hidden-import app.backtest `
             --hidden-import app.catalysts `
             --hidden-import app.data_provider `
@@ -127,6 +128,7 @@ jobs:
             --hidden-import app.smart_money_engine \
             --hidden-import app.decision_levels \
             --hidden-import app.cycle_engine \
+            --hidden-import app.weekly_reversal \
             --hidden-import app.backtest \
             --hidden-import app.catalysts \
             --hidden-import app.data_provider \

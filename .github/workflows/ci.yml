@@ -31,6 +31,7 @@ jobs:
       - run: node --check app/static/v14.js
       - run: node --check app/static/v15.js
       - run: node --check app/static/v16.js
+      - run: node --check app/static/v17.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -184,4 +185,15 @@ jobs:
           assert _regularity(s,c)>=30
           print('V16 cycle smoke ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '16.0'; print(app.title, app.version)"
+      - name: V17 weekly reversal smoke test
+        run: |
+          python - <<'PY'
+          import numpy as np,pandas as pd
+          from app.scoring import indicator_frame
+          x=np.arange(120);close=100-x*.08+np.maximum(0,x-85)*.35+np.sin(x/4)
+          df=pd.DataFrame({'Open':close-.4,'High':close+1,'Low':close-1,'Close':close,'Volume':1_000_000+np.maximum(0,x-90)*15_000})
+          ind=indicator_frame(df)
+          assert 'RSI14' in ind and 'STOCH_RSI_K' in ind and 'MACD_HIST' in ind
+          print('V17 weekly reversal indicators ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '17.0'; print(app.title, app.version)"
