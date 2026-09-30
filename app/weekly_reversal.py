@@ -130,5 +130,26 @@ def weekly_reversal_radar(limit=60,universe_limit=0):
             except Exception:pass
     order={'ALIM_PENCERESİ':0,'ERKEN_DÖNÜŞ':1,'TEYİT_BEKLE':2,'NÖTR':3,'SATIŞ_RİSKİ':4}
     rows.sort(key=lambda x:(order.get(x.get('signal'),9),-x.get('score',0),-x.get('rs4',0)))
-    return {'rows':rows[:max(10,min(int(limit),120))],'scanned':len(rows),'universe':len(u),
-            'note':'5-year weekly bars. Core setup: rising RSI from low zone + low Stoch RSI bullish cross + MACD histogram turning positive; enhanced by trend, volume and relative-strength filters.'}
+    # Add ticker-specific historical validation to the strongest candidates only.
+    top=rows[:max(20,min(int(limit),120))]
+    validated=[]
+    def hist_one(x):
+        if x.get('signal') not in {'ALIM_PENCERESİ','ERKEN_DÖNÜŞ','TEYİT_BEKLE'}: return x
+        try:
+            full=weekly_reversal(x['ticker'],with_history=True)
+            h=(full.get('historical') or {})
+            h8=(h.get('8w') or {})
+            n=int(h8.get('n') or 0);hit=float(h8.get('positive_pct') or 0);med=float(h8.get('median_pct') or 0)
+            x=dict(x);x['historical']=h
+            # shrink sparse history toward neutral; do not over-trust 1-2 examples
+            reliability=min(1.0,n/8.0)
+            edge=(hit-50)*.45+med*1.5
+            x['validated_score']=round(max(0,min(100,x.get('score',0)+edge*reliability)))
+            x['history_reliability']=round(reliability*100)
+            return x
+        except Exception:return x
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        for x in ex.map(hist_one,top):validated.append(x)
+    validated.sort(key=lambda x:(order.get(x.get('signal'),9),-x.get('validated_score',x.get('score',0)),-x.get('score',0)))
+    return {'rows':validated,'scanned':len(rows),'universe':len(u),
+            'note':'5-year weekly bars. Core setup: rising RSI from low zone + low Stoch RSI bullish cross + MACD histogram turning positive; enhanced by trend, volume, relative-strength and ticker-specific historical setup validation.'}
