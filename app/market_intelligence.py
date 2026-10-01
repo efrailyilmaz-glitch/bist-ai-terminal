@@ -33,6 +33,8 @@ def seasonality(ticker,period='10y'):
     if df is None or len(df)<260:return {'ticker':code,'status':'NO_DATA'}
     mclose=df['close'].resample('ME').last().dropna()
     mret=mclose.pct_change().dropna()*100
+    now=pd.Timestamp.today()
+    if len(mret) and mret.index[-1].year==now.year and mret.index[-1].month==now.month:mret=mret.iloc[:-1]
     months=[]
     names=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara']
     for m in range(1,13):
