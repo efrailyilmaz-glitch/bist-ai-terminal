@@ -26,6 +26,7 @@ def _parse(html:str)->List[Dict]:
         cells=[re.sub(r'\s+',' ',x.get_text(' ',strip=True)) for x in tds]
         if len(cells)<2: continue
         code=cells[0].strip().upper(); name=cells[1].strip()
+        if code in {'KOD','KODU','CODE','TICKER'}: continue
         if not re.fullmatch(r'[A-Z0-9]{3,6}',code): continue
         if code in seen: continue
         seen.add(code)
