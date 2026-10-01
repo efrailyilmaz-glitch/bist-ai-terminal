@@ -319,17 +319,17 @@ def system_audit_api():
     cycle_total=max(1,len(get_universe()))
     cycle_cov=round(float(bg.get('cycle_analyzed') or 0)/cycle_total*100,1)
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
-    desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND')=='1'
+    desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
       {'name':'Backend','status':'OK','detail':'FastAPI 18.0'},
-      {'name':'Background Supervisor','status':'OK' if (bg.get('running') or not desktop) else 'ERROR','detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
+      {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
       {'name':'Weekly Coverage','status':'OK' if weekly_cov>=80 else 'WARMING','detail':f'%{weekly_cov} · {bg.get("weekly_analyzed",0)}/{cycle_total}'},
       {'name':'Broker Safety','status':'OK','detail':'Direct live locked · paper risk gates active' if not br.get('direct_live_execution_enabled') else 'Live enabled'},
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
-    overall='OK' if not any(x['status']=='ERROR' for x in checks) else 'ERROR'
+    overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
     return {'version':'18.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/institutional-providers')
@@ -396,7 +396,7 @@ def kap():
 @app.on_event('startup')
 def desktop_background_radar():
     import os
-    if os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND')=='1':
+    if os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0':
         start_radar(); start_alert_engine(); start_background_supervisor()
 
 @app.get('/health')
