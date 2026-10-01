@@ -7,7 +7,7 @@ import pandas as pd
 from .market_data import yahoo_rows, scan_codes
 from .universe import get_universe
 
-_LOCK=threading.Lock();TTL=6*3600;SCHEMA_VERSION=2
+_LOCK=threading.Lock();TTL=6*3600;SCHEMA_VERSION=3
 def _dir():
     if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
     elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
@@ -60,16 +60,21 @@ def _cycle_candidates(df):
                     'since_recent_low':since_low,'since_recent_high':since_high})
     return out
 def _regularity(season,cycles):
-    ss=0
+    ss=0.0
     if season:
         best=max(season,key=lambda x:abs(x['positive']-50))
-        ss+=min(40,abs(best['positive']-50)*1.6)
+        # Reward a month that behaves consistently across years.
+        ss+=min(38,abs(best['positive']-50)*1.5)
+        if best.get('n',0)>=6:ss+=4
     if cycles:
         best=max(cycles,key=lambda x:abs(x['autocorr']))
-        ss+=min(35,abs(best['autocorr'])*100)
-        dispersion=np.std([x['median_return_pct'] for x in cycles]) if len(cycles)>2 else 0
-        ss+=min(15,dispersion)
-    return round(min(100,ss))
+        # Autocorrelation strength + directional consistency of the same horizon.
+        ss+=min(32,abs(best['autocorr'])*100)
+        ss+=min(18,abs(best.get('positive_pct',50)-50)*.72)
+        # Conflicting horizon outcomes are noise, not regularity.
+        dispersion=float(np.std([x['median_return_pct'] for x in cycles])) if len(cycles)>2 else 0
+        ss-=min(14,dispersion*.45)
+    return round(max(0,min(100,ss)))
 def cycle_profile(ticker,force=False):
     code=ticker.upper().replace('.IS','');now=time.time()
     with _LOCK:
