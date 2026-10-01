@@ -28,7 +28,7 @@ def _save_persist():
     try:_store_file().write_text(json.dumps(_PERSIST,ensure_ascii=False),encoding='utf-8')
     except Exception:pass
 _load_persist()
-_SCAN_CURSOR=0
+_SCAN_CURSOR=int((_PERSIST.get('__meta__') or {}).get('cursor',0)) if isinstance(_PERSIST.get('__meta__'),dict) else 0
 
 def _v(x,d=None):
     try:
@@ -186,16 +186,19 @@ def scan_weekly_reversal_batch(batch=24):
     with ThreadPoolExecutor(max_workers=5) as ex:
         for x in ex.map(lambda c:weekly_reversal(c,with_history=False),codes):
             if x.get('status')=='OK':done+=1
+    with _LOCK:
+        _PERSIST['__meta__']={'cursor':_SCAN_CURSOR,'updated_at':time.time()}
+        _save_persist()
     return {'scanned':done,'cursor':_SCAN_CURSOR,'universe':len(u)}
 
 def weekly_reversal_radar(limit=60,universe_limit=0):
     u=get_universe();now=time.time()
     with _LOCK:
-        rows=[_public(v) for v in _PERSIST.values() if isinstance(v,dict) and v.get('_schema')==SCHEMA_VERSION and now-float(v.get('_ts',0))<PERSIST_TTL and v.get('status')=='OK']
+        rows=[_public(v) for k,v in _PERSIST.items() if k!='__meta__' and isinstance(v,dict) and v.get('_schema')==SCHEMA_VERSION and now-float(v.get('_ts',0))<PERSIST_TTL and v.get('status')=='OK']
     # First use fills a small batch quickly; background supervisor completes the universe.
     if len(rows)<20:
         scan_weekly_reversal_batch(24)
-        with _LOCK:rows=[_public(v) for v in _PERSIST.values() if isinstance(v,dict) and v.get('_schema')==SCHEMA_VERSION and v.get('status')=='OK']
+        with _LOCK:rows=[_public(v) for k,v in _PERSIST.items() if k!='__meta__' and isinstance(v,dict) and v.get('_schema')==SCHEMA_VERSION and v.get('status')=='OK']
     order={'ALIM_PENCERESİ':0,'ERKEN_DÖNÜŞ':1,'TEYİT_BEKLE':2,'NÖTR':3,'SATIŞ_RİSKİ':4}
     rows.sort(key=lambda x:(order.get(x.get('signal'),9),-x.get('score',0),-x.get('rs4',0)))
     cap=max(20,min(int(limit),120));sell_quota=max(5,min(12,cap//5))

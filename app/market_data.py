@@ -264,7 +264,7 @@ def market_overview():
     with _LOCK:
         if _MARKET_CACHE['data'] is not None and now-_MARKET_CACHE['ts']<120:
             return _MARKET_CACHE['data']
-    out={'mode':'LIVE / YAHOO','updated':time.strftime('%d.%m.%Y %H:%M:%S'),'global_score':50,'regime':'NÖTR','fear':50,'breadth':0,'advancers':0,'decliners':0,'unchanged':0}
+    out={'mode':'DELAYED / YAHOO','updated':time.strftime('%d.%m.%Y %H:%M:%S'),'global_score':50,'regime':'NÖTR','fear':50,'breadth':0,'advancers':0,'decliners':0,'unchanged':0}
     symbols=[('xu100','XU100'),('usdtry','TRY=X'),('eurtry','EURTRY=X'),('sp500','^GSPC'),('nasdaq','^IXIC'),('dxy','DX-Y.NYB'),('us10y','^TNX'),('gold','GC=F'),('oil','CL=F')]
     def fetch(item):
         key,sym=item
@@ -290,7 +290,7 @@ def market_overview():
     score=int(max(0,min(100,score)))
     out['global_score']=score
     out['regime']='RISK-ON / BULL' if score>=62 else ('RISK-OFF / BEAR' if score<=38 else 'NÖTR / TRANSITION')
-    out['mode']='LIVE / YAHOO' if ok>=3 else ('PARTIAL / YAHOO' if ok else 'DATA UNAVAILABLE')
+    out['mode']='DELAYED / YAHOO' if ok>=3 else ('PARTIAL / YAHOO' if ok else 'DATA UNAVAILABLE')
     with _LOCK:_MARKET_CACHE.update({'ts':time.time(),'data':out})
     return out
 

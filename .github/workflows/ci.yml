@@ -242,6 +242,9 @@ jobs:
           from app.cycle_engine import SCHEMA_VERSION
           from app.weekly_reversal import SCHEMA_VERSION as WSCHEMA
           assert SCHEMA_VERSION>=4 and WSCHEMA>=3
+          from app.market_data import market_overview
+          import inspect
+          assert 'DELAYED / YAHOO' in inspect.getsource(market_overview)
           print('V18 QA hardening ok')
           PY
       - run: python -c "from app.main import app; assert app.version == '18.0'; print(app.title, app.version)"

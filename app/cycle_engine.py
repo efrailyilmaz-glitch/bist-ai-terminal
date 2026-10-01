@@ -25,6 +25,7 @@ def _save():
     try:_file().write_text(json.dumps(_CACHE,ensure_ascii=False),encoding='utf-8')
     except Exception:pass
 _load()
+_CURSOR=int((_CACHE.get('__meta__') or {}).get('cursor',0)) if isinstance(_CACHE.get('__meta__'),dict) else 0
 def _rows(ticker,period='10y'):
     rows=yahoo_rows(ticker,period=period,interval='1d').get('candles') or []
     if not rows:return None
@@ -117,14 +118,14 @@ def cycle_profile(ticker,force=False):
     with _LOCK:_CACHE[code]=out;_save()
     return out
 def cycle_radar(limit=40):
-    with _LOCK:rows=[v for v in _CACHE.values() if isinstance(v,dict) and v.get('status')=='OK']
+    now=time.time()
+    with _LOCK:rows=[v for k,v in _CACHE.items() if k!='__meta__' and isinstance(v,dict) and v.get('status')=='OK' and v.get('_schema')==SCHEMA_VERSION and now-float(v.get('_ts',0))<TTL]
     cap=max(5,min(int(limit),100));sell_quota=max(3,min(10,cap//4))
     buys=sorted([x for x in rows if x.get('signal')=='ALIM_PENCERESİ'],key=lambda x:(-x.get('regularity_score',0),-x.get('confidence',0)))
     others=sorted([x for x in rows if x.get('signal') not in {'ALIM_PENCERESİ','SATIŞ_RİSKİ'}],key=lambda x:(-x.get('regularity_score',0),-x.get('confidence',0)))
     sells=sorted([x for x in rows if x.get('signal')=='SATIŞ_RİSKİ'],key=lambda x:(-x.get('confidence',0),-x.get('regularity_score',0)))
     chosen=(buys+others)[:max(1,cap-min(sell_quota,len(sells)))]+sells[:sell_quota]
     return {'rows':chosen,'analyzed':len(rows),'universe':len(get_universe()),'note':'Background scanner gradually covers the full BIST universe and reserves shortlist capacity for both buy-window and sell-risk patterns.'}
-_CURSOR=0
 def scan_cycle_batch(batch=24):
     global _CURSOR
     u=get_universe()
@@ -140,4 +141,7 @@ def scan_cycle_batch(batch=24):
         except Exception:return 0
     with ThreadPoolExecutor(max_workers=5) as ex:
         done=sum(ex.map(one,codes))
+    with _LOCK:
+        _CACHE['__meta__']={'cursor':_CURSOR,'updated_at':time.time()}
+        _save()
     return {'scanned':done,'cursor':_CURSOR,'universe':len(u)}
