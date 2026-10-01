@@ -209,4 +209,25 @@ jobs:
           assert "'10y'" in src and "'max'" in src
           print('10y/max period support ok')
           PY
+      - name: API and frontend wiring smoke test
+        run: |
+          python - <<'PY'
+          from app.main import app, BASE
+          routes={getattr(r,'path',None) for r in app.routes}
+          required={
+            '/health','/api/scan','/api/chart/{ticker}','/api/committee/{ticker}',
+            '/api/smart-money/{ticker}','/api/decision-levels/{ticker}',
+            '/api/cycle-radar','/api/weekly-reversal-radar',
+            '/api/broker/status','/api/background/status','/api/experience/calibration',
+            '/api/kap-disclosures/{ticker}','/api/seasonality/{ticker}'
+          }
+          missing=required-routes
+          assert not missing, f'missing routes: {missing}'
+          html=(BASE/'templates/index.html').read_text(encoding='utf-8')
+          for name in ['v10.js','v11.js','v12.js','v13.js','v14.js','v15.js','v16.js','v17.js']:
+              assert name in html, f'missing frontend script {name}'
+          for view in ['execution','experience','smartmoney','cycles','weeklyreversal']:
+              assert f'data-view="{view}"' in html, f'missing nav {view}'
+          print('API/frontend wiring ok')
+          PY
       - run: python -c "from app.main import app; assert app.version == '17.1'; print(app.title, app.version)"
