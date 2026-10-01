@@ -330,7 +330,20 @@ function bindChartTools(){
 }
 async function backtestView(){return `<div class="panel"><div class="panelHead"><div><h2>Backtest Lab · ${state.current}</h2><p>MA20/MA50 trend stratejisi · gerçek tarihsel fiyat serisi</p></div><button class="toolbtn" id="runBacktest">Çalıştır</button></div><div id="btResult" class="empty">Backtest çalıştırılmayı bekliyor.</div></div>`}
 async function runBacktest(){const box=$('#btResult');if(!box)return;box.innerHTML='<div class="loading">Backtest hesaplanıyor…</div>';try{const b=await getJSON(`/api/backtest/${state.current}?fast=20&slow=50&period=2y`);if(b.error)throw new Error(b.error);box.innerHTML=`<div class="btgrid">${[['Strateji',pct(b.return_pct)],['Buy & Hold',pct(b.buy_hold_pct)],['Alpha',pct(b.alpha_pct)],['Sharpe',b.sharpe],['Max DD',pct(b.max_drawdown)],['İşlem',b.trades]].map(x=>`<div class="stat"><span>${x[0]}</span><b>${x[1]}</b></div>`).join('')}</div><p class="muted">Geçmiş performans gelecekteki sonucu garanti etmez. İşlem maliyeti/slippage katmanı sonraki motor sürümünde parametreleştirilecek.</p>`;}catch(e){box.innerHTML=`<div class="empty">Backtest hatası: ${e.message}</div>`}}
-function kapView(){return `<div class="kapcard"><h2>KAP Radar</h2><p>Şirket evreni KAP'ın BIST şirketleri listesinden dinamik alınıyor. Bildirim NLP katmanı ayrı servis olarak hazırlanıyor.</p><p><b>Neden şimdilik sahte akış yok?</b> Resmî gerçek zamanlı KAP veri yayını lisans/abonelik gerektirebildiği için, terminal gerçek veri bağlantısı kurulmadan yapay “canlı bildirim” göstermiyor.</p><a href="https://www.kap.org.tr/tr/bildirim-sorgu" target="_blank" rel="noopener">KAP bildirim sorgu ↗</a></div>`}
+function kapView(){return `<div class="panel"><div class="panelHead"><div><h2>KAP Radar · ${state.current}</h2><p>Şirket profili · son bildirimler · olay sınıfı · önem ve sentiment</p></div><button class="toolbtn" id="kapRefresh">Yenile</button></div><div id="kapLive"><div class="loading">KAP verileri yükleniyor…</div></div></div>`}
+function kapEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function loadKapRadar(){
+  const box=$('#kapLive');if(!box)return;
+  try{
+    const [p,d]=await Promise.all([getJSON('/api/kap-profile/'+state.current),getJSON('/api/kap-disclosures/'+state.current+'?limit=20')]);
+    const items=d.items||[];
+    const rows=items.map(x=>'<tr><td>'+(kapEsc(x.date)||'—')+'</td><td><a href="'+kapEsc(x.url)+'" target="_blank" rel="noopener">'+kapEsc(x.title)+'</a></td><td>'+kapEsc(x.event||'OTHER')+'</td><td>'+fmt(x.materiality||0,0)+'</td><td class="'+cls(x.sentiment_score||0)+'">'+fmt(x.sentiment_score||0,0)+'</td></tr>').join('');
+    box.innerHTML='<div class="premiumHero"><div><span>Durum</span><b>'+kapEsc(p.status||d.status)+'</b><small>KAP public source</small></div><div><span>Pazar</span><b>'+kapEsc(p.market||'—')+'</b><small>'+kapEsc((p.sectors||[]).slice(0,2).join(' · '))+'</small></div><div><span>Endeks</span><b>'+((p.indices||[]).length)+'</b><small>'+kapEsc((p.indices||[]).slice(0,2).join(' · '))+'</small></div><div><span>Bildirim</span><b>'+items.length+'</b><small>son eşleşmeler</small></div></div>'+
+    '<div class="tableWrap"><table class="stockTable"><thead><tr><th>Tarih</th><th>Bildirim</th><th>Olay</th><th>Önem</th><th>Sentiment</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<p class="muted">KAP public arama katmanı kullanılır. Sentiment ve önem puanı metin sınıflandırmasıdır; bildirimin hukuki/finansal etkisinin kesin yorumu değildir. Lisanslı eşzamanlı KAP feed bağlı değilse sahte canlı veri üretilmez.</p>';
+    setTimeout(()=>{try{v15SortTables()}catch(e){}},0)
+  }catch(e){box.innerHTML='<div class="empty">KAP verisi yüklenemedi: '+kapEsc(e.message)+'</div>'}
+}
 function render(){
   if(state.view==='overview'){els.title.textContent='Piyasa Komuta Merkezi';els.content.innerHTML=overview();}
   if(state.view==='all'){els.title.textContent='Tüm BIST Şirketleri';els.content.innerHTML=allStocks();bindTable();}
@@ -341,7 +354,7 @@ function render(){
   if(state.view==='portfolio'){els.title.textContent='Model Portföy';els.content.innerHTML=portfolioView();}
   if(state.view==='detail'){els.title.textContent=`${state.current} Hisse Analizi`;els.content.innerHTML=detailShell();bindChartTools();setTimeout(function(){loadChart();loadMtf();},0);}
   if(state.view==='backtest'){els.title.textContent='Backtest Lab';backtestView().then(h=>{els.content.innerHTML=h;$('#runBacktest').onclick=runBacktest});}
-  if(state.view==='kap'){els.title.textContent='KAP Radar';els.content.innerHTML=kapView();}
+  if(state.view==='kap'){els.title.textContent='KAP Radar';els.content.innerHTML=kapView();setTimeout(()=>{loadKapRadar();const b=$('#kapRefresh');if(b)b.onclick=loadKapRadar},0);}
 }
 function bindTable(){const s=$('#tableSearch'),sort=$('#tableSort'); if(s)s.oninput=e=>{els.search.value=e.target.value;render()};if(sort)sort.onchange=e=>{const q=(els.search.value||'').trim().toUpperCase();const rows=state.universe.filter(x=>!q||x.ticker.includes(q)||(x.name||'').toUpperCase().includes(q));$('#allBody').innerHTML=stockRows(rows,e.target.value)}}
 $$('.nav').forEach(b=>b.onclick=()=>{$$('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.view=b.dataset.view;render()});
