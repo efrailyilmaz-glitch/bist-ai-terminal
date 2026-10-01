@@ -1,5 +1,7 @@
 from __future__ import annotations
 import json, math, os, platform, threading, time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import pandas as pd
@@ -41,9 +43,30 @@ def _df(code,period='5y'):
     for c in ['Open','High','Low','Close','Volume']:df[c]=pd.to_numeric(df[c],errors='coerce')
     return df.dropna(subset=['Close']).reset_index(drop=True)
 
+def _week_is_open(df):
+    try:
+        last=pd.to_datetime(df.iloc[-1].get('time'),errors='coerce')
+        if pd.isna(last):return False
+        now=datetime.now(ZoneInfo('Europe/Istanbul'))
+        same_week=(last.isocalendar().year==now.isocalendar().year and last.isocalendar().week==now.isocalendar().week)
+        if not same_week:return False
+        return now.weekday()<4 or (now.weekday()==4 and (now.hour<18 or (now.hour==18 and now.minute<15)))
+    except Exception:return False
+
+def _provisional_snapshot(df):
+    try:
+        ind=indicator_frame(df);r=ind.iloc[-1]
+        return {'time':str(df.iloc[-1].get('time')),'rsi':round(_v(r.get('RSI14'),50),1),'stoch_k':round(_v(r.get('STOCH_RSI_K'),50),1),
+                'stoch_d':round(_v(r.get('STOCH_RSI_D'),50),1),'macd_hist':round(_v(r.get('MACD_HIST'),0),4),
+                'note':'Current weekly candle is still open and is not used for confirmed ranking or alerts.'}
+    except Exception:return None
+
 def _weekly_features(code):
-    df=_df(code,'5y')
-    if df is None or len(df)<60:return None
+    raw=_df(code,'5y')
+    if raw is None or len(raw)<60:return None
+    week_open=_week_is_open(raw);provisional=_provisional_snapshot(raw) if week_open else None
+    df=raw.iloc[:-1].copy().reset_index(drop=True) if week_open and len(raw)>60 else raw
+    if len(df)<60:return None
     ind=indicator_frame(df)
     c=df.Close.astype(float);v=df.Volume.fillna(0).astype(float)
     rsi=ind.RSI14;sk=ind.STOCH_RSI_K;sd=ind.STOCH_RSI_D;mh=ind.MACD_HIST;macd=ind.MACD;ms=ind.MACD_SIGNAL
@@ -97,7 +120,8 @@ def _weekly_features(code):
             'macd_hist':round(_v(mh.iloc[-1],0),4),'macd_new_green':bool(macd_new_green),'macd_rising':bool(macd_rising),'macd_cross':bool(macd_cross),
             'ema20':round(e20,2),'ema50':round(e50,2),'ema20_reclaim':bool(ema20_reclaim),'trend_ok':bool(trend_ok),'adx':round(_v(adx.iloc[-1],0),1),
             'plus_di':round(_v(pdi.iloc[-1],0),1),'minus_di':round(_v(mdi.iloc[-1],0),1),'volume_ratio':round(vol_ratio,2),
-            'rs4':round(rs4,2),'rs12':round(rs12,2),'higher_low':bool(higher_low),'bars':len(df),'_df':df,'_ind':ind}
+            'rs4':round(rs4,2),'rs12':round(rs12,2),'higher_low':bool(higher_low),'bars':len(df),'bar_status':'CONFIRMED_CLOSED_WEEK',
+            'provisional':provisional,'_df':df,'_ind':ind}
 
 def _historical_setup_stats(base):
     df=base.pop('_df');ind=base.pop('_ind')
