@@ -1,0 +1,10 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const ctx={v19Esc:s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),pct:v=>v+'%',fmt:v=>String(v),render(){},state:{current:'ASELS'}};
+vm.createContext(ctx);vm.runInContext(fs.readFileSync('app/static/v20.js','utf8'),ctx);
+assert(ctx.edgeView().includes('Üç sabit kuralı sına'));
+assert(ctx.edgeRenderResult({status:'NO_DATA'}).includes('alınamadı'));
+const metrics={n:0,mean_net_pct:null,mean_excess_pct:null,stress_excess_pct:null,worst_trade_pct:null,resampling_band:null,break_even_cost_bps:null};
+const data={status:'OK',ticker:'<script>',as_of:'2026-09-30',bars:1000,split_date:'2023-01-01',alignment:{stock_only_dates:0,benchmark_only_dates:0},source:'Yahoo',data_age_calendar_days:1,protocol:'edge-1.0',protocol_hash:'abc',cost_bps:30,strategies:[{name:'Test',rule:'<b>input</b>',horizon:20,current_setup:false,evidence:'INSUFFICIENT_EVIDENCE',early:metrics,late:metrics,skipped_unreliable_windows:0,reasons:['Az örnek'],recent_trades:[]}],limits:['Research']};
+const html=ctx.edgeRenderResult(data);
+assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));assert(html.includes('AVANTAJ KANITLANMADI'));assert(html.includes('Yeterli örnek yok'));assert(!html.includes('null%'));assert(!html.includes('%95 aile güveni'));
+console.log('research rendering, sparse samples, escaped fields and honest evidence labels passed');

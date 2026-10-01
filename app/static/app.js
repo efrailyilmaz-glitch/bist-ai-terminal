@@ -31,7 +31,7 @@ async function init(){
     els.systemMode.textContent=`V${h.version||'17.1'} · ${u.source||'UNIVERSE'}`;
     els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
     if(restored)updateRegime();
-    renderTickerbar(); render(); if(!['detail','forecast'].includes(state.view))setTimeout(()=>scanAll(false),restored?900:150);
+    renderTickerbar(); render(); if(!['detail','forecast','edges'].includes(state.view))setTimeout(()=>scanAll(false),restored?900:150);
   }catch(e){els.content.innerHTML=`<div class="empty">Başlatma hatası: ${e.message}</div>`;}
 }
 function renderTickerbar(){

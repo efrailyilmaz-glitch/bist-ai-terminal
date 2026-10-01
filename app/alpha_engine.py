@@ -9,6 +9,7 @@ from .scoring import score_frame
 from .fundamentals import get_fundamentals
 from .universe import get_universe
 from .kap_engine import disclosures
+from .research_data import align_daily
 
 _LOCK=threading.Lock();_CACHE={};TTL=30*60
 
@@ -49,8 +50,11 @@ def validate_alpha(ticker:str,period='10y',step=5,min_score=60):
         if h and now-h[0]<TTL:return h[1]
     df,rows=_df(code,period);bench,brows=_df('XU100',period)
     if df is None or bench is None:return {'ticker':code,'status':'NO_DATA'}
-    n=min(len(df),len(bench));df=df.iloc[-n:].reset_index(drop=True);bench=bench.iloc[-n:].reset_index(drop=True);rows=rows[-n:];events=[]
-    for i in range(220,n-61,max(1,int(step))):
+    try:df,bench,alignment=align_daily(df,bench)
+    except ValueError:return {'ticker':code,'status':'DATA_QUALITY_BLOCKED'}
+    n=len(df);rows=df.to_dict('records');events=[]
+    # The longest result window is 60 bars. Do not count it repeatedly.
+    for i in range(220,n-61,max(61,int(step))):
         hist=df.iloc[:i+1];bh=bench.iloc[:i+1]
         b20=(bh['Close'].iloc[-1]/bh['Close'].iloc[-21]-1)*100 if len(bh)>=21 else 0
         b60=(bh['Close'].iloc[-1]/bh['Close'].iloc[-61]-1)*100 if len(bh)>=61 else b20
@@ -76,7 +80,8 @@ def validate_alpha(ticker:str,period='10y',step=5,min_score=60):
     out={'ticker':code,'status':'OK','period':period,'sample_count':len(events),'min_score':min_score,
          'horizons':{'5d':_summ(events,5),'20d':_summ(events,20),'60d':_summ(events,60)},'calibration':buckets,'regimes':regimes,
          'recent_events':events[-30:][::-1],
-         'note':'Historical point-in-time technical score validation using only data available up to each sample date. Current-universe survivorship bias remains.'}
+         'alignment':alignment,'overlap_removed':True,'effective_step':max(61,int(step)),
+         'note':'Exploratory close-to-close gross price returns, date-aligned with XU100; non-overlapping 60-bar windows. Not an execution backtest. Costs, dividends, survivor bias and revised history are not controlled.'}
     with _LOCK:_CACHE[key]=(now,out)
     return out
 
@@ -137,8 +142,9 @@ def event_study(ticker:str,limit=20):
         if idx is None or bi is None:continue
         ev={'date':ds,'category':it.get('event_category'),'title':it.get('title'),'materiality':it.get('materiality'),'sentiment_score':it.get('sentiment_score')}
         for h in (1,5,20):
-            if idx+h<len(df) and bi+h<len(bench):
-                r=(df['Close'].iloc[idx+h]/df['Close'].iloc[idx]-1)*100;br=(bench['Close'].iloc[bi+h]/bench['Close'].iloc[bi]-1)*100
+            end=idx+h
+            if end<len(df) and dates[idx] in bmap and dates[end] in bmap:
+                r=(df['Close'].iloc[end]/df['Close'].iloc[idx]-1)*100;br=(bench['Close'].iloc[bmap[dates[end]]]/bench['Close'].iloc[bmap[dates[idx]]]-1)*100
                 ev[f'return_{h}d']=round(float(r),2);ev[f'excess_{h}d']=round(float(r-br),2)
         events.append(ev)
     summary={}
@@ -147,4 +153,4 @@ def event_study(ticker:str,limit=20):
         ev=[x for x in events if x.get('category')==cat]
         vals=[x.get('excess_20d') for x in ev if x.get('excess_20d') is not None]
         summary[cat]={'n':len(ev),'mean_excess_20d':round(float(np.mean(vals)),2) if vals else None,'hit_rate_20d':round(float(np.mean(np.array(vals)>0)*100),1) if vals else None}
-    return {'ticker':code,'status':'OK' if events else 'NO_DATED_EVENTS','events':events,'summary':summary,'note':'Public KAP search event dates matched to next available trading day; small samples are not statistically reliable.'}
+    return {'ticker':code,'status':'OK' if events else 'NO_DATED_EVENTS','events':events,'summary':summary,'note':'Descriptive gross post-date returns with identical stock/benchmark endpoints. Publication timestamps and consensus surprises are unavailable; not a tradable PEAD test. Small samples and overlapping events are not independent.'}

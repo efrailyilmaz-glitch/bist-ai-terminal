@@ -21,6 +21,9 @@ import app.decision_levels
 import app.cycle_engine
 import app.weekly_reversal
 import app.forecast_lab
+import app.edge_lab
+import app.edge_catalog
+import app.research_data
 import app.backtest
 import app.catalysts
 import app.data_provider
