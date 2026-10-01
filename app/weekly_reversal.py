@@ -171,7 +171,10 @@ def weekly_reversal_radar(limit=60,universe_limit=0):
         with _LOCK:rows=[_public(v) for v in _PERSIST.values() if isinstance(v,dict) and v.get('_schema')==SCHEMA_VERSION and v.get('status')=='OK']
     order={'ALIM_PENCERESİ':0,'ERKEN_DÖNÜŞ':1,'TEYİT_BEKLE':2,'NÖTR':3,'SATIŞ_RİSKİ':4}
     rows.sort(key=lambda x:(order.get(x.get('signal'),9),-x.get('score',0),-x.get('rs4',0)))
-    top=rows[:max(20,min(int(limit),120))]
+    cap=max(20,min(int(limit),120));sell_quota=max(5,min(12,cap//5))
+    sell_rows=sorted([x for x in rows if x.get('signal')=='SATIŞ_RİSKİ'],key=lambda x:(x.get('score',100),x.get('rsi',100)))[:sell_quota]
+    pos_rows=[x for x in rows if x.get('signal')!='SATIŞ_RİSKİ'][:max(1,cap-len(sell_rows))]
+    top=pos_rows+sell_rows
     validated=[]
     def hist_one(x):
         if x.get('signal') not in {'ALIM_PENCERESİ','ERKEN_DÖNÜŞ','TEYİT_BEKLE'}: return x
@@ -183,6 +186,10 @@ def weekly_reversal_radar(limit=60,universe_limit=0):
         except Exception:return x
     with ThreadPoolExecutor(max_workers=4) as ex:
         for x in ex.map(hist_one,top):validated.append(x)
-    validated.sort(key=lambda x:(order.get(x.get('signal'),9),-x.get('validated_score',x.get('score',0)),-x.get('score',0)))
+    positives=[x for x in validated if x.get('signal')!='SATIŞ_RİSKİ']
+    sells=[x for x in validated if x.get('signal')=='SATIŞ_RİSKİ']
+    positives.sort(key=lambda x:(order.get(x.get('signal'),9),-x.get('validated_score',x.get('score',0)),-x.get('score',0)))
+    sells.sort(key=lambda x:(x.get('score',100),x.get('rsi',100)))
+    validated=positives+sells
     return {'rows':validated,'scanned':len(rows),'universe':len(u),'coverage_pct':round(len(rows)/max(1,len(u))*100,1),
             'note':'5-year weekly bars. Results come from a persistent background full-universe scan; strongest candidates get ticker-specific historical validation.'}
