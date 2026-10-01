@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json, math, os, platform, threading, time
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pandas as pd
 from .market_data import yahoo_rows, scan_codes
@@ -117,7 +118,11 @@ def scan_cycle_batch(batch=24):
     for _ in range(n):
         codes.append(u[_CURSOR%len(u)]['ticker']);_CURSOR+=1
     done=0
-    for code in codes:
-        try:cycle_profile(code,force=False);done+=1
-        except Exception:pass
+    def one(code):
+        try:
+            x=cycle_profile(code,force=False)
+            return 1 if x.get('status')=='OK' else 0
+        except Exception:return 0
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        done=sum(ex.map(one,codes))
     return {'scanned':done,'cursor':_CURSOR,'universe':len(u)}
