@@ -1,3 +1,4 @@
+function v16PctMaybe(n){return n==null?'—':pct(n)}
 try{V15_GUIDES.cycles='Cycle Radar, hisselerin 10 yıllık geçmişinde tekrar eden dönemsel ve mevsimsel hareketleri arar. Düzenlilik ve güven yüksekse mevcut teknik teyitle birlikte ALIM PENCERESİ veya SATIŞ RİSKİ üretir; geçmiş döngü geleceği garanti etmez.'}catch(e){}
 function v16CycleView(){return '<div class="panel"><div class="panelHead"><div><h2>Cycle & Seasonality Radar</h2><p>10 yıllık tekrar döngüsü · mevsimsellik · teknik teyit</p></div><button class="toolbtn" id="cycleRefresh">Yenile</button></div><div id="cycleBox"><div class="loading">Döngü profilleri okunuyor…</div></div></div>'}
 function v16CycleTone(s){return s==='ALIM_PENCERESİ'?'up':s==='SATIŞ_RİSKİ'?'down':s==='KÂR_KORUMA'?'amber':''}
