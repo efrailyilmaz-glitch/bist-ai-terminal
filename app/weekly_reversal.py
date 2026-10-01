@@ -93,6 +93,7 @@ def _weekly_features(code):
     rs4=rs12=0.0
     try:
         b=_df('XU100','5y')
+        if b is not None and _week_is_open(b) and len(b)>13:b=b.iloc[:-1].copy().reset_index(drop=True)
         if b is not None and len(b)>=13:
             a4=(c.iloc[-1]/c.iloc[-5]-1)*100;b4=(b.Close.iloc[-1]/b.Close.iloc[-5]-1)*100
             a12=(c.iloc[-1]/c.iloc[-13]-1)*100;b12=(b.Close.iloc[-1]/b.Close.iloc[-13]-1)*100
