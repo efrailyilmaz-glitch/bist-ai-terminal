@@ -147,6 +147,7 @@ function createWindow() {
     show: true,
     backgroundColor: '#07121a',
     title: 'BIST AI Terminal',
+    tabbingIdentifier: 'bist-ai-analysis',
     autoHideMenuBar: process.platform !== 'darwin',
     webPreferences: {
       nodeIntegration: false,
@@ -158,16 +159,37 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'splash.html'));
   mainWindow.on('close',event=>{if(!quitting){event.preventDefault();mainWindow.hide();if(process.platform==='darwin'&&app.dock)app.dock.hide();}});
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  configureAnalysisWindows(mainWindow);
+
+}
+
+function isBackendURL(url) {
+  try { return backendPort && new URL(url).origin === 'http://127.0.0.1:' + backendPort; }
+  catch (_) { return false; }
+}
+
+function configureAnalysisWindows(win) {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isBackendURL(url)) {
+      return { action: 'allow', overrideBrowserWindowOptions: {
+        width: 1440, height: 960, backgroundColor: '#050b11',
+        tabbingIdentifier: 'bist-ai-analysis',
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+      }};
+    }
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
-
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    const allowed = backendPort && url.startsWith('http://127.0.0.1:' + backendPort);
-    if (!allowed && !url.startsWith('file://')) {
+  win.webContents.on('did-create-window', child => {
+    configureAnalysisWindows(child);
+    if (process.platform === 'darwin') {
+      try { win.addTabbedWindow(child); } catch (_) {}
+    }
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!isBackendURL(url)) {
       event.preventDefault();
-      shell.openExternal(url);
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     }
   });
 }

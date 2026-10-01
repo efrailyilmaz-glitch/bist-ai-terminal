@@ -1,12 +1,12 @@
-# BIST AI Terminal Desktop 5.1
+# BIST AI Terminal Desktop 19.0
 
 Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electron içinde açılır; FastAPI/Python motoru uygulamanın kendi içinde paketlidir ve yalnızca `127.0.0.1` üzerinde çalışır. Render kullanılmaz.
 
 ## Üretilen kurulum dosyaları
 
-- Windows 64-bit: `BIST-AI-Terminal-Setup-5.1.0-x64.exe`
-- macOS Intel: `BIST-AI-Terminal-5.1.0-x64.dmg`
-- macOS Apple Silicon: `BIST-AI-Terminal-5.1.0-arm64.dmg`
+- Windows 64-bit: `BIST-AI-Terminal-Setup-19.0.0-x64.exe`
+- macOS Intel: `BIST-AI-Terminal-19.0.0-x64.dmg`
+- macOS Apple Silicon: `BIST-AI-Terminal-19.0.0-arm64.dmg`
 
 ## Kurulum davranışı
 
@@ -64,3 +64,9 @@ Sertifika yoksa Windows SmartScreen veya macOS Gatekeeper ilk açılışta uyar�
 - GitHub Actions artifact upload
 
 `desktop-v*` etiketiyle tetiklenen build ayrıca installer dosyalarını GitHub Release'e ekler.
+
+## V19 araştırma ve gezinme
+
+Hisse tıklamaları tarayıcıda yeni sekme açar. Mac masaüstü uygulamasında yerel sekme desteği kullanılır; Windows masaüstünde ayrı analiz penceresi açılır. Kaynak liste korunur. Her sayfada Geri dön düğmesi bulunur. Paylaşılabilir URL hisse, sayfa ve grafik periyodunu içerir.
+
+Olasılık Laboratuvarı 10 yıllık fiyat geçmişinden 5/20/60 işlem günü için benzer dönem senaryoları üretir. 9 nedensel teknik özellik, örtüşmeyen analoglar, 5 bar embargo ve geçmişe dönük zaman sıralı Brier testi kullanır. Kanıt yetersizse karar üretmez. Model yalnızca teknik tarihsel araştırmadır; gerçek işlem, emir defteri veya kalibre edilmiş gelecek olasılığı değildir.

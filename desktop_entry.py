@@ -20,6 +20,7 @@ import app.smart_money_engine
 import app.decision_levels
 import app.cycle_engine
 import app.weekly_reversal
+import app.forecast_lab
 import app.backtest
 import app.catalysts
 import app.data_provider
