@@ -117,7 +117,8 @@ function showDesktopToast(title, body, tone='info') {
     const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const html='<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#edf6fb}.box{margin:7px;background:#091722;border:1px solid #204258;border-left:5px solid '+border+';border-radius:12px;padding:14px 16px;box-shadow:0 18px 44px #0009}b{display:block;font-size:13px}p{margin:7px 0 0;color:#a4b7c3;font-size:11px;line-height:1.4}</style><div class="box"><b>'+esc(title)+'</b><p>'+esc(body)+'</p></div>';
     toastWindow.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(html));toastWindow.once('ready-to-show',()=>toastWindow.showInactive());
-    toastWindow.webContents.on('before-input-event',()=>showMainWindow());
+    toastWindow.webContents.on('will-navigate',(ev,url)=>{if(url==='bistai://open'){ev.preventDefault();showMainWindow();try{toastWindow.destroy()}catch(_){}}});
+    toastWindow.webContents.once('did-finish-load',()=>{toastWindow.webContents.executeJavaScript("document.body.style.cursor='pointer';document.body.addEventListener('click',()=>{location.href='bistai://open'})").catch(()=>{})});
     setTimeout(()=>{try{if(toastWindow&&!toastWindow.isDestroyed())toastWindow.destroy()}catch(_){}},9000);
   } catch (_) {}
 }
@@ -129,7 +130,7 @@ function startAlertPolling() {
       const d=await backendJSON('/api/background/alerts?limit=30&since='+lastCommitteeAlertId),rows=d.alerts||[];
       for(const x of rows.slice().reverse()){
         lastCommitteeAlertId=Math.max(lastCommitteeAlertId,Number(x.id)||0);
-        if(x.type==='COMMITTEE_PASS'){showDesktopToast('BIST AI · KOMİTE ONAYI · '+x.ticker,x.message||('Komite skoru '+x.score),'good')} else if(x.type==='PRE_MARKUP_WATCH'){showDesktopToast('BIST AI · PRE-MARKUP WATCH · '+x.ticker,x.message||('Birikim skoru '+x.score),'money')} else if(x.type==='DISTRIBUTION_RISK'){showDesktopToast('BIST AI · DISTRIBUTION RISK · '+x.ticker,x.message||('Dağıtım riski '+x.score),'risk')} else if(x.type==='CYCLE_BUY_WINDOW'){showDesktopToast('BIST AI · ALIM PENCERESİ · '+x.ticker,x.message||('Döngü güveni '+x.score),'good')} else if(x.type==='CYCLE_SELL_RISK'){showDesktopToast('BIST AI · SATIŞ RİSKİ · '+x.ticker,x.message||('Döngü riski '+x.score),'risk')}
+        if(x.type==='COMMITTEE_PASS'){showDesktopToast('BIST AI · KOMİTE ONAYI · '+x.ticker,x.message||('Komite skoru '+x.score),'good')} else if(x.type==='PRE_MARKUP_WATCH'){showDesktopToast('BIST AI · PRE-MARKUP WATCH · '+x.ticker,x.message||('Birikim skoru '+x.score),'money')} else if(x.type==='DISTRIBUTION_RISK'){showDesktopToast('BIST AI · DISTRIBUTION RISK · '+x.ticker,x.message||('Dağıtım riski '+x.score),'risk')} else if(x.type==='CYCLE_BUY_WINDOW'){showDesktopToast('BIST AI · ALIM PENCERESİ · '+x.ticker,x.message||('Döngü güveni '+x.score),'good')} else if(x.type==='CYCLE_SELL_RISK'){showDesktopToast('BIST AI · SATIŞ RİSKİ · '+x.ticker,x.message||('Döngü riski '+x.score),'risk')} else if(x.type==='WEEKLY_REVERSAL_BUY'){showDesktopToast('BIST AI · HAFTALIK ALIM PENCERESİ · '+x.ticker,x.message||('Weekly reversal '+x.score),'good')} else if(x.type==='WEEKLY_REVERSAL_SELL'){showDesktopToast('BIST AI · HAFTALIK SATIŞ RİSKİ · '+x.ticker,x.message||('Weekly reversal risk '+x.score),'risk')}
       }
     }catch(_){}
   };poll();alertTimer=setInterval(poll,60000);
