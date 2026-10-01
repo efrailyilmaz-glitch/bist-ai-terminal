@@ -8,9 +8,10 @@ from .investment_committee import investment_committee
 from .experience_engine import record_signal, settle_due
 from .smart_money_engine import smart_money_snapshot
 from .cycle_engine import scan_cycle_batch, cycle_radar
+from .weekly_reversal import scan_weekly_reversal_batch, weekly_reversal_radar
 
 _THREAD=None
-_STATE={'running':False,'last_fast_check':None,'last_heavy_refresh':None,'last_committee_run':None,'last_settlement':None,'cycles':0,'error':None,'market_phase':'UNKNOWN','committee_reviews':[],'alerts':[],'last_cycle_scan':None,'cycle_analyzed':0}
+_STATE={'running':False,'last_fast_check':None,'last_heavy_refresh':None,'last_committee_run':None,'last_settlement':None,'cycles':0,'error':None,'market_phase':'UNKNOWN','committee_reviews':[],'alerts':[],'last_cycle_scan':None,'cycle_analyzed':0,'last_weekly_scan':None,'weekly_analyzed':0}
 _LAST_RADAR_SCAN=None;_LAST_COMMITTEE={};_LAST_SM_ALERT={}
 
 def _now_tr():return datetime.now(ZoneInfo('Europe/Istanbul'))
@@ -77,7 +78,7 @@ def _review_top():
         _STATE['committee_reviews']=(reviews+_STATE['committee_reviews'])[:50]
         _STATE['last_committee_run']=time.strftime('%d.%m.%Y %H:%M:%S')
 def _loop():
-    _STATE['running']=True;last_heavy=0;last_settle=0;last_cycle=0
+    _STATE['running']=True;last_heavy=0;last_settle=0;last_cycle=0;last_weekly=0
     while True:
         try:
             now=time.time();phase=market_phase();_STATE['market_phase']=phase
@@ -101,6 +102,9 @@ def _loop():
                     evt={'id':int(ts*1000)+len(_STATE['alerts']),'type':typ,'ticker':x.get('ticker'),'score':x.get('confidence'),
                          'message':f"{x.get('ticker')} · {x.get('signal')} · düzenlilik {x.get('regularity_score')} · güven {x.get('confidence')}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
                     _STATE['alerts'].insert(0,evt);_STATE['alerts']=_STATE['alerts'][:200]
+            if now-last_weekly>=5*60:
+                wr=scan_weekly_reversal_batch(25);last_weekly=now;_STATE['last_weekly_scan']=time.strftime('%d.%m.%Y %H:%M:%S')
+                rr=weekly_reversal_radar(limit=20);_STATE['weekly_analyzed']=rr.get('scanned',0)
             _STATE['cycles']+=1;_STATE['error']=None
         except Exception as e:_STATE['error']=str(e)[:300]
         time.sleep(_cadence(_STATE['market_phase'])[0])
