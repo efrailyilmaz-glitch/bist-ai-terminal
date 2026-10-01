@@ -52,4 +52,12 @@ function v15Toast(title,body,type='info'){let stack=$('#toastStack');if(!stack){
 async function v15PollAlerts(){try{const d=await getJSON('/api/background/alerts?limit=20&since='+v15LastAlert);for(const x of (d.alerts||[]).slice().reverse()){v15LastAlert=Math.max(v15LastAlert,Number(x.id)||0);const typ=(x.type==='DISTRIBUTION_RISK'||x.type==='CYCLE_SELL_RISK')?'risk':x.type==='PRE_MARKUP_WATCH'?'money':'good';v15Toast((x.type||'BIST AI')+' · '+x.ticker,x.message||'',typ)}localStorage.setItem('v15-alert-id',String(v15LastAlert))}catch(e){}}
 function v15Enhance(){setTimeout(()=>{v15AddGuide();v15MetricHelp();v15SortTables();v15DecisionLevels()},0)}
 const v15RenderBase=render;render=function(){v15RenderBase();v15Enhance()}
+let v15SortTimer=null;
+try{
+  const root=$('#content');
+  if(root){
+    const obs=new MutationObserver(()=>{clearTimeout(v15SortTimer);v15SortTimer=setTimeout(()=>{try{v15SortTables()}catch(e){}},60)});
+    obs.observe(root,{childList:true,subtree:true});
+  }
+}catch(e){}
 setInterval(v15PollAlerts,60000);setTimeout(v15PollAlerts,3500);
