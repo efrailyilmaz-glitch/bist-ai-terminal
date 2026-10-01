@@ -35,7 +35,7 @@ from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .opportunity_engine import smart_money_candidates
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='17.0')
+app=FastAPI(title='BIST AI Terminal',version='17.1')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -381,4 +381,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'17.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'17.1','service':'bist-ai-terminal'}
