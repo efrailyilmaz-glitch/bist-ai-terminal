@@ -6,7 +6,7 @@ import pandas as pd
 from .market_data import yahoo_rows, scan_codes
 from .universe import get_universe
 
-_LOCK=threading.Lock();TTL=6*3600
+_LOCK=threading.Lock();TTL=6*3600;SCHEMA_VERSION=2
 def _dir():
     if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
     elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
@@ -73,7 +73,7 @@ def cycle_profile(ticker,force=False):
     code=ticker.upper().replace('.IS','');now=time.time()
     with _LOCK:
         h=_CACHE.get(code)
-        if h and not force and now-float(h.get('_ts',0))<TTL:return h
+        if h and h.get('_schema')==SCHEMA_VERSION and h.get('history_period')=='10y' and not force and now-float(h.get('_ts',0))<TTL:return h
     df=_rows(code,'10y')
     if df is None or len(df)<260:return {'ticker':code,'status':'NO_DATA'}
     season=_seasonality(df);cycles=_cycle_candidates(df);regularity=_regularity(season,cycles)
@@ -100,7 +100,7 @@ def cycle_profile(ticker,force=False):
     confidence=round(min(100,regularity*.65+(abs(score-50)*1.1)))
     out={'ticker':code,'status':'OK','signal':signal,'cycle_score':score,'regularity_score':regularity,'confidence':confidence,'seasonality':season,'cycles':cycles,
          'current_month':month,'current_month_stats':sm,'dominant_cycle':best_cycle,'technical':{'short_score':short,'long_score':long,'risk':risk},
-         'reasons':reasons[:5],'years':round((df.index[-1]-df.index[0]).days/365.25,1),'_ts':now,
+         'reasons':reasons[:5],'years':round((df.index[-1]-df.index[0]).days/365.25,1),'history_period':'10y','_schema':SCHEMA_VERSION,'_ts':now,
          'note':'Cycle/seasonality signals are historical statistical patterns, not deterministic buy/sell instructions. Current technical confirmation is required.'}
     with _LOCK:_CACHE[code]=out;_save()
     return out
