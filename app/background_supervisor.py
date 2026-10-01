@@ -105,6 +105,20 @@ def _loop():
             if now-last_weekly>=5*60:
                 wr=scan_weekly_reversal_batch(25);last_weekly=now;_STATE['last_weekly_scan']=time.strftime('%d.%m.%Y %H:%M:%S')
                 rr=weekly_reversal_radar(limit=20);_STATE['weekly_analyzed']=rr.get('scanned',0)
+                for x in (rr.get('rows') or [])[:10]:
+                    sig=x.get('signal');hist=(x.get('historical') or {}).get('8w') or {}
+                    n=int(hist.get('n') or 0);hit=float(hist.get('positive_pct') or 0);med=float(hist.get('median_pct') or 0)
+                    if sig=='ALIM_PENCERESİ' and x.get('score',0)>=78 and n>=4 and hit>=60 and med>0:
+                        typ='WEEKLY_REVERSAL_BUY'
+                    elif sig=='SATIŞ_RİSKİ' and x.get('score',100)<=45:
+                        typ='WEEKLY_REVERSAL_SELL'
+                    else: continue
+                    key=f"{x.get('ticker')}:{typ}";ts=time.time()
+                    if ts-_LAST_SM_ALERT.get(key,0)<24*3600: continue
+                    _LAST_SM_ALERT[key]=ts
+                    evt={'id':int(ts*1000)+len(_STATE['alerts']),'type':typ,'ticker':x.get('ticker'),'score':x.get('score'),
+                         'message':f"{x.get('ticker')} · {sig.replace('_',' ')} · skor {x.get('score')} · 8H hit %{hit:.0f} (n={n}) · medyan %{med:.1f}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
+                    _STATE['alerts'].insert(0,evt);_STATE['alerts']=_STATE['alerts'][:200]
             _STATE['cycles']+=1;_STATE['error']=None
         except Exception as e:_STATE['error']=str(e)[:300]
         time.sleep(_cadence(_STATE['market_phase'])[0])
