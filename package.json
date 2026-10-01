@@ -1,6 +1,6 @@
 {
   "name": "bist-ai-terminal-desktop",
-  "version": "17.1.0",
+  "version": "18.0.0",
   "description": "BIST AI Quant Research Terminal Desktop",
   "main": "electron/main.cjs",
   "author": "Yildirim",

@@ -9,7 +9,7 @@ from .market_data import yahoo_rows
 from .scoring import indicator_frame
 from .universe import get_universe
 
-_LOCK=threading.Lock();_CACHE={};TTL=30*60;PERSIST_TTL=6*3600;SCHEMA_VERSION=2
+_LOCK=threading.Lock();_CACHE={};TTL=30*60;PERSIST_TTL=6*3600;SCHEMA_VERSION=3
 def _store_dir():
     from pathlib import Path
     if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
@@ -140,11 +140,13 @@ def _historical_setup_stats(base):
             for n in (4,8,12):
                 if i+n<len(c):e[f'r{n}']=(float(c.iloc[i+n])/p-1)*100
             events.append(e)
-    def s(n):
-        xs=[e[f'r{n}'] for e in events if e[f'r{n}'] is not None]
+    def s(n,trend_only=False):
+        xs=[e[f'r{n}'] for e in events if e[f'r{n}'] is not None and (not trend_only or e.get('trend_confirm'))]
         if not xs:return {'n':0}
         return {'n':len(xs),'positive_pct':round(sum(1 for x in xs if x>0)/len(xs)*100,1),'mean_pct':round(float(np.mean(xs)),2),'median_pct':round(float(np.median(xs)),2)}
-    return {'events':len(events),'4w':s(4),'8w':s(8),'12w':s(12),'note':'Historical setup = weekly RSI rising from <=45 zone + low Stoch RSI bullish cross + MACD histogram newly positive.'}
+    return {'events':len(events),'4w':s(4),'8w':s(8),'12w':s(12),
+            'trend_confirmed':{'4w':s(4,True),'8w':s(8,True),'12w':s(12,True)},
+            'note':'Core setup = weekly RSI rising from <=45 + low Stoch RSI bullish cross + MACD histogram newly positive. Trend-confirmed subset also requires price above a rising weekly EMA20.'}
 
 def _public(base):
     return {k:v for k,v in base.items() if not k.startswith('_')}
@@ -204,9 +206,12 @@ def weekly_reversal_radar(limit=60,universe_limit=0):
     def hist_one(x):
         if x.get('signal') not in {'ALIM_PENCERESİ','ERKEN_DÖNÜŞ','TEYİT_BEKLE'}: return x
         try:
-            full=weekly_reversal(x['ticker'],with_history=True);h=(full.get('historical') or {});h8=(h.get('8w') or {})
+            full=weekly_reversal(x['ticker'],with_history=True);h=(full.get('historical') or {})
+            core=(h.get('8w') or {});trend8=((h.get('trend_confirmed') or {}).get('8w') or {})
+            h8=trend8 if int(trend8.get('n') or 0)>=3 else core
             n=int(h8.get('n') or 0);hit=float(h8.get('positive_pct') or 0);med=float(h8.get('median_pct') or 0)
-            x=dict(x);x['historical']=h;reliability=min(1.0,n/8.0);edge=(hit-50)*.45+med*1.5
+            x=dict(x);x['historical']=h;x['validation_basis']='TREND_CONFIRMED_8W' if h8 is trend8 else 'CORE_8W'
+            reliability=min(1.0,n/8.0);edge=(hit-50)*.45+med*1.5
             x['validated_score']=round(max(0,min(100,x.get('score',0)+edge*reliability)));x['history_reliability']=round(reliability*100);return x
         except Exception:return x
     with ThreadPoolExecutor(max_workers=4) as ex:

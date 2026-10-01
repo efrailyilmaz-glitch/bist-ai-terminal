@@ -35,7 +35,7 @@ from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .opportunity_engine import smart_money_candidates
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='17.1')
+app=FastAPI(title='BIST AI Terminal',version='18.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -312,6 +312,26 @@ def weekly_reversal_api(ticker:str,with_history:bool=True):
 def weekly_reversal_radar_api(limit:int=80,universe_limit:int=0):
     return weekly_reversal_radar(limit=limit,universe_limit=universe_limit)
 
+@app.get('/api/system-audit')
+def system_audit_api():
+    import os
+    bg=background_status(); br=broker_status()
+    cycle_total=max(1,len(get_universe()))
+    cycle_cov=round(float(bg.get('cycle_analyzed') or 0)/cycle_total*100,1)
+    weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
+    desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND')=='1'
+    checks=[
+      {'name':'Backend','status':'OK','detail':'FastAPI 18.0'},
+      {'name':'Background Supervisor','status':'OK' if (bg.get('running') or not desktop) else 'ERROR','detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
+      {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
+      {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
+      {'name':'Weekly Coverage','status':'OK' if weekly_cov>=80 else 'WARMING','detail':f'%{weekly_cov} · {bg.get("weekly_analyzed",0)}/{cycle_total}'},
+      {'name':'Broker Safety','status':'OK','detail':'Direct live locked · paper risk gates active' if not br.get('direct_live_execution_enabled') else 'Live enabled'},
+      {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
+    ]
+    overall='OK' if not any(x['status']=='ERROR' for x in checks) else 'ERROR'
+    return {'version':'18.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+
 @app.get('/api/institutional-providers')
 def institutional_providers():
     return institutional_provider_status()
@@ -381,4 +401,4 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'17.1','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'18.0','service':'bist-ai-terminal'}

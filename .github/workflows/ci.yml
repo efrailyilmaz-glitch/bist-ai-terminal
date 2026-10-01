@@ -32,6 +32,7 @@ jobs:
       - run: node --check app/static/v15.js
       - run: node --check app/static/v16.js
       - run: node --check app/static/v17.js
+      - run: node --check app/static/v18.js
       - run: node --check electron/main.cjs
       - name: Technical engine smoke test
         run: |
@@ -224,10 +225,23 @@ jobs:
           missing=required-routes
           assert not missing, f'missing routes: {missing}'
           html=(BASE/'templates/index.html').read_text(encoding='utf-8')
-          for name in ['v10.js','v11.js','v12.js','v13.js','v14.js','v15.js','v16.js','v17.js']:
+          for name in ['v10.js','v11.js','v12.js','v13.js','v14.js','v15.js','v16.js','v17.js','v18.js']:
               assert name in html, f'missing frontend script {name}'
-          for view in ['execution','experience','smartmoney','cycles','weeklyreversal']:
+          for view in ['execution','experience','smartmoney','cycles','weeklyreversal','systemaudit']:
               assert f'data-view="{view}"' in html, f'missing nav {view}'
           print('API/frontend wiring ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '17.1'; print(app.title, app.version)"
+      - name: V18 QA hardening smoke test
+        run: |
+          python - <<'PY'
+          from app.broker_bridge import set_kill_switch, order_preview
+          set_kill_switch(True)
+          x=order_preview({'ticker':'TEST','side':'BUY','quantity':1,'limit_price':10,'order_type':'LIMIT','portfolio_value':100000})
+          assert x['blocked']
+          set_kill_switch(False)
+          from app.cycle_engine import SCHEMA_VERSION
+          from app.weekly_reversal import SCHEMA_VERSION as WSCHEMA
+          assert SCHEMA_VERSION>=4 and WSCHEMA>=3
+          print('V18 QA hardening ok')
+          PY
+      - run: python -c "from app.main import app; assert app.version == '18.0'; print(app.title, app.version)"

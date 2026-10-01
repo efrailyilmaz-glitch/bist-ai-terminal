@@ -7,7 +7,7 @@ import pandas as pd
 from .market_data import yahoo_rows, scan_codes
 from .universe import get_universe
 
-_LOCK=threading.Lock();TTL=6*3600;SCHEMA_VERSION=3
+_LOCK=threading.Lock();TTL=6*3600;SCHEMA_VERSION=4
 def _dir():
     if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
     elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
@@ -96,19 +96,22 @@ def cycle_profile(ticker,force=False):
         if sm['positive']>=65 and sm['median']>0:reasons.append(f"{month}. ay tarihsel olarak güçlü: %{sm['positive']} pozitif")
         if sm['positive']<=35 and sm['median']<0:reasons.append(f"{month}. ay tarihsel olarak zayıf: %{sm['positive']} pozitif")
     if best_cycle and abs(best_cycle['autocorr'])>=.12:
-        score+=best_cycle['autocorr']*35
-        reasons.append(f"{best_cycle['period']} işlem günlük döngüde tekrar sinyali")
+        # Autocorrelation measures regularity/persistence, not bullish or bearish direction.
+        # Direction must come from current seasonality and technical confirmation.
+        reasons.append(f"{best_cycle['period']} işlem günlük periyodiklik tespit edildi (AC {best_cycle['autocorr']})")
     short=float(tech.get('short_score') or 50);long=float(tech.get('long_score') or 50);risk=float(tech.get('risk') or 50)
     score+=(short-50)*.20+(long-50)*.10-(risk-50)*.08
     score=max(0,min(100,round(score)))
+    seasonal_bull=bool(sm and sm.get('n',0)>=4 and sm.get('positive',50)>=62 and sm.get('median',0)>0)
+    seasonal_bear=bool(sm and sm.get('n',0)>=4 and sm.get('positive',50)<=38 and sm.get('median',0)<0)
     if regularity<30:signal='NÖTR'
-    elif score>=67 and short>=58:signal='ALIM_PENCERESİ'
-    elif score<=38 or (sm and sm['positive']<=35 and short<48):signal='SATIŞ_RİSKİ'
+    elif score>=67 and short>=58 and (seasonal_bull or long>=62):signal='ALIM_PENCERESİ'
+    elif score<=38 or (seasonal_bear and short<48):signal='SATIŞ_RİSKİ'
     elif score<50 and risk>=65:signal='KÂR_KORUMA'
     else:signal='NÖTR'
     confidence=round(min(100,regularity*.65+(abs(score-50)*1.1)))
     out={'ticker':code,'status':'OK','signal':signal,'cycle_score':score,'regularity_score':regularity,'confidence':confidence,'seasonality':season,'cycles':cycles,
-         'current_month':month,'current_month_stats':sm,'dominant_cycle':best_cycle,'technical':{'short_score':short,'long_score':long,'risk':risk},
+         'current_month':month,'current_month_stats':sm,'dominant_cycle':best_cycle,'seasonal_bull':seasonal_bull,'seasonal_bear':seasonal_bear,'technical':{'short_score':short,'long_score':long,'risk':risk},
          'reasons':reasons[:5],'years':round((df.index[-1]-df.index[0]).days/365.25,1),'history_period':'10y','_schema':SCHEMA_VERSION,'_ts':now,
          'note':'Cycle/seasonality signals are historical statistical patterns, not deterministic buy/sell instructions. Current technical confirmation is required.'}
     with _LOCK:_CACHE[code]=out;_save()

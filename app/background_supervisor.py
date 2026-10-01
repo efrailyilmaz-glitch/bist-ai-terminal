@@ -1,5 +1,6 @@
 from __future__ import annotations
-import threading,time
+import json, os, platform, threading,time
+from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from .opportunity_engine import trigger_refresh, radar_snapshot, smart_money_candidates
@@ -13,6 +14,22 @@ from .weekly_reversal import scan_weekly_reversal_batch, weekly_reversal_radar
 _THREAD=None
 _STATE={'running':False,'last_fast_check':None,'last_heavy_refresh':None,'last_committee_run':None,'last_settlement':None,'cycles':0,'error':None,'market_phase':'UNKNOWN','committee_reviews':[],'alerts':[],'last_cycle_scan':None,'cycle_analyzed':0,'last_weekly_scan':None,'weekly_analyzed':0}
 _LAST_RADAR_SCAN=None;_LAST_COMMITTEE={};_LAST_SM_ALERT={}
+def _state_dir():
+    if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
+    elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
+    else:b=Path.home()/'.bist-ai-terminal'
+    b.mkdir(parents=True,exist_ok=True);return b
+def _cooldown_file():return _state_dir()/'background_cooldowns.json'
+def _load_cooldowns():
+    try:
+        d=json.loads(_cooldown_file().read_text(encoding='utf-8'))
+        _LAST_COMMITTEE.update({str(k):float(v) for k,v in (d.get('committee') or {}).items()})
+        _LAST_SM_ALERT.update({str(k):float(v) for k,v in (d.get('alerts') or {}).items()})
+    except Exception:pass
+def _save_cooldowns():
+    try:_cooldown_file().write_text(json.dumps({'committee':_LAST_COMMITTEE,'alerts':_LAST_SM_ALERT},ensure_ascii=False),encoding='utf-8')
+    except Exception:pass
+_load_cooldowns()
 
 def _now_tr():return datetime.now(ZoneInfo('Europe/Istanbul'))
 def market_phase(dt=None):
@@ -40,7 +57,7 @@ def _review_top():
         if now-_LAST_COMMITTEE.get(code,0)<6*3600:
             record_signal(s,None);continue
         try:
-            c=investment_committee(code);_LAST_COMMITTEE[code]=now
+            c=investment_committee(code);_LAST_COMMITTEE[code]=now;_save_cooldowns()
             rid=record_signal(s,c)
             item={'ticker':code,'decision':c.get('decision'),'decision_tr':c.get('decision_tr'),'committee_score':c.get('committee_score'),
                   'opportunity_score':s.get('opportunity_score'),'record_id':rid,'time':time.strftime('%d.%m.%Y %H:%M:%S')}
@@ -65,7 +82,7 @@ def _review_top():
             if not typ: continue
             key=f"{code}:{typ}";now=time.time()
             if now-_LAST_SM_ALERT.get(key,0)<6*3600: continue
-            _LAST_SM_ALERT[key]=now
+            _LAST_SM_ALERT[key]=now;_save_cooldowns()
             if typ=='PRE_MARKUP_WATCH':
                 evt={'id':int(now*1000)+len(_STATE['alerts']),'type':typ,'ticker':code,'score':sm.get('accumulation_probability'),
                      'message':f"{code} · Birikim {sm.get('accumulation_probability')} · Markup {sm.get('markup_probability')}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
@@ -98,7 +115,7 @@ def _loop():
                     if not typ: continue
                     key=f"{x.get('ticker')}:{typ}";ts=time.time()
                     if ts-_LAST_SM_ALERT.get(key,0)<24*3600: continue
-                    _LAST_SM_ALERT[key]=ts
+                    _LAST_SM_ALERT[key]=ts;_save_cooldowns()
                     evt={'id':int(ts*1000)+len(_STATE['alerts']),'type':typ,'ticker':x.get('ticker'),'score':x.get('confidence'),
                          'message':f"{x.get('ticker')} · {x.get('signal')} · düzenlilik {x.get('regularity_score')} · güven {x.get('confidence')}",'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
                     _STATE['alerts'].insert(0,evt);_STATE['alerts']=_STATE['alerts'][:200]

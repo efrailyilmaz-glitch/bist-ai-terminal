@@ -44,7 +44,23 @@ const V15_METRIC_HELP={RSI:'RSI 0–100 momentum göstergesidir. 70 üzeri aşı
 function v15Guide(){const t=V15_GUIDES[state.view];return t?'<div class="pageGuide"><b>Bu sayfa ne anlatıyor?</b><span>'+t+'</span></div>':''}
 function v15AddGuide(){if(!$('#content')||$('#content .pageGuide'))return;const g=v15Guide();if(g)$('#content').insertAdjacentHTML('beforeend',g)}
 function v15MetricHelp(){document.querySelectorAll('.indicatorCard,.stat,.metric,.premiumHero>div,.componentGrid>div').forEach(el=>{if(el.dataset.helped)return;const label=(el.querySelector('span')?.textContent||'').trim();const hit=Object.entries(V15_METRIC_HELP).find(([k])=>label.toLowerCase().includes(k.toLowerCase()));if(hit){el.dataset.helped='1';el.title=hit[1];el.insertAdjacentHTML('beforeend','<small class="metricHelp">'+hit[1]+'</small>')}})}
-function v15ParseCell(td){const s=(td?.textContent||'').trim().replace(/₺/g,'').replace(/%/g,'').replace(/x$/i,'').replace(/\./g,'').replace(',','.');const n=Number(s);return Number.isFinite(n)&&s!==''?n:(td?.textContent||'').trim().toLocaleLowerCase('tr')}
+function v15ParseCell(td){
+  const raw=(td?.textContent||'').trim(), cleaned=raw.replace(/[₺%x]/gi,'').trim();
+  if(!cleaned)return '';
+  let s=cleaned.replace(/\s/g,'');
+  const hasComma=s.includes(','),hasDot=s.includes('.');
+  if(hasComma&&hasDot){
+    if(s.lastIndexOf(',')>s.lastIndexOf('.'))s=s.replace(/\./g,'').replace(',','.');
+    else s=s.replace(/,/g,'');
+  }else if(hasComma){
+    s=s.replace(/\./g,'').replace(',','.');
+  }else if(hasDot){
+    const parts=s.split('.');
+    if(parts.length>2)s=parts.slice(0,-1).join('')+'.'+parts.at(-1);
+  }
+  const n=Number(s);
+  return Number.isFinite(n)?n:raw.toLocaleLowerCase('tr');
+}
 function v15SortTables(){document.querySelectorAll('table.stockTable').forEach(table=>{table.querySelectorAll('thead th').forEach((th,i)=>{if(th.dataset.sortable)return;th.dataset.sortable='1';th.classList.add('sortableTh');th.title='Sıralamak için tıkla';th.addEventListener('click',()=>{const body=table.tBodies[0];if(!body)return;const asc=th.dataset.dir!=='asc';table.querySelectorAll('th').forEach(x=>{x.dataset.dir='';x.classList.remove('sortAsc','sortDesc')});th.dataset.dir=asc?'asc':'desc';th.classList.add(asc?'sortAsc':'sortDesc');const rows=[...body.rows];rows.sort((a,b)=>{const A=v15ParseCell(a.cells[i]),B=v15ParseCell(b.cells[i]);if(typeof A==='number'&&typeof B==='number')return asc?A-B:B-A;return asc?String(A).localeCompare(String(B),'tr'):String(B).localeCompare(String(A),'tr')});rows.forEach(r=>body.appendChild(r))})})})}
 async function v15DecisionLevels(){if(!['detail','committee','smartmoney'].includes(state.view))return;if($('#decisionLevelsBox'))return;const root=$('#content .panel');if(!root)return;root.insertAdjacentHTML('beforeend','<div id="decisionLevelsBox" class="panelSub"><div class="subTitle"><b>Karar Seviyeleri</b><span>hedef · stop · breakout · olası dip bölgesi</span></div><div class="loading">Seviyeler hesaplanıyor…</div></div>');const b=$('#decisionLevelsBox');try{const d=await getJSON('/api/decision-levels/'+state.current);b.innerHTML='<div class="decisionGrid"><div><span>Kısa Vade Hedef</span><b>₺'+fmt(d.short_target)+'</b><small>günler–haftalar</small></div><div><span>Orta Vade Hedef</span><b>₺'+fmt(d.medium_target)+'</b><small>1–3 ay senaryosu</small></div><div><span>Uzun Vade Hedef</span><b>₺'+fmt(d.long_target)+'</b><small>6–12 ay teknik senaryo</small></div><div><span>Breakout Teyidi</span><b class="up">₺'+fmt(d.breakout_confirmation)+'</b><small>üzeri kapanış teyidi</small></div><div><span>Stop Referansı</span><b class="down">₺'+fmt(d.stop_reference)+'</b><small>altı tez zayıflar</small></div><div><span>Hard Invalidation</span><b class="down">₺'+fmt(d.hard_invalidation)+'</b><small>güçlü teknik geçersizlik</small></div></div><div class="dipZone"><div><span>Olası Dip / Tepki Bölgesi</span><b>₺'+fmt(d.dip_zone_low)+' – ₺'+fmt(d.dip_zone_high)+'</b><small>Güven '+d.dip_zone_confidence+'/100'+(d.trend_down?' · düşüş trendi aktif':'')+'</small></div><p>'+d.guidance.dip+'</p></div><div class="actionGuide"><p><b>Yukarı teyit:</b> '+d.guidance.breakout+'</p><p><b>Risk yönetimi:</b> '+d.guidance.stop+'</p><p><b>Hedefler:</b> '+d.guidance.targets+'</p></div><p class="muted">'+d.note+'</p>'}catch(e){b.innerHTML='<div class="empty">'+e.message+'</div>'}}
 let v15LastAlert=Number(localStorage.getItem('v15-alert-id')||0);
@@ -61,3 +77,16 @@ try{
   }
 }catch(e){}
 setInterval(v15PollAlerts,60000);setTimeout(v15PollAlerts,3500);
+
+let v15Observer=null;
+function v15InstallObserver(){
+  if(v15Observer||!document.body)return;
+  let queued=false;
+  v15Observer=new MutationObserver(()=>{
+    if(queued)return;queued=true;
+    requestAnimationFrame(()=>{queued=false;v15SortTables();v15MetricHelp()});
+  });
+  const root=$('#content')||document.body;
+  v15Observer.observe(root,{childList:true,subtree:true});
+}
+setTimeout(v15InstallObserver,100);
