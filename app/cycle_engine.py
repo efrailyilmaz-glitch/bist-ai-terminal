@@ -34,6 +34,9 @@ def _fwd(c,n):
     return (c.shift(-n)/c-1)*100
 def _seasonality(df):
     m=df.close.resample('ME').last().pct_change()*100
+    # Do not contaminate historical month statistics with the current partial month.
+    now=pd.Timestamp.today()
+    if len(m) and m.index[-1].year==now.year and m.index[-1].month==now.month:m=m.iloc[:-1]
     out=[]
     for month in range(1,13):
         x=m[m.index.month==month].dropna()
@@ -83,7 +86,7 @@ def cycle_profile(ticker,force=False):
     df=_rows(code,'10y')
     if df is None or len(df)<260:return {'ticker':code,'status':'NO_DATA'}
     season=_seasonality(df);cycles=_cycle_candidates(df);regularity=_regularity(season,cycles)
-    month=int(df.index[-1].month)
+    month=int(pd.Timestamp.today().month)
     sm=next((x for x in season if x['month']==month),None)
     best_cycle=max(cycles,key=lambda x:abs(x['autocorr'])) if cycles else None
     tech=(scan_codes([code]) or [{}])[0]
