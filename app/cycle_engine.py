@@ -107,8 +107,12 @@ def cycle_profile(ticker,force=False):
     return out
 def cycle_radar(limit=40):
     with _LOCK:rows=[v for v in _CACHE.values() if isinstance(v,dict) and v.get('status')=='OK']
-    rows.sort(key=lambda x:(x.get('signal')!='ALIM_PENCERESİ',-x.get('regularity_score',0),-x.get('confidence',0)))
-    return {'rows':rows[:max(5,min(int(limit),100))],'analyzed':len(rows),'universe':len(get_universe()),'note':'Background scanner gradually covers the full BIST universe and refreshes stale profiles.'}
+    cap=max(5,min(int(limit),100));sell_quota=max(3,min(10,cap//4))
+    buys=sorted([x for x in rows if x.get('signal')=='ALIM_PENCERESİ'],key=lambda x:(-x.get('regularity_score',0),-x.get('confidence',0)))
+    others=sorted([x for x in rows if x.get('signal') not in {'ALIM_PENCERESİ','SATIŞ_RİSKİ'}],key=lambda x:(-x.get('regularity_score',0),-x.get('confidence',0)))
+    sells=sorted([x for x in rows if x.get('signal')=='SATIŞ_RİSKİ'],key=lambda x:(-x.get('confidence',0),-x.get('regularity_score',0)))
+    chosen=(buys+others)[:max(1,cap-min(sell_quota,len(sells)))]+sells[:sell_quota]
+    return {'rows':chosen,'analyzed':len(rows),'universe':len(get_universe()),'note':'Background scanner gradually covers the full BIST universe and reserves shortlist capacity for both buy-window and sell-risk patterns.'}
 _CURSOR=0
 def scan_cycle_batch(batch=24):
     global _CURSOR
