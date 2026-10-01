@@ -48,7 +48,7 @@ async function scanAll(force=true){
   els.scanBtn.textContent='Taranıyor…';
   const batch=100, offsets=[];
   for(let offset=0;offset<state.total;offset+=batch)offsets.push(offset);
-  let cursor=0,completed=0,lastPaint=0,lastPersist=0;
+  let cursor=0,completed=0,failed=0,lastPaint=0,lastPersist=0;
   async function worker(){
     while(true){
       const idx=cursor++;
@@ -66,16 +66,16 @@ async function scanAll(force=true){
         if(now-lastPaint>900&&['overview','short','long','setups','anomaly'].includes(state.view)){render(false);lastPaint=now}
         if(now-lastPersist>2500){persistScanCache();lastPersist=now}
       }catch(e){
-        completed+=Math.min(batch,state.total-offset);
+        failed+=Math.min(batch,state.total-offset);
         els.scanStatus.textContent=`Bazı tarama paketleri atlandı · ${state.scan.size} veri mevcut`;
       }
     }
   }
   await Promise.all([worker(),worker()]);
-  state.scanned=state.total;
+  state.scanned=completed;
   updateRegime();persistScanCache();
   state.scanning=false;els.scanBtn.textContent='Tüm Evreni Tara';
-  els.scanStatus.textContent=`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
+  els.scanStatus.textContent=failed?`Tarama eksik · ${failed} hisse için istek başarısız · ${state.scan.size}/${state.total} fiyat verisi`:`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
   renderTickerbar();render(false);
 }
 function topBy(key,n=10){return [...state.scan.values()].sort((a,b)=>(b[key]||0)-(a[key]||0)).slice(0,n)}
@@ -196,6 +196,14 @@ async function ensureTickerScan(t){
   if(state.scan.has(t))return;
   try{const r=await getJSON(`/api/scan?codes=${encodeURIComponent(t)}`);(r.rows||[]).forEach(x=>state.scan.set(x.ticker,x));}catch(e){}
 }
+function refreshDetailMetrics(ticker){
+  if(state.view!=='detail'||state.current!==ticker||!state.scan.has(ticker))return;
+  const updated=document.createElement('div');updated.innerHTML=detailShell();
+  for(const selector of ['.chartTitle p','.stats','.indicatorGrid','.recommendBox']){
+    const current=$$('#content '+selector),fresh=[...updated.querySelectorAll(selector)];
+    current.forEach((el,i)=>{if(fresh[i])el.replaceWith(fresh[i])});
+  }
+}
 function structureHtml(s){
   if(!s)return '<div class="pending">Yapı verisi yok</div>';
   const div=s.divergence||{}, cr=s.cross||{}, sq=s.squeeze||{};
@@ -230,12 +238,17 @@ async function loadMtf(){
 function addGuide(series,price,color,title){
   try{series.createPriceLine({price,color,lineWidth:1,lineStyle:2,axisLabelVisible:true,title});}catch(e){}
 }
+let chartRequestId=0;
 async function loadChart(){
-  await ensureTickerScan(state.current);
+  const requestId=++chartRequestId, ticker=state.current;
+  await ensureTickerScan(ticker);
+  if(requestId!==chartRequestId)return;
   if(state.view!=='detail')return;
+  refreshDetailMetrics(ticker);
   const el=$('#tvChart'); if(!el)return;
   try{
-    const d=await getJSON(`/api/chart/${state.current}?period=${state.chartPeriod}&interval=${state.chartInterval}`);
+    const d=await getJSON(`/api/chart/${ticker}?period=${state.chartPeriod}&interval=${state.chartInterval}`);
+    if(requestId!==chartRequestId||state.view!=='detail'||state.current!==ticker||$('#tvChart')!==el)return;
     if(!d.candles?.length){el.innerHTML='<div class="empty">Grafik verisi bulunamadı</div>';return;}
     if(state.chart){try{state.chart.remove()}catch(e){} state.chart=null;}
     const chart=LightweightCharts.createChart(el,{
@@ -279,42 +292,37 @@ async function loadChart(){
       (d.structure.resistances||[]).forEach(function(x,i){addGuide(candle,x,'rgba(255,94,114,.5)','R'+(i+1));});
     }
     const sp=$('#structurePanel'); if(sp)sp.innerHTML=structureHtml(d.structure);
-    let pane=1,rsiStochPane=null,macdPane=null;
+    let pane=1;
     if(state.indicators.rsi||state.indicators.stoch){
-      rsiStochPane=pane;
       let guide=null;
       if(state.indicators.rsi){
-        const rs=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#49d7ff',priceLineVisible:false,title:'RSI'},pane);rs.setData(d.rsi||[]);
+        const rs=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:2,color:'#49d7ff',priceLineVisible:false,title:'RSI',autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})},pane);rs.setData(d.rsi||[]);
         guide=rs;
         addGuide(rs,70,'rgba(255,185,74,.5)','70');addGuide(rs,30,'rgba(255,94,114,.45)','30');
       }
       if(state.indicators.stoch){
-        const sk=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Stoch K'},pane);sk.setData(d.stoch_k||[]);
+        const sk=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Stoch K',autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})},pane);sk.setData(d.stoch_k||[]);
         const sd=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#a77cff',priceLineVisible:false,title:'Stoch D'},pane);sd.setData(d.stoch_d||[]);
         if(!guide)guide=sk;
         addGuide(sk,80,'rgba(255,185,74,.4)','80');addGuide(sk,20,'rgba(255,94,114,.4)','20');
       }
-      if(guide)guide.priceScale().applyOptions({autoScale:false,scaleMargins:{top:.08,bottom:.08}});
+      if(guide)guide.priceScale().applyOptions({autoScale:true,scaleMargins:{top:.08,bottom:.08}});
       pane++;
     }
 
     if(state.indicators.macd){
-      macdPane=pane;
       const mh=chart.addSeries(LightweightCharts.HistogramSeries,{priceLineVisible:false,title:'MACD Hist'},pane);
       mh.setData((d.macd_hist||[]).map(x=>({time:x.time,value:x.value,color:x.value>=0?'rgba(40,209,124,.55)':'rgba(255,94,114,.55)'})));
       const ml=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#49d7ff',priceLineVisible:false,title:'MACD'},pane);ml.setData(d.macd||[]);
       const ms=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Signal'},pane);ms.setData(d.macd_signal||[]);
     }
 
-    try{
-      const panes=chart.panes();
-      if(panes[0])panes[0].setHeight(390);
-      for(let i=1;i<panes.length;i++)panes[i].setHeight(140);
-      if(rsiStochPane!==null&&panes[rsiStochPane])panes[rsiStochPane].setHeight(175);
-      if(macdPane!==null&&panes[macdPane])panes[macdPane].setHeight(175);
-    }catch(e){}
+    // Stretch factors survive autoSize and avoid sequential setHeight redistribution.
+    const panes=chart.panes();
+    panes.forEach((p,i)=>p.setStretchFactor(i===0?390:175));
     chart.timeScale().fitContent();
   }catch(e){
+    if(requestId!==chartRequestId||state.view!=='detail'||$('#tvChart')!==el)return;
     el.innerHTML=`<div class="empty">Grafik yüklenemedi: ${e.message}</div>`;
   }
 }

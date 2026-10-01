@@ -34,6 +34,7 @@ jobs:
       - run: node --check app/static/v17.js
       - run: node --check app/static/v18.js
       - run: node --check electron/main.cjs
+      - run: node tests/chart-regression.cjs
       - name: Technical engine smoke test
         run: |
           python - <<'PY'
