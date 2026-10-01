@@ -24,11 +24,11 @@ const tagClass=s=>s==='GÜÇLÜ'?'':s==='POZİTİF'?'':s==='NÖTR'?'neutral':'we
 async function getJSON(url){const r=await fetch(url); if(!r.ok) throw new Error(`${r.status} ${url}`); return r.json();}
 async function init(){
   try{
-    const [u,m]=await Promise.all([getJSON('/api/universe'),getJSON('/api/market')]);
+    const [u,m,h]=await Promise.all([getJSON('/api/universe'),getJSON('/api/market'),getJSON('/health')]);
     state.universe=u.rows||[]; state.total=u.count||state.universe.length; state.market=m||{};
     state.universe.forEach(x=>state.meta.set(x.ticker,x));
     const restored=restoreScanCache();
-    els.systemMode.textContent=`V8 · ${u.source||'UNIVERSE'}`;
+    els.systemMode.textContent=`V${h.version||'17.1'} · ${u.source||'UNIVERSE'}`;
     els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
     if(restored)updateRegime();
     renderTickerbar(); render(); setTimeout(()=>scanAll(false),restored?900:150);
