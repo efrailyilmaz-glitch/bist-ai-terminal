@@ -1,5 +1,5 @@
 from __future__ import annotations
-import math, threading, time
+import json, math, os, platform, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import pandas as pd
@@ -7,7 +7,26 @@ from .market_data import yahoo_rows
 from .scoring import indicator_frame
 from .universe import get_universe
 
-_LOCK=threading.Lock();_CACHE={};TTL=30*60
+_LOCK=threading.Lock();_CACHE={};TTL=30*60;PERSIST_TTL=6*3600;SCHEMA_VERSION=2
+def _store_dir():
+    from pathlib import Path
+    if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
+    elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
+    else:b=Path.home()/'.bist-ai-terminal'
+    b.mkdir(parents=True,exist_ok=True);return b
+def _store_file():return _store_dir()/'weekly_reversal_profiles.json'
+_PERSIST={}
+def _load_persist():
+    global _PERSIST
+    try:
+        p=_store_file()
+        if p.exists():_PERSIST=json.loads(p.read_text(encoding='utf-8'))
+    except Exception:_PERSIST={}
+def _save_persist():
+    try:_store_file().write_text(json.dumps(_PERSIST,ensure_ascii=False),encoding='utf-8')
+    except Exception:pass
+_load_persist()
+_SCAN_CURSOR=0
 
 def _v(x,d=None):
     try:
@@ -102,54 +121,68 @@ def _historical_setup_stats(base):
         return {'n':len(xs),'positive_pct':round(sum(1 for x in xs if x>0)/len(xs)*100,1),'mean_pct':round(float(np.mean(xs)),2),'median_pct':round(float(np.median(xs)),2)}
     return {'events':len(events),'4w':s(4),'8w':s(8),'12w':s(12),'note':'Historical setup = weekly RSI rising from <=45 zone + low Stoch RSI bullish cross + MACD histogram newly positive.'}
 
+def _public(base):
+    return {k:v for k,v in base.items() if not k.startswith('_')}
+
 def weekly_reversal(ticker,with_history=True):
     code=ticker.upper().replace('.IS','');key=f'{code}:{int(bool(with_history))}';now=time.time()
     with _LOCK:
         hit=_CACHE.get(key)
         if hit and now-hit[0]<TTL:return hit[1]
+        ph=_PERSIST.get(code)
+        if (not with_history) and ph and ph.get('_schema')==SCHEMA_VERSION and now-float(ph.get('_ts',0))<PERSIST_TTL:
+            return _public(ph)
     base=_weekly_features(code)
     if not base:return {'ticker':code,'status':'NO_DATA'}
-    hist=_historical_setup_stats(base) if with_history else None
+    if with_history:
+        hist=_historical_setup_stats(base)
+    else:
+        base.pop('_df',None);base.pop('_ind',None);hist=None
     base['historical']=hist
     base['note']='Weekly reversal is a research signal. False positives are reduced with EMA20, DI/ADX, volume and XU100 relative-strength confirmation.'
-    with _LOCK:_CACHE[key]=(now,base)
-    return base
+    public=_public(base)
+    with _LOCK:
+        _CACHE[key]=(now,public)
+        if not with_history:
+            _PERSIST[code]={**public,'_schema':SCHEMA_VERSION,'_ts':now}
+            _save_persist()
+    return public
+
+def scan_weekly_reversal_batch(batch=24):
+    global _SCAN_CURSOR
+    u=get_universe()
+    if not u:return {'scanned':0,'universe':0}
+    n=max(5,min(int(batch),50));codes=[]
+    for _ in range(n):
+        codes.append(u[_SCAN_CURSOR%len(u)]['ticker']);_SCAN_CURSOR+=1
+    done=0
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        for x in ex.map(lambda c:weekly_reversal(c,with_history=False),codes):
+            if x.get('status')=='OK':done+=1
+    return {'scanned':done,'cursor':_SCAN_CURSOR,'universe':len(u)}
 
 def weekly_reversal_radar(limit=60,universe_limit=0):
-    u=get_universe();cap=len(u) if int(universe_limit or 0)<=0 else min(len(u),max(40,int(universe_limit)))
-    codes=[x['ticker'] for x in u[:cap]]
-    rows=[]
-    def one(code):
-        return weekly_reversal(code,with_history=False)
-    with ThreadPoolExecutor(max_workers=7) as ex:
-        fut=[ex.submit(one,c) for c in codes]
-        for q in as_completed(fut):
-            try:
-                x=q.result()
-                if x.get('status')=='OK':rows.append(x)
-            except Exception:pass
+    u=get_universe();now=time.time()
+    with _LOCK:
+        rows=[_public(v) for v in _PERSIST.values() if isinstance(v,dict) and v.get('_schema')==SCHEMA_VERSION and now-float(v.get('_ts',0))<PERSIST_TTL and v.get('status')=='OK']
+    # First use fills a small batch quickly; background supervisor completes the universe.
+    if len(rows)<20:
+        scan_weekly_reversal_batch(24)
+        with _LOCK:rows=[_public(v) for v in _PERSIST.values() if isinstance(v,dict) and v.get('_schema')==SCHEMA_VERSION and v.get('status')=='OK']
     order={'ALIM_PENCERESİ':0,'ERKEN_DÖNÜŞ':1,'TEYİT_BEKLE':2,'NÖTR':3,'SATIŞ_RİSKİ':4}
     rows.sort(key=lambda x:(order.get(x.get('signal'),9),-x.get('score',0),-x.get('rs4',0)))
-    # Add ticker-specific historical validation to the strongest candidates only.
     top=rows[:max(20,min(int(limit),120))]
     validated=[]
     def hist_one(x):
         if x.get('signal') not in {'ALIM_PENCERESİ','ERKEN_DÖNÜŞ','TEYİT_BEKLE'}: return x
         try:
-            full=weekly_reversal(x['ticker'],with_history=True)
-            h=(full.get('historical') or {})
-            h8=(h.get('8w') or {})
+            full=weekly_reversal(x['ticker'],with_history=True);h=(full.get('historical') or {});h8=(h.get('8w') or {})
             n=int(h8.get('n') or 0);hit=float(h8.get('positive_pct') or 0);med=float(h8.get('median_pct') or 0)
-            x=dict(x);x['historical']=h
-            # shrink sparse history toward neutral; do not over-trust 1-2 examples
-            reliability=min(1.0,n/8.0)
-            edge=(hit-50)*.45+med*1.5
-            x['validated_score']=round(max(0,min(100,x.get('score',0)+edge*reliability)))
-            x['history_reliability']=round(reliability*100)
-            return x
+            x=dict(x);x['historical']=h;reliability=min(1.0,n/8.0);edge=(hit-50)*.45+med*1.5
+            x['validated_score']=round(max(0,min(100,x.get('score',0)+edge*reliability)));x['history_reliability']=round(reliability*100);return x
         except Exception:return x
-    with ThreadPoolExecutor(max_workers=5) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         for x in ex.map(hist_one,top):validated.append(x)
     validated.sort(key=lambda x:(order.get(x.get('signal'),9),-x.get('validated_score',x.get('score',0)),-x.get('score',0)))
-    return {'rows':validated,'scanned':len(rows),'universe':len(u),
-            'note':'5-year weekly bars. Core setup: rising RSI from low zone + low Stoch RSI bullish cross + MACD histogram turning positive; enhanced by trend, volume, relative-strength and ticker-specific historical setup validation.'}
+    return {'rows':validated,'scanned':len(rows),'universe':len(u),'coverage_pct':round(len(rows)/max(1,len(u))*100,1),
+            'note':'5-year weekly bars. Results come from a persistent background full-universe scan; strongest candidates get ticker-specific historical validation.'}
