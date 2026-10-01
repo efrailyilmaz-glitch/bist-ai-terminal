@@ -209,4 +209,4 @@ jobs:
           assert "'10y'" in src and "'max'" in src
           print('10y/max period support ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '17.0'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '17.1'; print(app.title, app.version)"
