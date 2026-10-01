@@ -126,7 +126,7 @@ def _series(rows, values, digits=4):
 
 def yahoo_rows(code,period='1y',interval='1d'):
     code=code.upper().replace('.IS','')
-    period=period if period in {'1mo','3mo','6mo','1y','2y','5y'} else '1y'
+    period=period if period in {'1mo','3mo','6mo','1y','2y','5y','10y','max'} else '1y'
     interval=interval if interval in {'15m','30m','60m','1d','1wk'} else '1d'
     if interval in {'15m','30m'} and period not in {'1mo'}:period='1mo'
     if interval=='60m' and period in {'1y','2y','5y'}:period='6mo'
