@@ -1,7 +1,7 @@
 const { app, BrowserWindow, Menu, shell, dialog, Tray, nativeImage, screen } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
-const net = require('net');
+const { stablePort } = require('./stable-port.cjs');
 const http = require('http');
 
 let mainWindow = null;
@@ -27,18 +27,6 @@ if (!singleInstanceLock) {
       mainWindow.show();
       mainWindow.focus();
     }
-  });
-}
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.on('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port;
-      server.close(() => resolve(port));
-    });
   });
 }
 
@@ -247,7 +235,7 @@ app.whenReady().then(async () => {
   createWindow();
   buildTray();
   try {
-    backendPort = await freePort();
+    backendPort = await stablePort(app.getPath('userData'));
     startBackend(backendPort);
     await waitForBackend(backendPort);
     await mainWindow.loadURL('http://127.0.0.1:' + backendPort);

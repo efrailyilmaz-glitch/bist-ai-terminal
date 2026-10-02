@@ -38,6 +38,7 @@ jobs:
       - run: node --check app/static/v21.js
       - run: node --check app/static/chart-drawings.js
       - run: node tests/chart-order-tools.cjs
+      - run: node tests/desktop-storage.cjs
       - run: node tests/edge-ui-regression.cjs
       - run: node tests/navigation-regression.cjs
       - run: python -m unittest discover -s tests -p "test_*.py"
