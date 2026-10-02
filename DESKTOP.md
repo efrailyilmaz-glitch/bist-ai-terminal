@@ -4,9 +4,9 @@ Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electr
 
 ## Üretilen kurulum dosyaları
 
-- Windows 64-bit: `BIST-AI-Terminal-Setup-21.0.0-x64.exe`
-- macOS Intel: `BIST-AI-Terminal-21.0.0-x64.dmg`
-- macOS Apple Silicon: `BIST-AI-Terminal-21.0.0-arm64.dmg`
+- Windows 64-bit: `BIST-AI-Terminal-Setup-21.0.1-x64.exe`
+- macOS Intel: `BIST-AI-Terminal-21.0.1-x64.dmg`
+- macOS Apple Silicon: `BIST-AI-Terminal-21.0.1-arm64.dmg`
 
 ## Kurulum davranışı
 
@@ -84,3 +84,5 @@ Grafik kenarında çizgi, yatay çizgi, üç noktalı paralel kanal, cetvel, ren
 Grafik altındaki AL, SAT, AÇIĞA SAT ve AÇIĞI KAPAT düğmeleri yalnız yerel simülasyon hesabını değiştirir. 1 milyon TL sanal başlangıç sermayesi, tek yön komisyon ve short için %100 ek teminat varsayımı kullanılır. Hesap eski Execution Center paper hesabından ayrıdır. Gerçek aracı kurum API bağlantısı yoktur; gerçek emir gönderme düğmesi kapalıdır.
 
 Agresif alış, kullanıcının fiyat;lot biçiminde girdiği deneme satış kademelerini düşükten yükseğe tüketir. Hedef toplam lot, alt emir lotu ve üst fiyat zorunludur. Kademe tükenmesi, fiyat/pozisyon/nakit sınırı, 200 alt emir sınırı, Durdur, sayfadan ayrılma veya sekmenin gizlenmesi kalan planı durdurur. Gerçek kademe verisi veya gerçekleşme iddiası yoktur. Birden çok sekmede aynı yerel hesaba yazımlar Web Locks ile sıraya alınır.
+
+Masaüstü yerel adresi yeniden başlatmalarda korunur; çizimler ve grafik simülasyonu aynı cihazdaki uygulama profilinde saklanır. Kayıtlı port kullanımda ise uygulama farklı adrese geçmek yerine hata gösterir.
