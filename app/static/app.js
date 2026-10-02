@@ -240,6 +240,7 @@ function addGuide(series,price,color,title){
 }
 let chartRequestId=0;
 async function loadChart(){
+  if(typeof disposeChartWorkspace==='function')disposeChartWorkspace();
   const requestId=++chartRequestId, ticker=state.current;
   await ensureTickerScan(ticker);
   if(requestId!==chartRequestId)return;
@@ -321,6 +322,7 @@ async function loadChart(){
     const panes=chart.panes();
     panes.forEach((p,i)=>p.setStretchFactor(i===0?390:175));
     chart.timeScale().fitContent();
+    if(typeof attachChartWorkspace==='function')attachChartWorkspace({chart,candle,candles:d.candles,ticker,interval:state.chartInterval});
   }catch(e){
     if(requestId!==chartRequestId||state.view!=='detail'||$('#tvChart')!==el)return;
     el.innerHTML=`<div class="empty">Grafik yüklenemedi: ${e.message}</div>`;
