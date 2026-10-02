@@ -1,12 +1,12 @@
-# BIST AI Terminal Desktop 20.0
+# BIST AI Terminal Desktop 21.0
 
 Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electron içinde açılır; FastAPI/Python motoru uygulamanın kendi içinde paketlidir ve yalnızca `127.0.0.1` üzerinde çalışır. Render kullanılmaz.
 
 ## Üretilen kurulum dosyaları
 
-- Windows 64-bit: `BIST-AI-Terminal-Setup-20.0.0-x64.exe`
-- macOS Intel: `BIST-AI-Terminal-20.0.0-x64.dmg`
-- macOS Apple Silicon: `BIST-AI-Terminal-20.0.0-arm64.dmg`
+- Windows 64-bit: `BIST-AI-Terminal-Setup-21.0.0-x64.exe`
+- macOS Intel: `BIST-AI-Terminal-21.0.0-x64.dmg`
+- macOS Apple Silicon: `BIST-AI-Terminal-21.0.0-arm64.dmg`
 
 ## Kurulum davranışı
 
@@ -76,3 +76,11 @@ Olasılık Laboratuvarı 10 yıllık fiyat geçmişinden 5/20/60 işlem günü i
 Kaynaklı yedi hipotez ve üç sabit uzun pozisyon kuralı eklendi. Deney kapanış sinyalinden sonraki açılışta başlar; XU100 aynı tarihlerde karşılaştırılır. Maliyet ve iki kat maliyet stresi, zaman sıralı dönem ayrımı, eksik tarih kontrolleri ve hesaplanabilen son işlemler görünürdür. Sonuçlar keşif amaçlıdır; canlı işlem onayı üretilmez.
 
 Eski alfa araştırmasında satır sırası yerine tarih eşleştirmesi kullanılır; 60 günlük örneklerin örtüşmesi kaldırılmıştır. KAP olay getirisinde karşılaştırma başlangıç ve bitiş tarihleri eşleştirilmiştir. Şirket tablosu başlığı artık hisse evrenine girmez.
+
+## V21 Grafik araçları ve yerel simülasyon
+
+Grafik kenarında çizgi, yatay çizgi, üç noktalı paralel kanal, cetvel, renk seçimi, silme ve geri al/yinele bulunur. Çizimler hisse ve zaman dilimine göre bu cihazda saklanır; farklı zaman dilimlerine otomatik taşınmaz.
+
+Grafik altındaki AL, SAT, AÇIĞA SAT ve AÇIĞI KAPAT düğmeleri yalnız yerel simülasyon hesabını değiştirir. 1 milyon TL sanal başlangıç sermayesi, tek yön komisyon ve short için %100 ek teminat varsayımı kullanılır. Hesap eski Execution Center paper hesabından ayrıdır. Gerçek aracı kurum API bağlantısı yoktur; gerçek emir gönderme düğmesi kapalıdır.
+
+Agresif alış, kullanıcının fiyat;lot biçiminde girdiği deneme satış kademelerini düşükten yükseğe tüketir. Hedef toplam lot, alt emir lotu ve üst fiyat zorunludur. Kademe tükenmesi, fiyat/pozisyon/nakit sınırı, 200 alt emir sınırı, Durdur, sayfadan ayrılma veya sekmenin gizlenmesi kalan planı durdurur. Gerçek kademe verisi veya gerçekleşme iddiası yoktur. Birden çok sekmede aynı yerel hesaba yazımlar Web Locks ile sıraya alınır.
