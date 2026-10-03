@@ -80,7 +80,7 @@ def _scan_chunk(chunk,br20,br60):
                 df=_extract(raw,sym)
                 if df.empty:continue
                 sc=score_frame(df,benchmark_return_20=br20,benchmark_return_60=br60)
-                if sc:rows.append({'ticker':code,**sc})
+                if sc:rows.append({'ticker':code,**sc,'as_of':str(df.index[-1])[:10]})
             except Exception:
                 continue
     except Exception:
