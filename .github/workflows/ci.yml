@@ -35,6 +35,9 @@ jobs:
       - run: node --check app/static/v18.js
       - run: node --check app/static/v19.js
       - run: node --check app/static/v20.js
+      - run: node --check app/static/v22.js
+      - run: node --check app/static/screener-engine.js
+      - run: node tests/screener.cjs
       - run: node --check app/static/v21.js
       - run: node --check app/static/chart-drawings.js
       - run: node tests/chart-order-tools.cjs
@@ -257,4 +260,4 @@ jobs:
           assert 'DELAYED / YAHOO' in inspect.getsource(market_overview)
           print('V18 QA hardening ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '21.0'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '22.0'; print(app.title, app.version)"

@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');const S=require('../app/static/screener-engine.js');
+const rows=[{ticker:'A',rsi:50,volume_ratio:2,above_ema20:true,stoch_rsi_k:40,stoch_rsi_d:20},{ticker:'B',rsi:20,volume_ratio:0,above_ema20:false},{ticker:'C',rsi:null,volume_ratio:NaN},{ticker:'D',rsi:70}];
+const r={field:'rsi',op:'between',value:30,high:70},v={field:'volume_ratio',op:'>=',value:1.5};
+assert.deepEqual(S.filter(rows,[r,v]).map(x=>x.ticker),['A']);
+assert.deepEqual(S.filter(rows,[r,v],'any').map(x=>x.ticker),['A','D']);
+assert(!S.match(rows[2],{field:'rsi',op:'<=',value:30}));
+assert(!S.match({rsi:''},{field:'rsi',op:'<=',value:30}));
+assert(!S.match({above_ema20:1},{field:'above_ema20',op:'=',value:true}));
+assert(S.match(rows[0],{field:'stoch_rsi_k',op:'gt_field',value:'stoch_rsi_d'}));
+assert(!S.match(rows[1],{field:'stoch_rsi_k',op:'gt_field',value:'stoch_rsi_d'}));
+assert.throws(()=>S.filter(rows,[{...r,high:10}]));assert.throws(()=>S.filter(rows,[{...r,value:null}]));
+assert.deepEqual(S.sort(rows,'rsi').map(x=>x.ticker),['D','A','B','C']);
+assert.equal(S.filter(rows,[]).length,4);console.log('screener filter, missing values, comparisons and sorting passed');
+const vm=require('node:vm'),fs=require('node:fs');
+const ctx={BistScreener:S,v19Esc:v=>String(v??'').replaceAll('<','&lt;'),localStorage:{getItem:()=>null},state:{scanning:false},render(){},setInterval(){}};vm.createContext(ctx);vm.runInContext(fs.readFileSync('app/static/v22.js','utf8'),ctx);assert(ctx.screenView().includes('screenRules'));assert(ctx.screenView().includes('GÜNLÜK TEKNİK VERİ'));assert(ctx.screenView().includes('screenExport'));assert(fs.readFileSync('app/templates/index.html','utf8').includes('data-view="screener"'));console.log('screener view and navigation wiring passed');
