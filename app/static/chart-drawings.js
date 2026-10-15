@@ -1,6 +1,8 @@
 /* Price/time anchored drawings rendered on the native main-price pane. */
 (function(root){
  const timeKey=t=>typeof t==='object'?`${t.year}-${String(t.month).padStart(2,'0')}-${String(t.day).padStart(2,'0')}`:String(t);
+ function timeSeconds(t){if(typeof t==='number')return t;if(t&&typeof t==='object')return Date.UTC(t.year,t.month-1,t.day)/1000;const n=Date.parse(t);return Number.isFinite(n)?n/1000:NaN;}
+ function elapsed(a,b){const seconds=Math.abs(timeSeconds(b)-timeSeconds(a));if(!Number.isFinite(seconds))return 'Süre bilinmiyor';const mins=Math.floor(seconds/60),days=Math.floor(mins/1440),hours=Math.floor(mins%1440/60),m=mins%60;return [days?days+' gün':'',hours?hours+' saat':'',m?m+' dk':''].filter(Boolean).join(' ')||'0 dk';}
  function distance(p,a,b){const dx=b.x-a.x,dy=b.y-a.y,k=dx*dx+dy*dy;const t=k?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/k)):0;return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);}
  function channel(a,b,c){const dx=b.x-a.x;if(Math.abs(dx)<1)return null;const off=c.y-(a.y+(b.y-a.y)*(c.x-a.x)/dx);return [{x:a.x,y:a.y+off},{x:b.x,y:b.y+off}];}
  const names={cursor:'Seç / gezin',line:'Çizgi',horizontal:'Yatay çizgi',parallel:'Paralel kanal',ruler:'Cetvel'};
@@ -38,11 +40,11 @@
    for(const item of [...this.items,...(draft?[draft]:[])]){const pts=item.points.map(p=>this.point(p));if(!pts.length||pts.some(x=>!x))continue;ctx.strokeStyle=item.color;ctx.fillStyle=item.color;ctx.lineWidth=item.id===this.selected?3:2;ctx.setLineDash(item.id==='draft'?[5,4]:[]);const line=(a,b)=>{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();};
     if(item.type==='horizontal'){line({x:0,y:pts[0].y},{x:size.width,y:pts[0].y});ctx.font='12px sans-serif';ctx.fillText(item.points[0].price.toFixed(2),8,Math.max(14,pts[0].y-5));}
     else if(pts.length>=2){line(pts[0],pts[1]);if(item.type==='parallel'&&pts.length>=3){const other=channel(...pts);if(other){line(...other);ctx.globalAlpha=.1;ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);ctx.lineTo(pts[1].x,pts[1].y);ctx.lineTo(other[1].x,other[1].y);ctx.lineTo(other[0].x,other[0].y);ctx.closePath();ctx.fill();ctx.globalAlpha=1;}}
-     if(item.type==='ruler'){const [a,b]=item.points,delta=b.price-a.price,percent=delta/a.price*100,bars=Math.abs(this.indices.get(timeKey(b.time))-this.indices.get(timeKey(a.time)));ctx.setLineDash([3,3]);line(pts[0],{x:pts[1].x,y:pts[0].y});line({x:pts[1].x,y:pts[0].y},pts[1]);ctx.setLineDash([]);ctx.font='12px sans-serif';const label=`${delta>=0?'+':''}${delta.toFixed(2)} TL / ${percent.toFixed(2)}% / ${bars} bar`;const w=ctx.measureText(label).width+12,x=Math.max(0,Math.min(size.width-w,Math.min(pts[0].x,pts[1].x))),y=Math.max(20,Math.min(pts[0].y,pts[1].y));ctx.fillStyle='#112634';ctx.fillRect(x,y-19,w,21);ctx.fillStyle=item.color;ctx.fillText(label,x+6,y-4);}
+     if(item.type==='ruler'){const [a,b]=item.points,delta=b.price-a.price,percent=delta/a.price*100,bars=Math.abs(this.indices.get(timeKey(b.time))-this.indices.get(timeKey(a.time)));ctx.setLineDash([3,3]);line(pts[0],{x:pts[1].x,y:pts[0].y});line({x:pts[1].x,y:pts[0].y},pts[1]);ctx.setLineDash([]);ctx.font='12px sans-serif';const label=`${delta>=0?'+':''}${delta.toFixed(2)} TL / ${percent.toFixed(2)}% / ${Number.isFinite(bars)?bars:'—'} bar / ${elapsed(a.time,b.time)} (takvim)`;const w=ctx.measureText(label).width+12,x=Math.max(0,Math.min(size.width-w,Math.min(pts[0].x,pts[1].x))),y=Math.max(20,Math.min(pts[0].y,pts[1].y));ctx.fillStyle='#112634';ctx.fillRect(x,y-19,w,21);ctx.fillStyle=item.color;ctx.fillText(label,x+6,y-4);}
     }
     if(item.id===this.selected||item.id==='draft')for(const p of pts){ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill();}
    }ctx.restore();
   }
  }
- const api={Drawings,distance,channel,timeKey};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.BistDrawings=api;
+ const api={Drawings,distance,channel,timeKey,elapsed,timeSeconds};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.BistDrawings=api;
 })(typeof window!=='undefined'?window:this);

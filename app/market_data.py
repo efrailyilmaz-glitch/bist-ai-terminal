@@ -12,7 +12,7 @@ _SCAN_CACHE={}
 _SCORE_CACHE={}
 _CHART_CACHE={}
 _RAW_CACHE={}
-_BENCH_CACHE={'ts':0.0,'br20':0.0,'br60':0.0}
+_BENCH_CACHE={'ts':0.0,'br20':None,'br60':None}
 _MARKET_CACHE={'ts':0.0,'data':None}
 _MTF_CACHE={}
 _HTTP=requests.Session()
@@ -59,11 +59,12 @@ def _benchmark_returns():
     with _LOCK:
         if now-_BENCH_CACHE['ts']<600:
             return _BENCH_CACHE['br20'],_BENCH_CACHE['br60']
-    br20=br60=0.0
+    br20=br60=None
     try:
         braw=yf.download(['XU100.IS'],period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=False,progress=False,timeout=12)
         benchmark=_extract(braw,'XU100.IS')
-        br20=_ret(benchmark,20);br60=_ret(benchmark,60)
+        if len(benchmark)>20:br20=_ret(benchmark,20)
+        if len(benchmark)>60:br60=_ret(benchmark,60)
     except Exception:
         pass
     with _LOCK:
@@ -79,8 +80,17 @@ def _scan_chunk(chunk,br20,br60):
             try:
                 df=_extract(raw,sym)
                 if df.empty:continue
+                df=df.dropna(how='all')
                 sc=score_frame(df,benchmark_return_20=br20,benchmark_return_60=br60)
-                if sc:rows.append({'ticker':code,**sc,'as_of':str(df.index[-1])[:10]})
+                if sc:
+                    from .signal_guard import daily_metadata
+                    if br20 is None or br60 is None:
+                        g=sc['signal_guard']
+                        g['flags'].append({'code':'BENCHMARK_MISSING','message':'XU100 verisi yok; endekse göre üstünlük hesaplanmadı.','weight':20})
+                        g['score']=min(100,g['score']+20)
+                        if g['status']=='CLEAR':g['status']='WAIT'
+                        sc['relative_strength_20']=None;sc['relative_strength_60']=None
+                    rows.append(daily_metadata({'ticker':code,**sc},df.index[-1]))
             except Exception:
                 continue
     except Exception:
