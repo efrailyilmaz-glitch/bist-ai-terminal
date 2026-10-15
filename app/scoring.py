@@ -82,7 +82,7 @@ def indicator_frame(df: pd.DataFrame):
 
     signed=np.sign(c.diff()).fillna(0)
     out['OBV']=(signed*v).cumsum()
-    vol20=v.rolling(20).mean().replace(0,np.nan)
+    vol20=v.shift(1).rolling(20).mean().replace(0,np.nan)
     out['OBV_TREND20']=(out['OBV']-out['OBV'].shift(20))/(vol20*20)
     rng=(h-l).replace(0,np.nan)
     out['CLV']=((c-l)-(h-c))/rng
@@ -94,10 +94,18 @@ def indicator_frame(df: pd.DataFrame):
     return out
 
 def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0.0):
-    df=df.dropna(subset=['Close']).copy()
+    from .signal_guard import assess
+    df=df.dropna(how='all').copy()
+    guard=assess(df)
+    if any(f['code'] in {'MISSING_DATA','INVALID_BARS'} for f in guard['flags']): return None
+    df=df.copy()
     if len(df)<30:
         return None
     x=indicator_frame(df)
+    if any(pd.isna(x[k].iloc[-1]) for k in ['RSI14','STOCH_RSI_K','STOCH_RSI_D','ADX14']):
+        guard['flags'].append({'code':'INDICATOR_WARMUP','message':'Bazı göstergeler için yeterli geçerli geçmiş yok; nötr değer sinyal kabul edilmez.','weight':20})
+        guard['score']=min(100,guard['score']+20)
+        if guard['status']=='CLEAR':guard['status']='WAIT'
     c=x['Close'].astype(float)
     v=x.get('Volume',pd.Series(index=x.index,dtype=float)).fillna(0).astype(float)
     last=_num(c.iloc[-1])
@@ -217,12 +225,19 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     if ichi=='BULLISH': reasons_long.append('Ichimoku bullish')
     if cross.get('recent_event')=='GOLDEN_CROSS': reasons_long.append('Golden Cross')
 
+    raw_long=long
+    long=min(long,47 if guard['status']=='BLOCK' else 67) if guard['status']!='CLEAR' else long
+    raw_short=short
+    short=min(short,47 if guard['status']=='BLOCK' else 67) if guard['status']!='CLEAR' else short
+    raw_alpha=alpha
+    alpha=min(alpha,47 if guard['status']=='BLOCK' else 67) if guard['status']!='CLEAR' else alpha
     return {
+      'raw_alpha_score':raw_alpha,'signal_guard':guard,'guard_clear':guard['status']=='CLEAR','raw_short_score':raw_short,'raw_long_score':raw_long,
       'price':round(last,2),'change':round((last/prev-1)*100,2) if prev else 0,
       'short_score':short,'long_score':long,'alpha_score':alpha,
       'short_signal':'GÜÇLÜ' if short>=80 else 'POZİTİF' if short>=68 else 'NÖTR' if short>=48 else 'ZAYIF',
       'long_signal':'GÜÇLÜ' if long>=80 else 'POZİTİF' if long>=68 else 'NÖTR' if long>=48 else 'ZAYIF',
-      'rsi':round(r,1),'stoch_rsi_k':round(sk,1),'stoch_rsi_d':round(sd,1),
+      'rsi':round(r,1) if pd.notna(x['RSI14'].iloc[-1]) else None,'stoch_rsi_k':round(sk,1) if pd.notna(x['STOCH_RSI_K'].iloc[-1]) else None,'stoch_rsi_d':round(sd,1) if pd.notna(x['STOCH_RSI_D'].iloc[-1]) else None,
       'macd':round(macd,4),'macd_signal':round(macds,4),'macd_hist':round(mach,4),
       'adx':round(adx,1),'plus_di':round(pdi,1),'minus_di':round(mdi,1),
       'mfi':round(mfi,1),'atr':round(atrv,4),'atr_pct':round(atrpct,2),

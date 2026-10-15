@@ -8,6 +8,11 @@
  function trade(account,o){
   if(!/^[A-Z0-9]{2,12}$/.test(o.ticker||''))throw Error('Geçersiz hisse.');
   if(!['BUY','SELL','SHORT','COVER'].includes(o.side))throw Error('Geçersiz yön.');
+  if(typeof o.id!=='string'||!o.id)throw Error('İşlem kimliği gerekli.');
+  const at=o.at||new Date().toISOString(),stamp=Date.parse(at);
+  if(!Number.isFinite(stamp)||stamp>Date.now()+60000)throw Error('Geçerli, gelecekte olmayan işlem tarihi girin.');
+  const latest=account.orders.find(x=>x.ticker===o.ticker);
+  if(latest&&stamp<Date.parse(latest.at))throw Error('Bu hissenin son işleminden eski tarih girilemez.');
   const qty=lots(o.quantity),price=amount(o.price),feeBps=Number(o.feeBps??10);
   if(!Number.isFinite(feeBps)||feeBps<0||feeBps>100)throw Error('Komisyon 0–100 baz puan olmalı.');
   if(account.orders.some(x=>x.id===o.id))throw Error('Bu işlem zaten kaydedildi.');
@@ -30,8 +35,8 @@
   }
   if(p.quantity)a.positions[o.ticker]=p;else delete a.positions[o.ticker];
   a.cash=money(a.cash);a.realized=money(a.realized);a.revision++;
-  a.orders.unshift({id:o.id,ticker:o.ticker,side:o.side,quantity:qty,price,fee:money(fee),pnl:pnl===null?null:money(pnl),at:o.at||new Date().toISOString(),source:o.source||'USER_SIMULATION',runId:o.runId||null});
-  a.orders=a.orders.slice(0,500);return a;
+  a.orders.unshift({id:o.id,ticker:o.ticker,side:o.side,quantity:qty,price,fee:money(fee),pnl:pnl===null?null:money(pnl),at:new Date(stamp).toISOString(),recordedAt:new Date().toISOString(),source:o.source||'USER_SIMULATION',runId:o.runId||null});
+  return a;
  }
  function levels(text){
   const rows=String(text).trim().split(/\n/).filter(x=>x.trim());
@@ -47,6 +52,18 @@
   const level=book[index];if(level.price>maxPrice)return {stop:'ÜST FİYAT SINIRINA ULAŞILDI'};
   return {index,price:level.price,quantity:Math.min(remaining,child,level.quantity)};
  }
- const api={fresh,trade,levels,slice,lots,amount};
+ function valuation(a,quotes){
+  let known=0,unreal=0,missing=0;
+  const rows=Object.entries(a.positions).map(([ticker,p])=>{const q=quotes[ticker],price=q?.price,ok=typeof price==='number'&&Number.isFinite(price)&&price>0;
+   const orders=a.orders.filter(o=>o.ticker===ticker);
+   // Determine the start of the current position by replaying quantities backwards, including partial closes.
+   let balance=p.quantity,start=null;for(const o of orders){start=o.at;balance-=o.side==='BUY'||o.side==='COVER'?o.quantity:-o.quantity;if(balance===0)break;}
+   const pnl=ok?(price-p.avg)*p.quantity-p.entryFees:null,cost=Math.abs(p.quantity)*p.avg+p.entryFees;
+   if(ok){unreal+=pnl;known+=p.quantity>0?p.quantity*price:Math.abs(p.quantity)*(2*p.avg-price);}else missing++;
+   return {ticker,...p,price:ok?price:null,asOf:q?.as_of||null,pnl,returnPct:ok?pnl/cost*100:null,openedAt:balance===0?start:null,lastAt:orders[0]?.at||null};
+  });
+  return {rows,missing,unrealized:missing?null:money(unreal),knownUnrealized:money(unreal),equity:missing?null:money(a.cash+known),totalPnl:missing?null:money(a.realized+unreal),realized:a.realized,cash:a.cash};
+ }
+ const api={fresh,trade,levels,slice,lots,amount,valuation};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.BistPaperEngine=api;
 })(typeof window!=='undefined'?window:this);

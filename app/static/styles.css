@@ -90,3 +90,5 @@ html,body{height:100%;overflow:hidden}.shell{height:100vh;min-height:0}.sidebar{
 @media(max-width:750px){.drawRail{width:62px}.drawRail button{font-size:10px}.chartWorkspace{gap:4px}.quickPanel{padding:12px}.quickInputs input{width:135px}.quickActions button{flex:1;font-size:11px}}
 
 .screenerRule{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.screenerRule select,.screenerRule input,.forecastTools select{background:#101b2c;color:#e1ecff;border:1px solid #30435c;border-radius:6px;padding:9px}.screenerRule input{width:125px}.screenerRule select:first-child{min-width:220px}
+
+.guardCard{padding:16px;margin:12px 0;background:#172337;border-left:4px solid #f3b85d;border-radius:6px}.guardCard p{margin:8px 0}.guardCard small{color:#a8bbd0}
