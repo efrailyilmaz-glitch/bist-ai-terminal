@@ -233,9 +233,9 @@ function mtfHtml(d){
   return out;
 }
 async function loadMtf(){
-  const box=$('#mtfGrid'); if(!box)return;
-  try{const d=await getJSON('/api/mtf/'+state.current); if($('#mtfGrid'))$('#mtfGrid').innerHTML=mtfHtml(d);}
-  catch(e){if($('#mtfGrid'))$('#mtfGrid').innerHTML='<div class="pending">MTF yüklenemedi: '+e.message+'</div>';}
+  const box=$('#mtfGrid'),ticker=state.current; if(!box)return;
+  try{const d=await getJSON('/api/mtf/'+ticker); if(state.view==='detail'&&state.current===ticker&&$('#mtfGrid')===box)box.innerHTML=mtfHtml(d);}
+  catch(e){if(state.view==='detail'&&state.current===ticker&&$('#mtfGrid')===box)box.textContent='MTF yüklenemedi: '+e.message;}
 }
 function addGuide(series,price,color,title){
   try{series.createPriceLine({price,color,lineWidth:1,lineStyle:2,axisLabelVisible:true,title});}catch(e){}
@@ -326,6 +326,7 @@ async function loadChart(){
     const panes=chart.panes();
     panes.forEach((p,i)=>p.setStretchFactor(i===0?390:175));
     chart.timeScale().fitContent();
+    if(typeof stockChartReady==='function')stockChartReady(chart,d.candles,ticker);
     if(typeof attachChartWorkspace==='function')attachChartWorkspace({chart,candle,candles:d.candles,ticker,interval:state.chartInterval});
   }catch(e){
     if(requestId!==chartRequestId||state.view!=='detail'||$('#tvChart')!==el)return;
