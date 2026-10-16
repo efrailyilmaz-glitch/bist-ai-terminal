@@ -6,6 +6,7 @@ import pandas as pd
 import yfinance as yf
 from .scoring import score_frame, indicator_frame
 from .advanced_indicators import advanced_series, analyze_structure
+from .community_indicators import snapshot as community_snapshot, chart_series as community_series
 
 _LOCK=threading.Lock()
 _SCAN_CACHE={}
@@ -90,6 +91,8 @@ def _scan_chunk(chunk,br20,br60):
                         g['score']=min(100,g['score']+20)
                         if g['status']=='CLEAR':g['status']='WAIT'
                         sc['relative_strength_20']=None;sc['relative_strength_60']=None
+                    try:sc.update(community_snapshot(df))
+                    except (ValueError,KeyError,TypeError):sc.update({'community_status':'INVALID_DATA','community_as_of':None})
                     rows.append(daily_metadata({'ticker':code,**sc},df.index[-1]))
             except Exception:
                 continue
@@ -187,6 +190,7 @@ def yahoo_chart(code, period='1y', interval='1d'):
         'supertrend_down':[{'time':row['time'],'value':round(float(v),4)} for row,v,b in zip(rows,adv['supertrend'],adv['supertrend_bull']) if pd.notna(v) and not bool(b)],
         'tenkan':_series(rows,adv['tenkan']),'kijun':_series(rows,adv['kijun']),'ichimoku_a':_series(rows,adv['ichimoku_a']),'ichimoku_b':_series(rows,adv['ichimoku_b']),
         'structure':structure,
+        'community':community_series(calc.assign(time=base.time),interval) if interval in {'1d','1wk'} else {'series':{},'message':'Topluluk uyarlamaları günlük ve haftalık kapanmış barları kullanır.'},
     }
     last=ind.iloc[-1]
     data['indicators']={
