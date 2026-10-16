@@ -59,7 +59,7 @@ def delete_rule(rule_id):
 def list_rules():
     with _LOCK:return {'rules':list(_STATE['rules']),'last_eval':_STATE['last_eval'],'error':_STATE['error']}
 def events(limit=100,since=0):
-    with _LOCK:return {'events':[x for x in _STATE['events'] if int(x.get('id',0))>int(since or 0)][:max(1,min(limit,200))],'last_eval':_STATE['last_eval']}
+    with _LOCK:return {'events':[x for x in _STATE['events'] if int(x.get('id',0))>int(since or 0)][:max(1,min(limit,500))],'last_eval':_STATE['last_eval']}
 def evaluate_once():
     try:
         with _LOCK:rules=[dict(x) for x in _STATE['rules'] if x.get('enabled')]
