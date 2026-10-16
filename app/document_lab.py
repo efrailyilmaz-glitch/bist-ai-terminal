@@ -95,7 +95,7 @@ def _cloud(provider,text):
 
 def _local(text):
     rows=[]
-    for match in re.finditer(r'[^\n.!?]+(?:[.!?](?=\s|$)|$)',text):
+    for match in re.finditer(r'.+?(?:[.!?](?=\s|$)|\n|$)',text,re.S):
         quote=match.group().strip()
         if not 20<=len(quote)<=1200:continue
         category=next((cat for cat,pattern in _RULES if re.search(pattern,quote,re.I)),None)

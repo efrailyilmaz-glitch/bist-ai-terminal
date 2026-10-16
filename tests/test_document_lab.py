@@ -12,7 +12,7 @@ class DocumentLabTests(unittest.TestCase):
  def test_local_never_calls_provider(self):
   with patch.object(lab.requests,'post',side_effect=AssertionError('network')):
    a=lab.review(self.req());b=lab.review(self.req())
-  self.assertEqual(a['sha256'],b['sha256']);self.assertTrue(a['evidence']);self.assertFalse(a['source_verified'])
+  self.assertEqual(a['sha256'],b['sha256']);self.assertTrue(a['evidence']);self.assertFalse(a['source_verified']);self.assertIn('16.10.2026',a['evidence'][0]['quote'])
   for e in a['evidence']:self.assertEqual(TEXT[e['start']:e['end']],e['quote'])
  def test_no_evidence_abstains(self):
   r=lab.review(lab.ReviewRequest(text='Bu metin yalnızca genel açıklama amacıyla hazırlanmıştır.',source='test'));self.assertEqual(r['status'],'ABSTAIN')
