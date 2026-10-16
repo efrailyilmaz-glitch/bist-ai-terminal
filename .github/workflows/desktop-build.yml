@@ -15,6 +15,10 @@ on:
     tags:
       - "desktop-v*"
 
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -222,6 +226,18 @@ jobs:
         with:
           path: release-artifacts
           merge-multiple: true
+
+      - name: Verify current main and generate checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            CURRENT=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
+            test "$CURRENT" = "$GITHUB_SHA" || { echo "Obsolete build; refusing to publish."; exit 1; }
+          fi
+          cd release-artifacts
+          sha256sum *.exe *.dmg > SHA256SUMS.txt
+          printf '%s\n' "${GITHUB_SHA}" > BUILD_COMMIT.txt
 
       - name: Publish desktop installers
         env:
