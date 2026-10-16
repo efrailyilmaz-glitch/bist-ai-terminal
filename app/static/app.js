@@ -46,7 +46,7 @@ async function scanAll(force=true){
   state.scanning=true;
   if(force){state.scan.clear();state.scanned=0;try{localStorage.removeItem(SCAN_CACHE_KEY)}catch(e){}}
   els.scanBtn.textContent='Taranıyor…';
-  const batch=100, offsets=[];
+  const batch=20, offsets=[];
   for(let offset=0;offset<state.total;offset+=batch)offsets.push(offset);
   let cursor=0,completed=0,failed=0,lastPaint=0,lastPersist=0;
   async function worker(){
@@ -72,7 +72,7 @@ async function scanAll(force=true){
       }
     }
   }
-  await Promise.all([worker(),worker()]);
+  await worker();
   state.scanned=completed;
   updateRegime();persistScanCache();
   state.scanning=false;els.scanBtn.textContent='Tüm Evreni Tara';

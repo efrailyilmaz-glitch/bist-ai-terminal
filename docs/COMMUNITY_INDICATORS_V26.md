@@ -57,3 +57,7 @@ Kullanıcının ticari olmayan kullanım tercihi kaydedildi. Önceki 14 aday (Qu
 - https://www.tradingview.com/script/zVhoDQME/
 - https://www.tradingview.com/pine-script-docs/concepts/repainting/
 - https://www.tradingview.com/house-rules/
+
+## V26.0.1 toplu tarama düzeltmesi
+
+Yayımdaki tek hisse ve tarihsel deney çalışırken büyük tarama istekleri zaman aşımına uğradı. Önceki istemci iki adet 100 hisselik istek başlatıyor, sağlayıcı her 25 hisselik grubu sıralı indiriyordu. İstemci artık tek seferde 20 hisse ister; sağlayıcı indirmesi en fazla dört iş parçacığı kullanır. Veri sağlayıcının 429 sınırı hâlâ mümkündür; eksik veri güvenli sinyal kabul edilmez.

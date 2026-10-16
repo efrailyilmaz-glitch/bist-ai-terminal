@@ -76,7 +76,7 @@ def _scan_chunk(chunk,br20,br60):
     rows=[]
     syms=[x+'.IS' for x in chunk]
     try:
-        raw=yf.download(syms,period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=False,progress=False,timeout=18)
+        raw=yf.download(syms,period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=4,progress=False,timeout=18)
         for code,sym in zip(chunk,syms):
             try:
                 df=_extract(raw,sym)

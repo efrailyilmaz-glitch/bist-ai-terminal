@@ -275,4 +275,4 @@ jobs:
           assert 'DELAYED / YAHOO' in inspect.getsource(market_overview)
           print('V18 QA hardening ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '26.0'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '26.0.1'; print(app.title, app.version)"
