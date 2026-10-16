@@ -149,4 +149,4 @@ def status():
             'pro_alert_rules':len(a.get('rules') or []),'cadence':{'fast_seconds':fast,'heavy_minutes':round(heavy/60)},
             'note':'Market-hours-aware continuous supervisor. Runs while the backend is alive; sleeping/off computer requires a server deployment.'}
 def alerts(limit=50,since=0):
-    return {'alerts':[x for x in _STATE['alerts'] if int(x.get('id',0))>int(since or 0)][:max(1,min(int(limit),100))]}
+    return {'alerts':[x for x in _STATE['alerts'] if int(x.get('id',0))>int(since or 0)][:max(1,min(int(limit),500))]}

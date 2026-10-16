@@ -124,4 +124,4 @@ def radar_snapshot(limit=60):
 def smart_money_candidates(limit=40):
     with _LOCK:return {'rows':list(_STATE.get('smart_money_candidates') or [])[:max(1,min(limit,80))],'last_scan':_STATE.get('last_scan'),'status':_STATE.get('status')}
 def alerts_snapshot(limit=50,since=0):
-    with _LOCK:return {'alerts':[x for x in _STATE['alerts'] if int(x.get('id',0))>int(since or 0)][:max(1,min(limit,100))],'last_scan':_STATE['last_scan'],'status':_STATE['status']}
+    with _LOCK:return {'alerts':[x for x in _STATE['alerts'] if int(x.get('id',0))>int(since or 0)][:max(1,min(limit,500))],'last_scan':_STATE['last_scan'],'status':_STATE['status']}

@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict'),N=require('../app/static/notification-engine.js'),fs=require('node:fs'),vm=require('node:vm');
+const now=Date.parse('2026-10-16T08:00:00Z'),q={price:110,change:6,volume_ratio:4,as_of:'2026-10-16'},h={ticker:'TEST',source:'paper',quantity:100,avg:100,entryFees:10,cycle:'a'};
+let es=N.movements([h],{TEST:q},N.defaults,now);assert.equal(es.length,2,'fee-adjusted return below 10%, daily and volume only');
+let s=N.ingest(N.fresh(),es,now);s.items[0].read=true;s=N.ingest(s,es,now+60000);assert.equal(s.items.length,2);assert(s.items[0].read,'dedup preserves read state');
+es=N.movements([h],{TEST:{...q,price:115,change:11}},N.defaults,now);assert(es.some(x=>x.body.includes('14.89%')));const t=N.ingest(s,es,now);assert.equal(t.items.length,4,'new daily threshold and position threshold only');
+assert.equal(N.movements([h],{TEST:{...q,as_of:'2026-01-01'}},N.defaults,now).length,0);assert.equal(N.movements([h],{TEST:{...q,price:NaN}},N.defaults,now).length,0);assert.equal(N.movements([h],{},N.defaults,now).length,0);
+const short=N.movements([{...h,quantity:-100}],{TEST:{...q,price:80,change:-8}},N.defaults,now);assert(short.some(e=>e.body.startsWith('+19.88%')),'short benefit on declining price');
+assert.equal(N.settings({daily:0,volume:Infinity,position:101}).daily,5);
+const a=N.normalise('pro',{id:now,ticker:'TEST',name:'My rule',rule_id:'a'},now),b=N.normalise('background',{id:now,ticker:'TEST',message:'Risk'},now);assert.notEqual(a.id,b.id);assert.equal(N.ingest(N.fresh(),[a,b],now).items.length,2);
+s=N.ingest(N.fresh(),Array.from({length:1100},(_,i)=>({...a,id:String(i),time:now+i})),now);assert.equal(s.items.length,1000);assert.equal(Object.keys(s.seen).length,1100);assert.equal(N.ingest(s,[{...a,id:'0',time:now}],now).items.length,1000);
+// Two tabs must merge with the latest journal under a shared lock.
+const mem=new Map();let tail=Promise.resolve(),fail=false;
+const storage={getItem:k=>mem.get(k)||null,setItem:(k,v)=>{if(fail)throw Error('quota');mem.set(k,v);}};
+function tab(){const c={noticeKey:'journal',noticeMemory:N.fresh(),noticeVolatile:false,noticeStorageError:'',localStorage:storage,noticePaint(){},navigator:{locks:{request:(_,fn)=>{const p=tail.then(fn);tail=p.catch(()=>{});return p;}}}};vm.createContext(c);const src=fs.readFileSync('app/static/v24.js','utf8');vm.runInContext(src.slice(src.indexOf('function noticeRead()'),src.indexOf('function noticePaint()')),c);return c;}
+(async()=>{const x=tab(),y=tab();await Promise.all([x.noticeWrite(s=>N.ingest(s,[a],now)),y.noticeWrite(s=>N.ingest(s,[b],now))]);assert.equal(x.noticeRead().items.length,2);fail=true;await x.noticeWrite(s=>N.ingest(s,[{...a,id:'extra'}],now));assert.equal(x.noticeRead().items.length,3,'quota error retains memory copy');assert(x.noticeStorageError);console.log('notification thresholds, short P/L, freshness, dedup/read receipts, retention and cross-tab locking passed');})().catch(e=>{console.error(e);process.exitCode=1;});
+const tooEarly=N.movements([{...h,afterDate:'2026-10-17'}],{TEST:{...q,price:120}},N.defaults,now);assert(!tooEarly.some(x=>x.title.includes('maliyetine')),'a quote predating the trade cannot trigger P/L alerts');
+assert(fs.readFileSync('app/templates/index.html','utf8').includes('notification-engine.js'));assert(fs.readFileSync('app/static/v24.js','utf8').includes('noticeDrawer'));assert(fs.readFileSync('app/static/v15.js','utf8').includes('BistNotificationCenterActive'));
