@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const series=[],panes=[{}];const context={render:()=>{},setInterval:()=>{},v19Esc:s=>String(s).replace(/</g,'&lt;'),addGuide:()=>{},LightweightCharts:{LineSeries:'line',HistogramSeries:'hist'}};
+vm.createContext(context);vm.runInContext(fs.readFileSync('app/static/v26.js','utf8'),context);
+const chart={panes:()=>panes,addSeries:(type,options,pane)=>{panes[pane]??={};const s={pane,type,options,setData(data){this.data=data;}};series.push(s);return s;}};
+const point={time:'2026-01-01',value:12};const payload={series:Object.fromEntries(['ce_long','ce_short','ut_stop','wt','wt_signal','sq_momentum','chop'].map(k=>[k,[point]]))};
+context.plotCommunityIndicators(chart,payload,{wavetrend:true,squeeze:true,chandelier:true,utbot:true,chop:true});
+assert.equal(panes.length,4,'three separate oscillator panes plus price');assert.equal(series.filter(s=>s.pane===0).length,3);
+assert.equal(series.find(s=>s.options.title==='WaveTrend').pane,1);assert.equal(series.find(s=>s.type==='hist').pane,2);assert.equal(series.find(s=>s.options.title==='CHOP14').pane,3);
+assert.deepEqual(JSON.parse(JSON.stringify(context.communityEvents26({community_status:'OK',wt_cross_up:true,ut_cross_up:false}))),['WaveTrend ↑']);
+assert.equal(context.communityEvents26({wt_cross_up:true}).length,0);
+const SE=require('../app/static/screener-engine.js');assert(SE.match({sq_release:true},{field:'sq_release',op:'=',value:true}));assert(!SE.match({}, {field:'sq_release',op:'=',value:true}));
+console.log('community chart panes, event gating and screener missing-value checks passed');

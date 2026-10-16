@@ -41,7 +41,7 @@ from .opportunity_engine import smart_money_candidates
 from .document_lab import ReviewRequest, review as document_review, configuration as document_configuration
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='25.0')
+app=FastAPI(title='BIST AI Terminal',version='26.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -355,7 +355,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'25.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'26.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/institutional-providers')
 def institutional_providers():
@@ -426,7 +426,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'25.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'26.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
@@ -435,3 +435,24 @@ def document_status_api():
 @app.post('/api/document-lab/review')
 def document_review_api(payload:ReviewRequest,x_bist_cloud_token:str=Header(default='')):
     return document_review(payload,x_bist_cloud_token)
+
+@app.get('/api/community-catalog')
+def community_catalog_api():
+    from .community_catalog import CATALOG
+    return CATALOG
+
+@app.get('/api/community-research/{ticker}')
+def community_research_api(ticker:str,cost_bps:int=30):
+    import re
+    import pandas as pd
+    from .market_data import yahoo_rows
+    from .community_indicators import evaluate
+    code=ticker.upper().removesuffix('.IS')
+    if not re.fullmatch(r'[A-Z0-9]{2,12}',code) or not 0<=cost_bps<=300:
+        raise HTTPException(422,'Geçersiz hisse veya maliyet.')
+    try:
+        raw=yahoo_rows(code,period='5y',interval='1d')
+        frame=pd.DataFrame(raw['candles']).rename(columns={'open':'Open','high':'High','low':'Low','close':'Close','volume':'Volume'})
+        return {'ticker':code,**evaluate(frame,cost_bps)}
+    except Exception:
+        return {'ticker':code,'status':'NO_DATA','message':'Kaynak verisi yok veya barlar geçersiz; deney üretilmedi.'}

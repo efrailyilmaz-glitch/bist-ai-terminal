@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
-const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true}};
-const SCAN_CACHE_KEY='bist-ai-scan-v23';
+const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true,wavetrend:false,squeeze:false,chandelier:false,utbot:false,chop:false}};
+const SCAN_CACHE_KEY='bist-ai-scan-v26';
 function restoreScanCache(){
   try{
     const cached=JSON.parse(localStorage.getItem(SCAN_CACHE_KEY)||'null');
@@ -31,7 +31,7 @@ async function init(){
     els.systemMode.textContent=`V${h.version||'17.1'} · ${u.source||'UNIVERSE'}`;
     els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
     if(restored)updateRegime();
-    renderTickerbar(); render(); if(!['detail','forecast','edges','paperportfolio','documentlab'].includes(state.view))setTimeout(()=>scanAll(false),restored?900:150);
+    renderTickerbar(); render(); if(!['detail','forecast','edges','paperportfolio','documentlab','community'].includes(state.view))setTimeout(()=>scanAll(false),restored?900:150);
   }catch(e){els.content.innerHTML=`<div class="empty">Başlatma hatası: ${e.message}</div>`;}
 }
 function renderTickerbar(){
@@ -77,7 +77,7 @@ async function scanAll(force=true){
   updateRegime();persistScanCache();
   state.scanning=false;els.scanBtn.textContent='Tüm Evreni Tara';
   els.scanStatus.textContent=failed?`Tarama eksik · ${failed} hisse için fiyat verisi alınamadı · ${state.scan.size}/${state.total} fiyat verisi`:`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
-  renderTickerbar();if(!['detail','paperportfolio','documentlab'].includes(state.view))render(false);
+  renderTickerbar();if(!['detail','paperportfolio','documentlab','community'].includes(state.view))render(false);
 }
 function topBy(key,n=10){return [...state.scan.values()].sort((a,b)=>(b[key]||0)-(a[key]||0)).slice(0,n)}
 function updateRegime(){
@@ -178,9 +178,9 @@ function detailShell(){
     </div>
     <div class="indicatorToolbar">
       <span>Göstergeler</span>
-      ${[['ema','EMA 20/50/200'],['bb','Bollinger'],['supertrend','Supertrend'],['ichimoku','Ichimoku'],['levels','Destek/Direnç'],['rsi','RSI'],['stoch','Stoch RSI'],['macd','MACD']].map(x=>`<button data-indicator="${x[0]}" class="${state.indicators[x[0]]?'active':''}">${x[1]}</button>`).join('')}
+      ${[['ema','EMA 20/50/200'],['bb','Bollinger'],['supertrend','Supertrend'],['ichimoku','Ichimoku'],['levels','Destek/Direnç'],['rsi','RSI'],['stoch','Stoch RSI'],['macd','MACD'],['wavetrend','WaveTrend'],['squeeze','Squeeze Momentum'],['chandelier','Chandelier Exit'],['utbot','UT Bot'],['chop','CHOP']].map(x=>`<button data-indicator="${x[0]}" class="${state.indicators[x[0]]?'active':''}">${x[1]}</button>`).join('')}
     </div>
-    <div id="tvChart" class="chartbox"></div>
+    <p id="communityChartStatus" class="muted"></p><div id="tvChart" class="chartbox"></div>
     ${detailStats(r)}
     ${indicatorDashboard(r)}
     <div class="panelSub"><div class="subTitle"><b>Multi-Timeframe Konsensüs</b><span>15dk · 1sa · 4sa · 1g · 1h</span></div><div id="mtfGrid" class="mtfGrid"><div class="pending">Zaman dilimleri hesaplanıyor…</div></div></div>
@@ -320,6 +320,8 @@ async function loadChart(){
       const ms=chart.addSeries(LightweightCharts.LineSeries,{lineWidth:1,color:'#f6b94a',priceLineVisible:false,title:'Signal'},pane);ms.setData(d.macd_signal||[]);
     }
 
+    const communityStatus=$('#communityChartStatus');if(communityStatus)communityStatus.textContent=d.community?.message||('Topluluk çizgileri son kapanmış barda biter · '+(d.community?.open_bars_omitted||0)+' açık bar hariç · yalnız günlük/haftalık.');
+    if(typeof plotCommunityIndicators==='function')plotCommunityIndicators(chart,d.community,state.indicators);
     // Stretch factors survive autoSize and avoid sequential setHeight redistribution.
     const panes=chart.panes();
     panes.forEach((p,i)=>p.setStretchFactor(i===0?390:175));
