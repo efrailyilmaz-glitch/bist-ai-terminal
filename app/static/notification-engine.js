@@ -18,7 +18,7 @@ function normalise(source,r,now=Date.now()){
  const epoch=Number(r.id),time=epoch>1e12&&epoch<=now+60000?epoch:now;
  return {id:JSON.stringify([source,String(r.id),code,r.rule_id||r.type||'']),source,ticker:code,time,sourceTime:String(r.created_at||r.at||''),title:(r.name||r.type||r.label||r.grade||sources[source])+(code?' · '+code:''),body:r.message||((r.score!=null?'Skor '+r.score+' · ':'')+(r.quantity!=null?String(r.side)+' '+r.quantity+' lot · ₺'+r.price:Object.entries(r.values||{}).map(([k,v])=>k+': '+v).join(' · ')))};
 }
-function currentQuote(q,now){if(!q||!finite(q.price)||q.price<=0||!/^\d{4}-\d{2}-\d{2}$/.test(q.as_of||''))return false;const age=now-Date.parse(q.as_of+'T00:00:00Z');return finite(age)&&age>=-86400000&&age<=7*86400000;}
+function currentQuote(q,now){if(!q||!finite(q.price)||q.price<=0||!/^\d{4}-\d{2}-\d{2}$/.test(q.as_of||''))return false;const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Istanbul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now));if(q.as_of>today)return false;const age=now-Date.parse(q.as_of+'T00:00:00Z');return finite(age)&&age>=-10800000&&age<=7*86400000;}
 function movements(holdings,quotes,config,now=Date.now()){
  const s=settings(config),out=[];
  for(const h of holdings){const q=quotes[h.ticker];if(!sources[h.source]||!currentQuote(q,now))continue;
