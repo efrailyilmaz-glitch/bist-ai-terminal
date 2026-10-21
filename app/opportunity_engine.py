@@ -10,6 +10,7 @@ from .news_engine import headlines
 from .analyst_engine import trusted_research
 
 _LOCK=threading.Lock();_WAKE=threading.Event();_THREAD=None;INTERVAL=15*60
+RANKING_VERSION=2
 _STATE={'status':'IDLE','running':False,'last_scan':None,'duration_sec':None,'universe_count':0,'analyzed_count':0,'opportunities':[],'smart_money_candidates':[],'alerts':[],'error':None}
 def _v(x,d=50.0):
     try:
@@ -58,9 +59,17 @@ def score_opportunity(t,fundamentals=None,analyst=None,macro=None,kap=None,news=
     if anom>=80:warn.append('Aşırı fiyat/hacim anomalisi')
     if t.get('supertrend')=='BEARISH' and t.get('ichimoku')=='BEARISH':penalty+=7;warn.append('Trend yapısı negatif')
     overall=int(round(_cap(base+bonus-penalty)));short=int(round(_cap(.58*s+.12*smart+.10*ms+.08*ks+.06*ns+.06*ana+bonus*.6-penalty)));long=int(round(_cap(.28*l+.28*fund+.20*ana+.08*ks+.06*ns+.10*ms+bonus*.45-penalty*.65)))
-    grade='MEGA' if overall>=86 and len(conf)>=5 and risk<72 else 'STRONG' if overall>=78 and len(conf)>=4 else 'WATCH' if overall>=66 else 'NORMAL'
+    guard=t.get('signal_guard') or {}
+    guard_status=guard.get('status','UNKNOWN')
+    raw_overall=overall
+    if guard_status!='CLEAR':
+        cap=67 if guard_status=='WAIT' else 47
+        overall=min(overall,cap);short=min(short,cap);long=min(long,cap)
+        warn.insert(0,'Sinyal kontrolü: '+guard_status+'; teyitli fırsat değildir.')
+    grade=('WAIT' if guard_status=='WAIT' else 'BLOCK') if guard_status!='CLEAR' else 'MEGA' if overall>=86 and len(conf)>=5 and risk<72 else 'STRONG' if overall>=78 and len(conf)>=4 else 'WATCH' if overall>=66 else 'NORMAL'
     return {'ticker':t.get('ticker'),'price':t.get('price'),'opportunity_score':overall,'short_opportunity_score':short,'long_opportunity_score':long,'grade':grade,
-            'label':'BÜYÜK FIRSAT ADAYI' if grade=='MEGA' else 'GÜÇLÜ FIRSAT' if grade=='STRONG' else 'İZLE' if grade=='WATCH' else 'NORMAL',
+            'raw_opportunity_score':raw_overall,'signal_guard':guard,'as_of':t.get('as_of'),'fetched_at':t.get('fetched_at'),'bar_provisional':t.get('bar_provisional'),
+            'label':'TEYİT BEKLİYOR' if grade=='WAIT' else 'SIRALAMA DIŞI' if grade=='BLOCK' else 'BÜYÜK FIRSAT ADAYI' if grade=='MEGA' else 'GÜÇLÜ FIRSAT' if grade=='STRONG' else 'İZLE' if grade=='WATCH' else 'NORMAL',
             'confidence':int(round(_cap(len(conf)*12+min(35,(a.get('coverage_count') or 0)*10)+min(25,_v(f.get('coverage_pct'),0)*.25)))),
             'confirmations':conf[:8],'warnings':warn[:6],'targets':_targets(t,a,f),'components':{'technical_short':round(s),'technical_long':round(l),'fundamental':round(fund),'analyst':round(ana),'kap':round(ks),'news':round(ns),'macro':round(ms),'smart_money':round(smart),'risk':round(risk),'anomaly':round(anom)},'avg_value_turnover_20':liq,'updated':time.strftime('%d.%m.%Y %H:%M:%S')}
 def _file():
@@ -72,7 +81,7 @@ def _file():
     return b/'opportunity_state.json'
 def _save():
     try:
-        with _LOCK:d={'last_scan':_STATE['last_scan'],'opportunities':_STATE['opportunities'][:60],'alerts':_STATE['alerts'][:250]}
+        with _LOCK:d={'ranking_version':RANKING_VERSION,'last_scan':_STATE['last_scan'],'opportunities':_STATE['opportunities'][:60],'alerts':_STATE['alerts'][:250]}
         _file().write_text(json.dumps(d,ensure_ascii=False),encoding='utf-8')
     except Exception:pass
 def _load():
@@ -80,9 +89,20 @@ def _load():
         p=_file()
         if not p.exists():return
         d=json.loads(p.read_text(encoding='utf-8'))
+        if d.get('ranking_version')!=RANKING_VERSION:return
         with _LOCK:_STATE['last_scan']=d.get('last_scan');_STATE['opportunities']=d.get('opportunities') or [];_STATE['alerts']=d.get('alerts') or []
     except Exception:pass
 def _alert(o):return {'id':int(time.time()*1000),'ticker':o.get('ticker'),'grade':o.get('grade'),'label':o.get('label'),'score':o.get('opportunity_score'),'short_score':o.get('short_opportunity_score'),'long_score':o.get('long_opportunity_score'),'price':o.get('price'),'targets':o.get('targets'),'confirmations':o.get('confirmations'),'created_at':time.strftime('%d.%m.%Y %H:%M:%S')}
+def rank_opportunities(basic,rich):
+    # Enrichment replaces a row, never creates a privileged top group or drops failures.
+    merged={r['ticker']:r for r in basic}
+    merged.update({r['ticker']:r for r in rich})
+    rows=[r for r in merged.values() if r.get('grade')!='BLOCK']
+    rows=sorted(rows,key=lambda r:(-r['opportunity_score'],-r.get('raw_opportunity_score',r['opportunity_score']),r.get('components',{}).get('risk',100),r['ticker']))
+    for r in rows:
+        r['rank']=next(i+1 for i,x in enumerate(rows) if x['opportunity_score']==r['opportunity_score'])
+        r['score_ties']=sum(x['opportunity_score']==r['opportunity_score'] for x in rows)
+    return rows
 def run_radar_once():
     st=time.time()
     with _LOCK:_STATE.update({'status':'SCANNING','running':True,'error':None})
@@ -95,7 +115,7 @@ def run_radar_once():
             for q in as_completed(fs):
                 try:rich.append(q.result())
                 except Exception:pass
-        rich.sort(key=lambda x:x['opportunity_score'],reverse=True);ops=(rich+[x for x in basic if x.get('ticker') not in top])[:80]
+        ops=rank_opportunities(basic,rich)[:80]
         smc=sorted([{'ticker':r.get('ticker'),'price':r.get('price'),'smart_money_score':r.get('smart_money_score'),'short_score':r.get('short_score'),'long_score':r.get('long_score'),
                      'rs20':r.get('relative_strength_20'),'volume_ratio':r.get('volume_ratio'),'cmf20':r.get('cmf20'),'up_down_volume_ratio':r.get('up_down_volume_ratio'),'upper_wick_5d_pct':r.get('upper_wick_5d_pct'),
                      'risk':r.get('risk'),'anomaly_score':r.get('anomaly_score')} for r in rows],key=lambda x:x.get('smart_money_score') or 0,reverse=True)[:40]
@@ -120,7 +140,9 @@ def start_radar():
         _STATE['status']='STARTING';_THREAD=threading.Thread(target=_loop,name='BISTOpportunityRadar',daemon=True);_THREAD.start()
 def trigger_refresh():_WAKE.set();return {'queued':True,'status':_STATE.get('status')}
 def radar_snapshot(limit=60):
-    with _LOCK:return {'status':_STATE['status'],'running':_STATE['running'],'last_scan':_STATE['last_scan'],'duration_sec':_STATE['duration_sec'],'universe_count':_STATE['universe_count'],'analyzed_count':_STATE['analyzed_count'],'error':_STATE['error'],'opportunities':list(_STATE['opportunities'])[:max(1,min(limit,100))]}
+    with _LOCK:
+        rows=[r for r in _STATE['opportunities'] if r.get('fetched_at') and 0<=time.time()-r['fetched_at']<=20*60]
+        return {'ranking_version':RANKING_VERSION,'status':_STATE['status'],'running':_STATE['running'],'last_scan':_STATE['last_scan'],'duration_sec':_STATE['duration_sec'],'universe_count':_STATE['universe_count'],'analyzed_count':_STATE['analyzed_count'],'error':_STATE['error'],'opportunities':rows[:max(1,min(limit,100))]}
 def smart_money_candidates(limit=40):
     with _LOCK:return {'rows':list(_STATE.get('smart_money_candidates') or [])[:max(1,min(limit,80))],'last_scan':_STATE.get('last_scan'),'status':_STATE.get('status')}
 def alerts_snapshot(limit=50,since=0):
