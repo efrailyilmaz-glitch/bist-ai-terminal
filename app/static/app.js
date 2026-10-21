@@ -1,12 +1,12 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
 const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true,wavetrend:false,squeeze:false,chandelier:false,utbot:false,chop:false}};
-const SCAN_CACHE_KEY='bist-ai-scan-v26';
+const SCAN_CACHE_KEY='bist-ai-scan-v26-2';
 function restoreScanCache(){
   try{
     const cached=JSON.parse(localStorage.getItem(SCAN_CACHE_KEY)||'null');
     if(!cached||!cached.ts||Date.now()-cached.ts>15*60*1000||!Array.isArray(cached.rows))return false;
-    cached.rows.forEach(x=>state.scan.set(x.ticker,x));
+    cached.rows.filter(x=>RankingEngine.eligible(x,'alpha_score')).forEach(x=>state.scan.set(x.ticker,x));
     state.scanned=Math.min(state.total,cached.scanned||cached.rows.length);
     return state.scan.size>0;
   }catch(e){return false}
@@ -56,6 +56,7 @@ async function scanAll(force=true){
       const offset=offsets[idx];
       try{
         const r=await getJSON(`/api/scan?offset=${offset}&limit=${batch}`);
+        state.universe.slice(offset,offset+batch).forEach(x=>state.scan.delete(x.ticker));
         (r.rows||[]).forEach(x=>state.scan.set(x.ticker,x));
         completed+=r.requested||Math.min(batch,state.total-offset);
         failed+=(r.missing||[]).length;
@@ -67,8 +68,10 @@ async function scanAll(force=true){
         if(now-lastPaint>900&&['overview','short','long','setups','anomaly'].includes(state.view)){render(false);lastPaint=now}
         if(now-lastPersist>2500){persistScanCache();lastPersist=now}
       }catch(e){
+        state.universe.slice(offset,offset+batch).forEach(x=>state.scan.delete(x.ticker));
         failed+=Math.min(batch,state.total-offset);
         els.scanStatus.textContent=`Bazı tarama paketleri atlandı · ${state.scan.size} veri mevcut`;
+        if(['overview','short','long'].includes(state.view))render(false);
       }
     }
   }
@@ -79,7 +82,9 @@ async function scanAll(force=true){
   els.scanStatus.textContent=failed?`Tarama eksik · ${failed} hisse için fiyat verisi alınamadı · ${state.scan.size}/${state.total} fiyat verisi`:`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
   renderTickerbar();if(!['detail','paperportfolio','documentlab','community'].includes(state.view))render(false);
 }
-function topBy(key,n=10){return [...state.scan.values()].sort((a,b)=>(b[key]||0)-(a[key]||0)).slice(0,n)}
+function rankedRows(key){return RankingEngine.rows(state.scan.values(),key);}
+function topBy(key,n=10){return rankedRows(key).slice(0,n)}
+function rankingNotice(){return `<p class="rankingNotice" role="status">${state.scanning?'GEÇİCİ SIRALAMA · Tarama sürüyor.':'MEVCUT VERİYLE SIRALAMA ·'} ${state.scan.size}/${state.total} hissede fiyat verisi · ${rankedRows('alpha_score').length} güncel sıralama adayı; kapsam tamamlanmadan BIST lideri belirlenemez. Eski veya engelli veri sıralama dışıdır. Eşit puanlar ortak sırayı paylaşır; görünüm sırası ham teknik skor, risk ve likiditeyle belirlenir. Ham skor teyit değildir.</p>`;}
 function updateRegime(){
   const a=[...state.scan.values()]; if(a.length<10)return;
   const adv=a.filter(x=>x.change>0).length, dec=a.filter(x=>x.change<0).length;
@@ -87,10 +92,11 @@ function updateRegime(){
   state.market.advancers=adv; state.market.decliners=dec; state.market.breadth=breadth;
   state.market.regime=(breadth>=58&&avg>=60)?'RISK-ON / BULL':(breadth<=42&&avg<=45)?'RISK-OFF / BEAR':'NÖTR / TRANSITION';
 }
-function candidateList(rows,key){return rows.map((r,i)=>{const meta=state.meta.get(r.ticker)||{};const sig=key==='short_score'?r.short_signal:r.long_signal;const reasons=(key==='short_score'?r.reasons_short:r.reasons_long)||[];return `<div class="candidate" onclick="openStock('${r.ticker}')"><span class="rank">${String(i+1).padStart(2,'0')}</span><strong>${r.ticker}</strong><div><div>${meta.name||r.name||''}</div><div class="reason">${reasons.join(' · ')||r.trend||'veri hesaplandı'}</div></div><span class="score">${r[key]||0}</span><span class="${cls(r.change)}">${pct(r.change)}</span><span class="tag ${tagClass(sig)}">${sig}</span></div>`}).join('')||'<div class="empty">Tarama sonuçları yükleniyor…</div>'}
+function candidateList(rows,key){const all=rankedRows(key);return rows.map(r=>{const meta=state.meta.get(r.ticker)||{},pos=RankingEngine.position(all,r,key);const sig=key==='short_score'?r.short_signal:r.long_signal;const reasons=(key==='short_score'?r.reasons_short:r.reasons_long)||[];const wait=r.signal_guard?.status==='WAIT';return `<div class="candidate" onclick="openStock('${r.ticker}')"><span class="rank">${pos.ties>1?'=':''}${pos.rank}</span><strong>${r.ticker}</strong><div><div>${meta.name||r.name||''}</div><div class="reason">${reasons.join(' · ')||r.trend||'veri hesaplandı'}</div><small>${r.as_of} · ${r.bar_provisional?'Açık günlük bar':'Günlük bar'} · ${wait?'TEYİT BEKLİYOR':'Sinyal kontrolü CLEAR'}${pos.ties>1?` · ${pos.ties} hisse eşit puanda`:''} · Ham teknik ${r['raw_'+key]??r[key]}</small></div><span class="score">${r[key]}</span><span class="${cls(r.change)}">${pct(r.change)}</span><span class="tag ${wait?'neutral':tagClass(sig)}">${wait?'TEYİT BEKLİYOR':sig}</span></div>`}).join('')||'<div class="empty">Güncel ve geçerli sıralama verisi bekleniyor.</div>'}
+
 function overview(){
   const sh=topBy('short_score',8), lg=topBy('long_score',8); const progress=state.total?Math.round(state.scanned/state.total*100):0;
-  return `<div class="grid2"><div class="panel"><div class="panelHead"><div><h2>Kısa Vade Alpha Radar</h2><p>Momentum · hacim · breakout · MA20/50 · RSI</p></div><span class="pill">SHORT HORIZON</span></div>${candidateList(sh,'short_score')}</div>
+  return `${rankingNotice()}<div class="grid2"><div class="panel"><div class="panelHead"><div><h2>Kısa Vade Alpha Radar</h2><p>Momentum · hacim · breakout · MA20/50 · RSI</p></div><span class="pill">SHORT HORIZON</span></div>${candidateList(sh,'short_score')}</div>
   <div class="panel"><div class="panelHead"><div><h2>Evren Motoru</h2><p>KAP şirket evreni + Yahoo fiyat katmanı</p></div></div><div class="hero"><small>Tarama kapsamı</small><b>${state.scanned}/${state.total}</b><div class="progress"><i style="width:${progress}%"></i></div><small>${state.scan.size} sembolde fiyat/teknik veri üretildi</small></div><div class="stats"><div class="stat"><span>Güçlü kısa</span><b>${[...state.scan.values()].filter(x=>x.short_score>=80).length}</b></div><div class="stat"><span>Güçlü uzun</span><b>${[...state.scan.values()].filter(x=>x.long_score>=80).length}</b></div><div class="stat"><span>Breakout</span><b>${[...state.scan.values()].filter(x=>x.breakout20).length}</b></div><div class="stat"><span>Yukarı trend</span><b>${[...state.scan.values()].filter(x=>x.trend==='YUKARI').length}</b></div><div class="stat"><span>Hacim >1.5x</span><b>${[...state.scan.values()].filter(x=>x.volume_ratio>1.5).length}</b></div><div class="stat"><span>Veri yok</span><b>${Math.max(0,state.total-state.scan.size)}</b></div></div></div>
   <div class="panel"><div class="panelHead"><div><h2>Uzun Vade Alpha Radar</h2><p>MA50/200 · 3/6 ay momentum · volatilite filtresi</p></div><span class="pill">LONG HORIZON</span></div>${candidateList(lg,'long_score')}</div>
   <div class="panel"><div class="panelHead"><div><h2>Global Risk & Piyasa Rejimi</h2><p>BIST · ABD · DXY · faiz · kur birleşik risk skoru</p></div></div><div class="hero"><small>Aktif durum</small><b>${state.market.regime||'NÖTR'}</b><small>Global skor ${state.market.global_score??50}/100 · ${state.market.mode||'LIVE / YAHOO'}</small></div><div class="stats"><div class="stat"><span>Nasdaq</span><b class="${cls(state.market.nasdaq_change||0)}">${pct(state.market.nasdaq_change||0)}</b></div><div class="stat"><span>DXY</span><b class="${cls(-(state.market.dxy_change||0))}">${pct(state.market.dxy_change||0)}</b></div><div class="stat"><span>US10Y</span><b>${state.market.us10y?fmt(state.market.us10y):'—'}</b></div><div class="stat"><span>Altın</span><b class="${cls(state.market.gold_change||0)}">${pct(state.market.gold_change||0)}</b></div><div class="stat"><span>Petrol</span><b class="${cls(state.market.oil_change||0)}">${pct(state.market.oil_change||0)}</b></div><div class="stat"><span>Breadth</span><b>%${state.market.breadth||0}</b></div></div></div></div>`;
@@ -108,7 +114,7 @@ function stockRows(rows,sort='ticker'){
   if(sort==='rs') rows.sort((a,b)=>(state.scan.get(b.ticker)?.relative_strength_20||-999)-(state.scan.get(a.ticker)?.relative_strength_20||-999));
   return rows.map(m=>{const r=state.scan.get(m.ticker);return `<tr onclick="openStock('${m.ticker}')"><td><strong>${m.ticker}</strong></td><td>${m.name||''}</td>${r?`<td>₺${fmt(r.price)}</td><td class="${cls(r.change)}">${pct(r.change)}</td><td>${r.short_score}</td><td>${r.long_score}</td><td>${fmt(r.rsi,1)}</td><td>${fmt(r.stoch_rsi_k,1)}</td><td class="${cls(r.macd_hist)}">${fmt(r.macd_hist,4)}</td><td>${fmt(r.adx,1)}</td><td>${fmt(r.mfi,1)}</td><td class="${cls(r.relative_strength_20)}">${pct(r.relative_strength_20)}</td><td>${r.volume_ratio}x</td><td>${r.trend}</td>`:`<td colspan="12" class="pending">Tarama bekleniyor</td>`}</tr>`}).join('');
 }
-function horizonView(kind){const key=kind==='short'?'short_score':'long_score';const rows=[...state.scan.values()].sort((a,b)=>b[key]-a[key]);return `<div class="panel"><div class="panelHead"><div><h2>${kind==='short'?'Kısa Vade':'Uzun Vade'} Araştırma Adayları</h2><p>${kind==='short'?'Günler–haftalar: momentum, breakout, hacim ve kısa trend':'Aylar: MA200, 3/6 ay momentum ve volatilite dengesi'}</p></div><span class="pill">${state.scan.size} ANALYZED</span></div>${candidateList(rows.slice(0,100),key)}</div>`}
+function horizonView(kind){const key=kind==='short'?'short_score':'long_score';const rows=rankedRows(key);return `${rankingNotice()}<div class="panel"><div class="panelHead"><div><h2>${kind==='short'?'Kısa Vade':'Uzun Vade'} Araştırma Adayları</h2><p>${kind==='short'?'Günler–haftalar: momentum, breakout, hacim ve kısa trend':'Aylar: MA200, 3/6 ay momentum ve volatilite dengesi'}</p></div><span class="pill">${state.scan.size} ANALYZED</span></div>${candidateList(rows.slice(0,100),key)}</div>`}
 function setupRows(rows,label){
   return rows.slice(0,30).map(function(r,i){
     const m=state.meta.get(r.ticker)||{};
@@ -132,7 +138,7 @@ function anomalyView(){
   const rows=[...state.scan.values()].sort((a,b)=>(b.anomaly_score||0)-(a.anomaly_score||0)).slice(0,100);
   return `<div class="panel"><div class="panelHead"><div><h2>Anomali Radar</h2><p>Hacim sıçraması · sert günlük hareket · volatilite sapması. Bu ekran manipülasyon suçu iddiası değildir.</p></div><span class="pill">RISK MONITOR</span></div>${rows.map((r,i)=>{const m=state.meta.get(r.ticker)||{};return `<div class="candidate" onclick="openStock('${r.ticker}')"><span class="rank">${String(i+1).padStart(2,'0')}</span><strong>${r.ticker}</strong><div><div>${m.name||''}</div><div class="reason">Hacim ${r.volume_ratio}x · Vol %${r.volatility} · Gün ${pct(r.change)}</div></div><span class="score">${r.anomaly_score||0}</span><span class="${cls(r.change)}">${pct(r.change)}</span><span class="tag ${(r.anomaly_score||0)>65?'weak':'neutral'}">${(r.anomaly_score||0)>65?'YÜKSEK':'İZLE'}</span></div>`}).join('')||'<div class="empty">Tarama sonuçları bekleniyor…</div>'}</div>`;
 }
-function modelPortfolioRows(){return [...state.scan.values()].filter(x=>(x.alpha_score||0)>=55).sort((a,b)=>(b.alpha_score||0)-(a.alpha_score||0)).slice(0,10);}
+function modelPortfolioRows(){return rankedRows('alpha_score').filter(x=>x.signal_guard.status==='CLEAR'&&x.alpha_score>=55).slice(0,10);}
 function portfolioView(){
   const rows=modelPortfolioRows();
   const raw=rows.map(x=>Math.max(1,(x.alpha_score||50)*(100-Math.min(90,x.risk||50))));
@@ -195,8 +201,8 @@ function detailStats(r){
   const a=[['Kısa skor',r.short_score],['Uzun skor',r.long_score],['Alpha',r.alpha_score],['20G momentum',r.momentum_20!=null?pct(r.momentum_20):'—'],['3A momentum',r.momentum_60!=null?pct(r.momentum_60):'—'],['Volatilite',r.volatility!=null?`${r.volatility}%`:'—'],['Risk',r.risk!=null?`${r.risk}/100`:'—'],['Hacim',r.volume_ratio!=null?`${r.volume_ratio}x`:'—']];return `<div class="stats">${a.map(x=>`<div class="stat"><span>${x[0]}</span><b>${x[1]??'—'}</b></div>`).join('')}</div>`;
 }
 async function ensureTickerScan(t){
-  if(state.scan.has(t))return;
-  try{const r=await getJSON(`/api/scan?codes=${encodeURIComponent(t)}`);(r.rows||[]).forEach(x=>state.scan.set(x.ticker,x));}catch(e){}
+  if(state.scan.has(t)&&RankingEngine.eligible(state.scan.get(t),'alpha_score'))return;
+  try{const r=await getJSON(`/api/scan?codes=${encodeURIComponent(t)}`);state.scan.delete(t);(r.rows||[]).forEach(x=>state.scan.set(x.ticker,x));}catch(e){state.scan.delete(t);}
 }
 function refreshDetailMetrics(ticker){
   if(state.view!=='detail'||state.current!==ticker||!state.scan.has(ticker))return;
@@ -375,4 +381,5 @@ function bindTable(){const s=$('#tableSearch'),sort=$('#tableSort'); if(s)s.onin
 $$('.nav').forEach(b=>b.onclick=()=>{$$('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.view=b.dataset.view;render()});
 els.scanBtn.onclick=()=>scanAll(true);
 els.search.oninput=e=>{if(state.view==='all'){render();return;}const q=e.target.value.trim().toUpperCase();if(q.length>=2){const m=state.universe.find(x=>x.ticker===q)||state.universe.find(x=>x.ticker.startsWith(q));if(m)openStock(m.ticker)}};
+setInterval(()=>{if(!state.scanning&&['overview','short','long','portfolio'].includes(state.view))render(false);},60000);
 window.openStock=openStock; init();

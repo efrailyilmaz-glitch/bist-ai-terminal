@@ -93,7 +93,7 @@ def _scan_chunk(chunk,br20,br60):
                         sc['relative_strength_20']=None;sc['relative_strength_60']=None
                     try:sc.update(community_snapshot(df))
                     except (ValueError,KeyError,TypeError):sc.update({'community_status':'INVALID_DATA','community_as_of':None})
-                    rows.append(daily_metadata({'ticker':code,**sc},df.index[-1]))
+                    rows.append(daily_metadata({'ticker':code,**sc,'fetched_at':time.time()},df.index[-1]))
             except Exception:
                 continue
     except Exception:
