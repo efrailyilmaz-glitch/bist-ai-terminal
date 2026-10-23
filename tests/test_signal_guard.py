@@ -39,6 +39,7 @@ class SignalGuardTests(unittest.TestCase):
     def test_missing_benchmark_is_not_zero_return(self):
         from unittest.mock import patch
         from app import market_data as m
+        m._DAILY_CACHE.clear()
         with patch.object(m.yf,'download',return_value=pd.DataFrame()):
             m._BENCH_CACHE['ts']=0
             self.assertEqual(m._benchmark_returns(),(None,None))
