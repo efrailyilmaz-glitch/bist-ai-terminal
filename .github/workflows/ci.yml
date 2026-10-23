@@ -27,6 +27,8 @@ jobs:
       - run: node --check app/static/stock-switcher.js
       - run: node --check app/static/auto-paper.js
       - run: node tests/auto-paper.cjs
+      - run: node --check app/static/robot-arena.js
+      - run: node tests/robot-arena.cjs
       - run: node tests/ranking.cjs
       - run: node tests/stock-switcher.cjs
       - run: node --check app/static/v26.js
@@ -280,4 +282,4 @@ jobs:
           assert 'DELAYED / YAHOO' in inspect.getsource(market_overview)
           print('V18 QA hardening ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '27.1'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '28.0'; print(app.title, app.version)"

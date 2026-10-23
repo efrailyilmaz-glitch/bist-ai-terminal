@@ -39,10 +39,10 @@ from fastapi import HTTPException
 from .opportunity_engine import smart_money_candidates
 
 from .document_lab import ReviewRequest, review as document_review, configuration as document_configuration
-from . import auto_paper
+from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='27.1')
+app=FastAPI(title='BIST AI Terminal',version='28.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -356,7 +356,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'27.1','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'28.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/institutional-providers')
 def institutional_providers():
@@ -424,11 +424,11 @@ def desktop_background_radar():
     import os
     if os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0':
         start_radar(); start_alert_engine(); start_background_supervisor()
-        auto_paper.start_worker()
+        auto_paper.start_worker(); robot_arena.start_worker()
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'27.1','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'28.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
@@ -483,3 +483,23 @@ def auto_control_api(payload:dict=Body(...),x_bist_paper_token:str=Header(defaul
 
 @app.post('/api/auto-paper/demo')
 def auto_demo_api():return auto_paper.demo()
+
+
+@app.get('/api/robot-arena/catalog')
+def arena_catalog_api():return robot_arena.catalog()
+
+@app.get('/api/robot-arena/account')
+def arena_account_api(x_bist_paper_token:str=Header(default='')):
+    return _auto_result(robot_arena.snapshot,x_bist_paper_token)
+
+@app.post('/api/robot-arena/create')
+def arena_create_api(x_bist_paper_token:str=Header(default='')):
+    return _auto_result(robot_arena.create,x_bist_paper_token)
+
+@app.post('/api/robot-arena/control')
+def arena_control_api(payload:dict=Body(...),x_bist_paper_token:str=Header(default='')):
+    return _auto_result(robot_arena.control,x_bist_paper_token,payload.get('action'))
+
+@app.post('/api/robot-arena/config')
+def arena_config_api(payload:dict=Body(...),x_bist_paper_token:str=Header(default='')):
+    return _auto_result(robot_arena.configure,x_bist_paper_token,payload)
