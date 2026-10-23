@@ -31,7 +31,7 @@ async function init(){
     els.systemMode.textContent=`V${h.version||'17.1'} · ${u.source||'UNIVERSE'}`;
     els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
     if(restored)updateRegime();
-    renderTickerbar(); render(); if(!['detail','forecast','edges','paperportfolio','documentlab','community'].includes(state.view))setTimeout(()=>scanAll(false),restored?900:150);
+    renderTickerbar(); render(); if(!['detail','forecast','edges','paperportfolio','documentlab','community','autopaper'].includes(state.view))setTimeout(()=>scanAll(false),restored?900:150);
   }catch(e){els.content.innerHTML=`<div class="empty">Başlatma hatası: ${e.message}</div>`;}
 }
 function renderTickerbar(){
@@ -80,7 +80,7 @@ async function scanAll(force=true){
   updateRegime();persistScanCache();
   state.scanning=false;els.scanBtn.textContent='Tüm Evreni Tara';
   els.scanStatus.textContent=failed?`Tarama eksik · ${failed} hisse için fiyat verisi alınamadı · ${state.scan.size}/${state.total} fiyat verisi`:`Tarama tamamlandı · ${state.scan.size}/${state.total} fiyat verisi`;
-  renderTickerbar();if(!['detail','paperportfolio','documentlab','community'].includes(state.view))render(false);
+  renderTickerbar();if(!['detail','paperportfolio','documentlab','community','autopaper'].includes(state.view))render(false);
 }
 function rankedRows(key){return RankingEngine.rows(state.scan.values(),key);}
 function topBy(key,n=10){return rankedRows(key).slice(0,n)}
