@@ -39,9 +39,10 @@ from fastapi import HTTPException
 from .opportunity_engine import smart_money_candidates
 
 from .document_lab import ReviewRequest, review as document_review, configuration as document_configuration
+from . import auto_paper
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='26.2')
+app=FastAPI(title='BIST AI Terminal',version='27.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -355,7 +356,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'26.2','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'27.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/institutional-providers')
 def institutional_providers():
@@ -423,10 +424,11 @@ def desktop_background_radar():
     import os
     if os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0':
         start_radar(); start_alert_engine(); start_background_supervisor()
+        auto_paper.start_worker()
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'26.2','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'27.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
@@ -456,3 +458,28 @@ def community_research_api(ticker:str,cost_bps:int=30):
         return {'ticker':code,**evaluate(frame,cost_bps)}
     except Exception:
         return {'ticker':code,'status':'NO_DATA','message':'Kaynak verisi yok veya barlar geçersiz; deney üretilmedi.'}
+
+
+# Separate, bearer-token-scoped paper accounts. No route connects to a live broker.
+def _auto_result(fn,*args):
+    try:return fn(*args)
+    except FileNotFoundError:raise HTTPException(status_code=404,detail='Otomatik sanal hesap bulunamadı.')
+    except ValueError as e:raise HTTPException(status_code=400,detail=str(e))
+
+@app.post('/api/auto-paper/accounts')
+def auto_create_api():return auto_paper.create_account()
+
+@app.get('/api/auto-paper/account')
+def auto_account_api(x_bist_paper_token:str=Header(default='')):
+    return _auto_result(auto_paper.snapshot,x_bist_paper_token)
+
+@app.post('/api/auto-paper/config')
+def auto_config_api(payload:dict=Body(...),x_bist_paper_token:str=Header(default='')):
+    return _auto_result(auto_paper.configure,x_bist_paper_token,payload)
+
+@app.post('/api/auto-paper/control')
+def auto_control_api(payload:dict=Body(...),x_bist_paper_token:str=Header(default='')):
+    return _auto_result(auto_paper.control,x_bist_paper_token,payload.get('action'))
+
+@app.post('/api/auto-paper/demo')
+def auto_demo_api():return auto_paper.demo()

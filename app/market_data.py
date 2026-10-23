@@ -307,4 +307,3 @@ def market_overview():
     out['mode']='DELAYED / YAHOO' if ok>=3 else ('PARTIAL / YAHOO' if ok else 'DATA UNAVAILABLE')
     with _LOCK:_MARKET_CACHE.update({'ts':time.time(),'data':out})
     return out
-

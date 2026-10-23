@@ -25,6 +25,8 @@ jobs:
       - run: pip install -r requirements.txt httpx
       - run: python -m compileall app
       - run: node --check app/static/stock-switcher.js
+      - run: node --check app/static/auto-paper.js
+      - run: node tests/auto-paper.cjs
       - run: node tests/ranking.cjs
       - run: node tests/stock-switcher.cjs
       - run: node --check app/static/v26.js
@@ -278,4 +280,4 @@ jobs:
           assert 'DELAYED / YAHOO' in inspect.getsource(market_overview)
           print('V18 QA hardening ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '26.2'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '27.0'; print(app.title, app.version)"
