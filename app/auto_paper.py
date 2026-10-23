@@ -60,6 +60,11 @@ def fill(a,o,reference,at,quantity=None):
         a['cash']+=qty*px-fee if p['quantity']>0 else qty*(2*p['avg']-px)-fee
         a['realized']+=pnl;del a['positions'][code]
     order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR'}
+    stats=a.get('arena_stats')
+    if stats is not None:
+        stats['fees']+=fee
+        if pnl is not None:
+            stats['closed']+=1;stats['wins']+=int(pnl>0);stats['profit']+=max(0,pnl);stats['loss']+=max(0,-pnl)
     a['orders'].insert(0,order);del a['orders'][2000:];event(a,'FILLED',code,o['reason'],side=side)
 
 def valid_quote(q,now):
@@ -125,7 +130,7 @@ def risk_check(a,now):
         for code,p in a['positions'].items():queue(a,code,'SELL' if p['quantity']>0 else 'COVER',halt,now)
     a['last_equity']=v['equity'];return v
 
-def choose(a,rows,requested,now):
+def choose(a,rows,requested,now,signal_fn=None,exit_fn=None):
     from datetime import timedelta
     expected=now.date() if (now.hour,now.minute)>=(18,20) else now.date()-timedelta(days=1)
     while expected.weekday()>=5:expected-=timedelta(days=1)
@@ -134,12 +139,12 @@ def choose(a,rows,requested,now):
     if not a['enabled']:return
     for r in valid:
         code=r['ticker'];p=a['positions'].get(code)
-        if p and ((p['quantity']>0 and r.get('supertrend')=='BEARISH') or (p['quantity']<0 and r.get('supertrend')=='BULLISH')):
+        if p and (exit_fn(r,p) if exit_fn else ((p['quantity']>0 and r.get('supertrend')=='BEARISH') or (p['quantity']<0 and r.get('supertrend')=='BULLISH'))):
             queue(a,code,'SELL' if p['quantity']>0 else 'COVER','Kapanmış günlük barda trend tersine döndü.',now)
     if coverage<a['config']['min_coverage_pct']:
         event(a,'WAIT','','Yetersiz tarama kapsamı; yeni pozisyon açılmadı.',coverage_pct=round(coverage,1));return
     if a['risk_halt']:return
-    candidates=[(signal(r),r) for r in valid];candidates=[(s,r) for s,r in candidates if s and (s[0]!='SHORT' or a['config']['allow_short'])]
+    candidates=[((signal_fn or signal)(r),r) for r in valid];candidates=[(s,r) for s,r in candidates if s and (s[0]!='SHORT' or a['config']['allow_short'])]
     candidates.sort(key=lambda x:(-x[0][2],x[1].get('risk',100),x[1]['ticker']))
     for s,r in candidates:
         if len(a['positions'])+sum(o['side'] in {'BUY','SHORT'} for o in a['pending'].values())>=a['config']['max_positions']:break
@@ -152,7 +157,7 @@ def choose(a,rows,requested,now):
         queue(a,code,s[0],s[1],now,atr=r['atr'],signal_as_of=r['as_of'])
     event(a,'SCAN_COMPLETE','','Kapalı bar stratejisi değerlendirildi.',coverage_pct=round(coverage,1),candidates=len(candidates))
 
-def closed_signals(codes,now):
+def closed_signals(codes,now,enrich=False):
     import pandas as pd
     from .market_data import daily_frames,_ret
     from .scoring import score_frame
@@ -171,6 +176,9 @@ def closed_signals(codes,now):
             if not r:continue
             r=daily_metadata({'ticker':code,**r,'history_bars':len(df)},df.index[-1],now)
             if br20 is None or br60 is None:r['signal_guard']['status']='WAIT'
+            if enrich:
+                from .robot_strategies import features
+                r['robot_features']=features(df,bench)
             out.append(r)
         except (ValueError,KeyError,TypeError,IndexError):continue
     return out
