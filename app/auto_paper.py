@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 TR=ZoneInfo('Europe/Istanbul')
 DEFAULTS={'max_positions':6,'position_pct':10.,'gross_pct':60.,'risk_pct':.5,'daily_loss_pct':2.,'drawdown_pct':10.,'fee_bps':10.,'slippage_bps':10.,'borrow_annual_pct':15.,'min_coverage_pct':80.,'allow_short':True}
-_LOCK=threading.RLock();_BUSY=set();_THREAD=None
+_LOCK=threading.RLock();_BUSY=set();_THREAD=None;_RISK_THREAD=None
 
 def now_tr():return datetime.now(TR)
 def stamp():return now_tr().isoformat()
@@ -154,13 +154,12 @@ def choose(a,rows,requested,now):
 
 def closed_signals(codes,now):
     import pandas as pd
-    from .market_data import yf,_extract,_ret
+    from .market_data import daily_frames,_ret
     from .scoring import score_frame
     from .signal_guard import daily_metadata
-    syms=[c+'.IS' for c in codes]+['XU100.IS']
-    raw=yf.download(syms,period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=4,progress=False,timeout=18)
+    frames=daily_frames(list(codes)+['XU100'])
     def closed(sym):
-        df=_extract(raw,sym).dropna(how='all')
+        df=frames.get(sym.removesuffix('.IS'),pd.DataFrame()).dropna(how='all')
         if df.empty:return df
         cutoff=now.date() if (now.hour,now.minute)>=(18,20) else (pd.Timestamp(now.date())-pd.Timedelta(days=1)).date()
         return df[[pd.Timestamp(i).date()<=cutoff for i in df.index]]
@@ -202,7 +201,7 @@ def snapshot(token):
     with _LOCK:a=_read(_key(token))
     a['scan']['total']=len(a['scan']['codes'])
     a.pop('signal_keys',None);a['scan'].pop('rows',None);a['scan'].pop('codes',None)
-    return {**a,'valuation':valuation(a),'mode':'PAPER','live_execution':False,'worker_running':bool(_THREAD and _THREAD.is_alive())}
+    return {**a,'valuation':valuation(a),'mode':'PAPER','live_execution':False,'worker_running':bool(_THREAD and _THREAD.is_alive() and _RISK_THREAD and _RISK_THREAD.is_alive())}
 def configure(token,payload):
     with _LOCK:
         key=_key(token);a=_read(key)
@@ -222,80 +221,109 @@ def configure(token,payload):
 def control(token,action):
     with _LOCK:
         key=_key(token);a=_read(key)
-        if action=='start':a['enabled']=True
+        if action=='start':a['enabled']=True;a['scan'].update({'next_due':0,'retry_at':0})
         elif action in {'pause','close_all'}:
             a['enabled']=False;a['pending']={c:o for c,o in a['pending'].items() if o['side'] in {'SELL','COVER'}}
             if action=='close_all':
                 for c,p in a['positions'].items():queue(a,c,'SELL' if p['quantity']>0 else 'COVER','Kullanıcı tümünü kapat ve durdur talebi.',now_tr())
-        elif action=='refresh':a['last_cycle']=None
+        elif action=='refresh':a['last_cycle']=None;a['last_risk_check']=None;a['scan'].update({'next_due':0,'retry_at':0})
         else:raise ValueError('Geçersiz kontrol.')
         event(a,'CONTROL','',action);_write(key,a)
     start_worker();return snapshot(token)
 
-def cycle(key,now=None):
-    fixed_clock=now is not None;now=now or now_tr()
+def cycle(key,now=None,lane='combined'):
+    if lane not in {'combined','scan','risk'}:raise ValueError('Geçersiz motor hattı')
+    fixed_clock=now is not None;now=now or now_tr();request_start=now.isoformat();busy=(key,lane)
     with _LOCK:
-        if key in _BUSY:return
-        a=_read(key);_BUSY.add(key)
+        if busy in _BUSY:return
+        a=_read(key);_BUSY.add(busy)
     try:
-        # Network calls happen outside the state lock; controls never wait on Yahoo.
-        codes=list(set(a['positions'])|set(a['pending']))
-        def fetch(c):
-            try:return c,latest_quote(c,now)
-            except Exception:return c,None
-        with ThreadPoolExecutor(max_workers=3) as ex:quotes=dict(ex.map(fetch,codes))
-        batch=[];signals=[];universe=[];data_error=None
-        if a['enabled']:
+        # Quote control and full-universe downloads use independent workers.
+        quotes={}
+        if lane!='scan':
+            codes=list(set(a['positions'])|set(a['pending']))
+            def fetch(c):
+                try:return c,latest_quote(c,now)
+                except Exception:return c,None
+            with ThreadPoolExecutor(max_workers=3) as ex:quotes=dict(ex.map(fetch,codes))
+        batch=[];signals=[];universe=[];data_error=None;offset=0;epoch=None
+        if lane!='risk' and a['enabled']:
             try:
                 from .universe import get_universe
+                from .market_data import daily_epoch
                 u=get_universe()
                 if not u or any(r.get('source')!='KAP' for r in u):raise ValueError('KAP evrenine ulaşılamadı; küçük yedek listeyle otomatik giriş yapılmaz.')
-                universe=[r['ticker'] for r in u]
-                scan=a['scan'];offset=scan['cursor'] if scan['codes']==universe else 0;batch=universe[offset:offset+20]
+                universe=[r['ticker'] for r in u];epoch=daily_epoch(now)
+                scan=a['scan'];offset=scan['cursor'] if scan['codes']==universe and scan.get('epoch')==epoch else 0
+                batch=universe[offset:offset+20]
                 signals=closed_signals(batch,now) if batch else []
-            except Exception as e:
-                data_error=str(e)[:250];batch=[]
+            except Exception as e:data_error=str(e)[:250];batch=[]
         # Decision time is AFTER retrieval, never the earlier request start time.
         if not fixed_clock:now=now_tr()
         with _LOCK:
-            # Re-read so a pause/config change during fetch wins over stale work.
-            a=_read(key);risk_check(a,now)
-            for c,q in quotes.items():
-                if q:process_quote(a,c,q,now);risk_check(a,now)
-            if a['enabled'] and batch:
+            # Every lane merges into the latest ledger; a pause/config change wins.
+            a=_read(key)
+            if lane!='scan':
+                risk_check(a,now)
+                for c,q in quotes.items():
+                    if q:process_quote(a,c,q,now);risk_check(a,now)
+                v=risk_check(a,now);a['curve'].append({'time':now.isoformat(),'equity':v['equity']});a['curve']=a['curve'][-2000:]
+                a['last_risk_check']=now.isoformat()
+            if lane!='risk':
                 scan=a['scan']
-                if scan['codes']!=universe:scan.update({'codes':universe,'cursor':0,'rows':{}})
-                scan['rows'].update({r['ticker']:r for r in signals});scan['cursor']+=len(batch)
-                if scan['cursor']>=len(universe):
-                    # Mix neither trading dates nor old scan cycles in a ranking.
-                    values=list(scan['rows'].values());latest=max((r['as_of'] for r in values),default='')
-                    choose(a,[r for r in values if r['as_of']==latest],len(universe),now)
-                    scan.update({'cursor':0,'rows':{}})
-            v=risk_check(a,now);a['curve'].append({'time':now.isoformat(),'equity':v['equity']});a['curve']=a['curve'][-2000:]
-            a['last_cycle']=now.isoformat();a['error']=data_error;_write(key,a)
+                if a['enabled'] and batch:
+                    if scan['codes']!=universe or scan.get('epoch')!=epoch:
+                        scan.update({'codes':universe,'cursor':0,'rows':{},'epoch':epoch})
+                    # Only this lane advances the cursor; stale/misaligned work is discarded.
+                    if scan['cursor']==offset:
+                        if not offset:scan['started_at']=request_start
+                        scan['rows'].update({r['ticker']:r for r in signals});scan['cursor']+=len(batch)
+                        scan['last_batch_at']=now.isoformat();scan['next_due']=0;scan['retry_at']=0
+                        if scan['cursor']>=len(universe):
+                            values=list(scan['rows'].values());latest=max((r['as_of'] for r in values),default='')
+                            choose(a,[r for r in values if r['as_of']==latest],len(universe),now)
+                            scan.update({'cursor':0,'rows':{},'completed_at':now.isoformat(),'completed_count':len(universe),'next_due':now.timestamp()+600})
+                            scan['duration_sec']=round((now-datetime.fromisoformat(scan['started_at'])).total_seconds(),1)
+                elif data_error:scan['retry_at']=now.timestamp()+30
+                a['error']=data_error
+            a['last_cycle']=now.isoformat();_write(key,a)
     except Exception as e:
         with _LOCK:
-            a=_read(key);a['error']=str(e)[:250];a['last_cycle']=now.isoformat();_write(key,a)
+            a=_read(key);a['error']=str(e)[:250];a['last_cycle']=now.isoformat()
+            if lane!='risk':a['scan']['retry_at']=now.timestamp()+30
+            _write(key,a)
     finally:
-        with _LOCK:_BUSY.discard(key)
+        with _LOCK:_BUSY.discard(busy)
 
-def _loop():
+def scan_due(a,now):
+    from .market_data import daily_epoch
+    return a['enabled'] and now.timestamp()>=a['scan'].get('retry_at',0) and (a['scan'].get('epoch')!=daily_epoch(now) or now.timestamp()>=a['scan'].get('next_due',0))
+
+def _loop(lane='scan'):
     while True:
         try:
             for path in list(_directory().glob('*.json')):
                 try:
                     with _LOCK:a=_read(path.stem)
-                    if not(a['enabled'] or a['positions'] or a['pending']):continue
-                    if a['last_cycle'] and time.time()-datetime.fromisoformat(a['last_cycle']).timestamp()<60:continue
-                    cycle(path.stem)
+                    now=now_tr()
+                    if lane=='scan':
+                        if not scan_due(a,now):continue
+                    else:
+                        if not(a['enabled'] or a['positions'] or a['pending']):continue
+                        last=a.get('last_risk_check')
+                        if last and now.timestamp()-datetime.fromisoformat(last).timestamp()<30:continue
+                    cycle(path.stem,lane=lane)
                 except Exception:continue
         except Exception:pass
-        time.sleep(5)
+        time.sleep(1)
+
 def start_worker():
-    global _THREAD
+    global _THREAD,_RISK_THREAD
     with _LOCK:
-        if _THREAD and _THREAD.is_alive():return
-        _THREAD=threading.Thread(target=_loop,name='AutoPaperOnly',daemon=True);_THREAD.start()
+        if not(_THREAD and _THREAD.is_alive()):
+            _THREAD=threading.Thread(target=_loop,args=('scan',),name='AutoPaperScan',daemon=True);_THREAD.start()
+        if not(_RISK_THREAD and _RISK_THREAD.is_alive()):
+            _RISK_THREAD=threading.Thread(target=_loop,args=('risk',),name='AutoPaperRisk',daemon=True);_RISK_THREAD.start()
 
 def demo():
     """Deterministic synthetic fixture, kept completely outside forward account history."""

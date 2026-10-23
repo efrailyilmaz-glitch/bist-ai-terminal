@@ -16,6 +16,10 @@ _RAW_CACHE={}
 _BENCH_CACHE={'ts':0.0,'br20':None,'br60':None}
 _MARKET_CACHE={'ts':0.0,'data':None}
 _MTF_CACHE={}
+_DAILY_CACHE={}
+_DAILY_FLIGHTS={}
+_DAILY_LOCK=threading.Lock()
+_DAILY_DOWNLOADS=threading.BoundedSemaphore(2)
 _HTTP=requests.Session()
 _HTTP.headers.update({'User-Agent':'Mozilla/5.0 BIST-AI-Terminal/5.1'})
 _HTTP.mount('https://',HTTPAdapter(pool_connections=24,pool_maxsize=24,max_retries=1))
@@ -55,15 +59,61 @@ def _ret(df,n):
     except Exception:
         return 0.0
 
+def daily_epoch(now=None):
+    """Invalidate pre-close snapshots when the daily bar becomes eligible to close."""
+    from datetime import datetime,timedelta
+    from zoneinfo import ZoneInfo
+    dt=now or datetime.now(ZoneInfo('Europe/Istanbul'))
+    day=dt.date() if (dt.hour,dt.minute)>=(18,20) else dt.date()-timedelta(days=1)
+    while day.weekday()>=5:day-=timedelta(days=1)
+    return day.isoformat()
+
+def daily_frames(codes):
+    """Shared one-year OHLCV snapshots, with per-symbol coalescing and copy isolation."""
+    codes=list(dict.fromkeys(c.upper().removesuffix('.IS') for c in codes))
+    now=time.time();epoch=daily_epoch();result={};owned=[];waiting=[]
+    def copy_hit(code,hit):
+        if not hit[2].empty:
+            frame=hit[2].copy(deep=True);frame.attrs['fetched_at']=hit[0];result[code]=frame
+    with _DAILY_LOCK:
+        for code in codes:
+            hit=_DAILY_CACHE.get(code)
+            if hit and hit[1]==epoch and now-hit[0]<(600 if not hit[2].empty else 30):copy_hit(code,hit)
+            elif code in _DAILY_FLIGHTS:waiting.append((code,_DAILY_FLIGHTS[code]))
+            else:
+                _DAILY_FLIGHTS[code]=threading.Event();owned.append(code)
+    if owned:
+        frames={}
+        try:
+            # Daily scans cannot exhaust quote/control threads; cap provider concurrency.
+            with _DAILY_DOWNLOADS:
+                raw=yf.download([c+'.IS' for c in owned],period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=4,progress=False,timeout=18)
+            frames={c:_extract(raw,c+'.IS').dropna(how='all') for c in owned}
+        except Exception:pass
+        finally:
+            with _DAILY_LOCK:
+                for code in owned:
+                    hit=(time.time(),epoch,frames.get(code,pd.DataFrame()))
+                    _DAILY_CACHE[code]=hit;copy_hit(code,hit)
+                    _DAILY_FLIGHTS.pop(code).set()
+                if len(_DAILY_CACHE)>1200:
+                    for code in sorted(_DAILY_CACHE,key=lambda c:_DAILY_CACHE[c][0])[:len(_DAILY_CACHE)-1200]:_DAILY_CACHE.pop(code,None)
+    for code,event in waiting:
+        # A slow existing request is not duplicated or relabelled as fresh.
+        if event.wait(25):
+            with _DAILY_LOCK:
+                hit=_DAILY_CACHE.get(code)
+                if hit and hit[1]==epoch and time.time()-hit[0]<600:copy_hit(code,hit)
+    return result
+
 def _benchmark_returns():
     now=time.time()
     with _LOCK:
-        if now-_BENCH_CACHE['ts']<600:
+        if now-_BENCH_CACHE['ts']<(600 if _BENCH_CACHE['br20'] is not None and _BENCH_CACHE['br60'] is not None else 30):
             return _BENCH_CACHE['br20'],_BENCH_CACHE['br60']
     br20=br60=None
     try:
-        braw=yf.download(['XU100.IS'],period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=False,progress=False,timeout=12)
-        benchmark=_extract(braw,'XU100.IS')
+        benchmark=daily_frames(['XU100']).get('XU100',pd.DataFrame())
         if len(benchmark)>20:br20=_ret(benchmark,20)
         if len(benchmark)>60:br60=_ret(benchmark,60)
     except Exception:
@@ -74,13 +124,13 @@ def _benchmark_returns():
 
 def _scan_chunk(chunk,br20,br60):
     rows=[]
-    syms=[x+'.IS' for x in chunk]
     try:
-        raw=yf.download(syms,period='1y',interval='1d',group_by='ticker',auto_adjust=True,threads=4,progress=False,timeout=18)
-        for code,sym in zip(chunk,syms):
+        frames=daily_frames(chunk)
+        for code in chunk:
             try:
-                df=_extract(raw,sym)
+                df=frames.get(code,pd.DataFrame())
                 if df.empty:continue
+                fetched_at=df.attrs.get('fetched_at',time.time())
                 df=df.dropna(how='all')
                 sc=score_frame(df,benchmark_return_20=br20,benchmark_return_60=br60)
                 if sc:
@@ -93,7 +143,7 @@ def _scan_chunk(chunk,br20,br60):
                         sc['relative_strength_20']=None;sc['relative_strength_60']=None
                     try:sc.update(community_snapshot(df))
                     except (ValueError,KeyError,TypeError):sc.update({'community_status':'INVALID_DATA','community_as_of':None})
-                    rows.append(daily_metadata({'ticker':code,**sc,'fetched_at':time.time()},df.index[-1]))
+                    rows.append(daily_metadata({'ticker':code,**sc,'fetched_at':fetched_at},df.index[-1]))
             except Exception:
                 continue
     except Exception:
@@ -106,7 +156,7 @@ def scan_codes(codes):
     key=','.join(codes)
     with _LOCK:
         hit=_SCAN_CACHE.get(key)
-        if hit and now-hit[0]<600:return hit[1]
+        if hit and now-hit[0]<(600 if len(hit[1])==len(codes) else 30):return hit[1]
 
     result_map={}
     missing=[]

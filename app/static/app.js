@@ -75,7 +75,7 @@ async function scanAll(force=true){
       }
     }
   }
-  await worker();
+  await Promise.all([worker(),worker()]);
   state.scanned=completed;
   updateRegime();persistScanCache();
   state.scanning=false;els.scanBtn.textContent='Tüm Evreni Tara';
