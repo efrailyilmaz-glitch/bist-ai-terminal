@@ -1,4 +1,4 @@
-# Automatic paper trading — V27.0
+# Automatic paper trading — V27.1
 
 This engine only writes simulated account records. It imports no broker submission API and exposes no live execution mode. The manual chart paper account is separate.
 
@@ -37,3 +37,5 @@ Unit/API tests cover account isolation and persistence, all four sides, fees and
 The 60-second delay after every 20-symbol packet was removed. One scan worker continues unfinished packets on the next scheduler pass (about one second), then rests for ten minutes after a complete scan. Failed data requests back off for 30 seconds. A separate risk worker checks accounts on a 30-second target cadence; slow daily downloads cannot block that worker. Provider/network latency can still delay individual reads. Existing ledgers migrate without resetting cash, orders or positions.
 
 Normal UI scans use at most two concurrent packets. Both normal and automatic scans share copied per-symbol one-year daily OHLCV snapshots for ten minutes, coalesce duplicate in-flight requests and bound provider download concurrency. Empty downloads have a shorter retry cache. Pre-close snapshots expire at the existing 18:20 daily-bar cutoff; the automatic engine still removes open bars. Copy isolation and original fetch timestamps prevent one consumer from modifying or relabelling another consumer's data. UI status shows last packet time and completed scan duration.
+
+On ephemeral web hosting, a redeploy can remove server account files. An existing browser token then receives an explicit missing-account message. The user can choose to create a new paused account; the application never silently resets cash or replaces the account. This does not restore lost history. Desktop account files remain in the application data directory.
