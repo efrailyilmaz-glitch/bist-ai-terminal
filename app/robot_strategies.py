@@ -11,7 +11,7 @@ CATALOG=[
  {'id':'ott','name':'OTT · bağımsız uyarlama','origin':'Anıl Özekşi / Kıvanç Özbilgiç','url':'https://www.tradingview.com/script/HPbRZvsV/','rules':'VIDYA/OTT trend durumu; trend robotunda sabit 2R kaldırıldı.','parameters':{'length':2,'percent':1.4},'execution':{'stop_atr':2.5,'target_r':None,'trail_atr':2.5}},
  {'id':'tott','name':'TOTT · bağımsız uyarlama','origin':'Anıl Özekşi / Kıvanç Özbilgiç','url':'https://www.tradingview.com/script/eENf7NpJ/','rules':'VIDYA40/TOTT trend durumu; stratejiye özel trailing çıkış.','parameters':{'length':40,'percent':1.0},'execution':{'stop_atr':2.7,'target_r':None,'trail_atr':2.7}},
  {'id':'momentum','name':'Göreli Momentum','origin':'Kamuya açık momentum prensipleri','rules':'EMA50 üstü + XU100 göre RS20/60 pozitif + ADX. EMA50/trend bozulunca çıkar.','parameters':{},'execution':{'stop_atr':2.5,'target_r':None,'trail_atr':2.5}},
- {'id':'tsmomentum','name':'Time-Series Momentum','origin':'AQR / akademik trend-following prensibi','url':'https://www.aqr.com/insights/research/journal-article/time-series-momentum','rules':'6A/12A momentum pozitif, EMA200 üstü, endeks rejimi olumlu. 3ATR trailing ile kazananı taşır.','parameters':{'lookbacks':[120,252]},'execution':{'stop_atr':3.0,'target_r':None,'trail_atr':3.0}},
+ {'id':'tsmomentum','name':'Time-Series Momentum','origin':'AQR / akademik trend-following prensibi','url':'https://www.aqr.com/insights/research/journal-article/time-series-momentum','rules':'120/200 işlem günü momentum pozitif, EMA200 üstü, endeks rejimi olumlu. 3ATR trailing ile kazananı taşır.','parameters':{'lookbacks':[120,200]},'execution':{'stop_atr':3.0,'target_r':None,'trail_atr':3.0}},
  {'id':'donchian55','name':'Donchian 55 Breakout','origin':'Klasik trend breakout prensibi','rules':'Önceki 55 günlük zirve üstü kapanış + ADX + hacim + rejim.','parameters':{'entry':55,'exit':20},'execution':{'stop_atr':2.5,'target_r':None,'trail_atr':2.5}},
  {'id':'meanrev','name':'Rejim Filtreli Mean Reversion','origin':'Klasik mean-reversion prensibi','rules':'Yalnız ana trend yukarıyken RSI2 çok düşük + z-score<-2. Ortalama dönüşte çıkar.','parameters':{'rsi2':10,'zscore':-2},'execution':{'stop_atr':1.6,'target_r':1.5,'trail_atr':None}},
  {'id':'lowvolbreak','name':'Low-Volatility Breakout','origin':'Volatilite sıkışması + breakout prensibi','rules':'20G volatilite 60G rejimine göre düşükken breakout + hacim + güçlü kapanış.','parameters':{'compression_ratio':.75},'execution':{'stop_atr':2.0,'target_r':3.0,'trail_atr':2.0}},
@@ -75,7 +75,7 @@ def features(df,benchmark=None):
     a=float(_rma(tr,14).iloc[-1]);span=float(h.iloc[-1]-l.iloc[-1]);px=float(c.iloc[-1]);hi20=h.shift().rolling(20).max();hi55=h.shift().rolling(55).max();lo20=l.shift().rolling(20).min()
     out={'alpha_bull':bool(alpha.iloc[-1]>alpha.iloc[-3]),'alpha_bear':bool(alpha.iloc[-1]<alpha.iloc[-3]),'ott_bull':bool(ma.iloc[-1]>ot.iloc[-1]),'ott_bear':bool(ma.iloc[-1]<ot.iloc[-1]),'tott_bull':bool(tm.iloc[-1]>to.iloc[-1]*1.006),'tott_bear':bool(tm.iloc[-1]<to.iloc[-1]*.994),
          'ema20_bull':bool(c.iloc[-1]>e20.iloc[-1]),'ema50_bull':bool(c.iloc[-1]>e50.iloc[-1]),'ema200_bull':bool(c.iloc[-1]>e200.iloc[-1]),'breakout_prior20':bool(c.iloc[-1]>hi20.iloc[-1]),'breakout_prior55':bool(c.iloc[-1]>hi55.iloc[-1]),'below_low20':bool(c.iloc[-1]<lo20.iloc[-1]),
-         'mom120':float((c.iloc[-1]/c.iloc[-121]-1)*100),'mom252':float((c.iloc[-1]/c.iloc[-200]-1)*100),'rsi2':float(rsi2.iloc[-1]) if pd.notna(rsi2.iloc[-1]) else 50.,'zscore20':float(z20.iloc[-1]) if pd.notna(z20.iloc[-1]) else 0.,
+         'mom120':float((c.iloc[-1]/c.iloc[-121]-1)*100),'mom200':float((c.iloc[-1]/c.iloc[-200]-1)*100),'rsi2':float(rsi2.iloc[-1]) if pd.notna(rsi2.iloc[-1]) else 50.,'zscore20':float(z20.iloc[-1]) if pd.notna(z20.iloc[-1]) else 0.,
          'vol_ratio_20_60':float(vol20.iloc[-1]/vol60.iloc[-1]) if pd.notna(vol60.iloc[-1]) and vol60.iloc[-1]>0 else 1.,'volume_confirm':float(v.iloc[-1]/v.shift().rolling(20).mean().iloc[-1]) if v.shift().rolling(20).mean().iloc[-1]>0 else None,
          'close_location':float((px-l.iloc[-1])/span) if span else 0.,'upper_wick':float((h.iloc[-1]-max(px,x.Open.iloc[-1]))/span) if span else 1.,'gap_atr':float(abs(x.Open.iloc[-1]-c.iloc[-2])/a) if a>0 else None,'extension_atr':float((px-e20.iloc[-1])/a) if a>0 else None,'benchmark_bull':None}
     if benchmark is not None and len(benchmark)>=200 and benchmark.index[-1]==df.index[-1]:
@@ -101,8 +101,8 @@ def entry(strategy,r):
         if finite(r,'relative_strength_20','relative_strength_60','adx','rsi') and r['relative_strength_20']>0 and r['relative_strength_60']>0 and f.get('ema50_bull') and f.get('benchmark_bull') is True and r['adx']>=20 and 45<=r['rsi']<=70:s='BUY'
         rank=min(99.,50+max(0,r.get('relative_strength_20',0))+max(0,r.get('relative_strength_60',0))/2)
     elif strategy=='tsmomentum':
-        if f.get('benchmark_bull') is True and f.get('ema200_bull') and f.get('mom120',0)>4 and f.get('mom252',0)>8 and r.get('relative_strength_60',0)>0:s='BUY'
-        rank=min(99.,45+max(0,f.get('mom120',0))*.5+max(0,f.get('mom252',0))*.25)
+        if f.get('benchmark_bull') is True and f.get('ema200_bull') and f.get('mom120',0)>4 and f.get('mom200',0)>8 and r.get('relative_strength_60',0)>0:s='BUY'
+        rank=min(99.,45+max(0,f.get('mom120',0))*.5+max(0,f.get('mom200',0))*.25)
     elif strategy=='donchian55':
         if f.get('benchmark_bull') is True and f.get('breakout_prior55') and r.get('adx',0)>=22 and (f.get('volume_confirm') or 0)>=1.15 and f.get('close_location',0)>=.60 and f.get('upper_wick',1)<=.30:s='BUY'
         rank=min(99.,55+max(0,r.get('adx',0)-20)+max(0,((f.get('volume_confirm') or 1)-1)*10))
