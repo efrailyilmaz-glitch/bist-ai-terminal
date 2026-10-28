@@ -103,6 +103,7 @@ class RobotArenaTests(unittest.TestCase):
             self.assertAlmostEqual(b['cash']-b['capital'],b['realized'],places=6)
     def test_common_short_gate_and_short_collateral_accounting(self):
         root=self.running();r=self.row();r.update({'short_score':20.,'long_score':25.,'rsi':40.,'supertrend':'BEARISH','macd_hist':-1.})
+        r['robot_features']['benchmark_bull']=False
         for k in ('alpha','ott','tott'):r['robot_features'][k+'_bull']=False;r['robot_features'][k+'_bear']=True
         a.apply_scan(root,[r],1,self.now)
         self.assertTrue(all(o['side']!='SHORT' for b in root['bots'].values() for o in b['pending'].values()))
