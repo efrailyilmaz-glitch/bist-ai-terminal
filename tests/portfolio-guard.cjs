@@ -7,6 +7,11 @@ assert.throws(()=>trade(a,'COVER',1,8,'2025-01-01T00:00:00Z'));assert.throws(()=
 a=trade(a,'COVER',100,8,'2026-01-03T10:00:00Z');a=trade(a,'BUY',10,10,'2026-01-04T10:00:00Z');assert.equal(E.valuation(a,{TEST:{price:10}}).rows[0].openedAt,'2026-01-04T10:00:00.000Z');
 assert.equal(D.elapsed('2026-10-09','2026-10-12'),'3 gün');assert.equal(D.elapsed(0,5400),'1 saat 30 dk');assert.equal(D.elapsed({year:2026,month:1,day:1},{year:2026,month:1,day:8}),'7 gün');assert.equal(D.elapsed('bad','x'),'Süre bilinmiyor');
 console.log('long/short equity, partial close, missing quote, dates, reopen and ruler elapsed time passed');
+let ex=E.excursion({quantity:100,avg:10},[{high:12,low:9},{high:11,low:8}]);assert.equal(ex.mfePct,20);assert.equal(ex.maePct,-20);
+ex=E.excursion({quantity:-100,avg:10},[{high:12,low:9},{high:11,low:8}]);assert.equal(ex.mfePct,20);assert.equal(ex.maePct,-20);
+assert.deepEqual(E.excursion({quantity:100,avg:10},[]),{mfePct:null,maePct:null});
+console.log('MFE/MAE long-short excursion calculations passed');
+
 const fs=require('node:fs'),vm=require('node:vm');let context={v19Esc:v=>String(v??'').replaceAll('<','&lt;'),detailShell:()=>'<div class="chartTop">',refreshDetailMetrics(){},render(){},window:{addEventListener(){}},state:{current:'TEST',scan:new Map(),total:0},quickAccount(){return E.fresh();},BistPaperEngine:E};vm.createContext(context);vm.runInContext(fs.readFileSync('app/static/v23.js','utf8'),context);assert(context.paperView().includes('İşlem tarihi'));assert(context.paperView().includes('paperPositions'));assert(context.guardHTML({signal_guard:{status:'WAIT',score:30,flags:[{message:'<script>'}]}}).includes('&lt;script>'));assert(!context.guardHTML({}).includes('CLEAR'));console.log('portfolio/guard rendering and escaped source messages passed');
 // A portfolio order waiting on another tab's account lock must be cancelled after navigation.
 let queued,stored=0;const status={isConnected:true,textContent:''},inputs={'#paperStatus':status,'#paperAt':{value:''},'#paperTicker':{value:'TEST'},'#paperQty':{value:'1'},'#paperPrice':{value:'10'},'#paperFee':{value:'10'}};
