@@ -37,6 +37,7 @@ import app.portfolio_analytics
 import app.providers
 import app.research_engine
 import app.scoring
+import app.trap_defense
 import app.universe
 
 def main():

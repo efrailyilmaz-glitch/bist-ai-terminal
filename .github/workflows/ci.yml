@@ -32,6 +32,7 @@ jobs:
       - run: node tests/ranking.cjs
       - run: node tests/stock-switcher.cjs
       - run: node --check app/static/v26.js
+      - run: node --check app/static/v29.js
       - run: node tests/community.cjs
       - run: node --check app/static/v25.js
       - run: node --check app/static/app.js
@@ -282,4 +283,17 @@ jobs:
           assert 'DELAYED / YAHOO' in inspect.getsource(market_overview)
           print('V18 QA hardening ok')
           PY
-      - run: python -c "from app.main import app; assert app.version == '28.0.1'; print(app.title, app.version)"
+      - name: V29 trap defense smoke test
+        run: |
+          python - <<'PY'
+          import numpy as np,pandas as pd
+          from app.trap_defense import assess_traps
+          n=90;close=np.linspace(100,120,n);vol=np.ones(n)*1_000_000
+          df=pd.DataFrame({'Open':close-.2,'High':close+.7,'Low':close-.8,'Close':close,'Volume':vol})
+          a=assess_traps(df);assert a['status'] in {'CLEAR','WAIT','BLOCK'}
+          close2=close.copy();close2[-4]=145;close2[-1]=125;vol2=vol.copy();vol2[-1]=6_000_000
+          df2=pd.DataFrame({'Open':close2-.2,'High':close2+2,'Low':close2-1,'Close':close2,'Volume':vol2})
+          b=assess_traps(df2);assert b['score']>=a['score']
+          print('V29 trap defense ok',a['score'],b['score'])
+          PY
+      - run: python -c "from app.main import app; assert app.version == '29.0.0'; print(app.title, app.version)"

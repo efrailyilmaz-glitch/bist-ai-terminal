@@ -56,11 +56,12 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
         gates.append({'name':name,'pass':bool(passed),'detail':detail,'hard':hard})
         if hard and not passed:veto.append(name)
 
-    liq=_v(tech.get('avg_value_turnover_20'),0);risk=_v(tech.get('risk'),100);anom=_v(tech.get('anomaly_score'),100)
+    liq=_v(tech.get('avg_value_turnover_20'),0);risk=_v(tech.get('risk'),100);anom=_v(tech.get('anomaly_score'),100);trap=tech.get('trap_defense') or {};trap_score=_v(trap.get('score'),100)
     health=_v(premium.get('health_score'));fv_up=_v(premium.get('fair_value_upside_pct'));piot=(premium.get('piotroski') or {}).get('score');alt=(premium.get('altman') or {}).get('status')
     gate('Likidite',liq>=5_000_000,f'20G ort. işlem değeri ≈ ₺{liq:,.0f}',True)
     gate('Aşırı risk yok',risk<82,f'Risk skoru {risk:.0f}/100',True)
-    gate('Manipülasyon/anomali proxy aşırı değil',anom<90,f'Anomali {anom:.0f}/100',True)
+    gate('Anomali proxy aşırı değil',anom<90,f'Anomali {anom:.0f}/100',True)
+    gate('Tuzak Savunması',trap.get('status')!='BLOCK' and trap_score<60,f"{trap.get('status','UNKNOWN')} · {trap_score:.0f}/100",True)
     gate('Uzun trend bozuk değil',not (tech.get('supertrend')=='BEARISH' and tech.get('ichimoku')=='BEARISH'),f"{tech.get('supertrend')} / {tech.get('ichimoku')}",True)
     gate('Tarihsel edge örneklemi',emp.get('sample',0)>=15,f"N={emp.get('sample',0)} · {emp.get('source')}",False)
     gate('Tarihsel hit-rate',emp.get('hit_probability',.5)>=.55,f"{emp.get('hit_probability',.5)*100:.1f}%",False)
@@ -102,7 +103,7 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
       'alpha':_cap(50+(emp.get('hit_probability',.5)-.5)*120+emp.get('median_excess_pct',0)*2),
       'fundamental':_v(fund.get('fundamental_score'),50),'health':health if health is not None else 50,
       'valuation':_cap(50+(fv_up or 0)*1.2),'analyst':_v(analyst.get('analyst_score'),50),
-      'macro':_v(macro.get('global_score'),50),'risk_quality':_cap(100-risk*.7-anom*.3),'pro_technical':_v(protech.get('alignment_score'),50)
+      'macro':_v(macro.get('global_score'),50),'risk_quality':_cap(100-risk*.55-anom*.20-trap_score*.25),'pro_technical':_v(protech.get('alignment_score'),50)
     }
     weights={'opportunity':.18,'ensemble':.15,'alpha':.18,'fundamental':.12,'health':.10,'valuation':.08,'analyst':.07,'macro':.05,'risk_quality':.05,'pro_technical':.02}
     composite=round(sum(evidence[k]*weights[k] for k in weights))
@@ -129,4 +130,4 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
                 'liquidity_cap_5pct_adv':round(liquidity_cap,2),'research_position_value':round(research_position,2),'research_position_pct':round(position_pct,2),
                 'note':'Research sizing proxy only; combines stop-distance risk budget, 5% ADV liquidity cap, max-position cap and quarter-Kelly cap.'
             },'invalidation':invalidation,'opportunity':opp,'alpha_validation':alpha,'ensemble':ensemble,'premium':premium,'pro_technical':protech,'forensics':forensic,
-            'note':'Committee can veto strong signals. This is a research decision framework, not an instruction to transact.'}
+            'trap_defense':trap,'note':'Committee can veto strong signals, including deception-risk patterns. This is a research decision framework, not an instruction to transact.'}

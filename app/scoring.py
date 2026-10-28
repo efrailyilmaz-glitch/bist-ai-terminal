@@ -95,8 +95,11 @@ def indicator_frame(df: pd.DataFrame):
 
 def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0.0):
     from .signal_guard import assess
+    from .trap_defense import assess_traps, combined_guard
     df=df.dropna(how='all').copy()
     guard=assess(df)
+    trap=assess_traps(df)
+    guard=combined_guard(guard,trap)
     if any(f['code'] in {'MISSING_DATA','INVALID_BARS'} for f in guard['flags']): return None
     df=df.copy()
     if len(df)<30:
@@ -232,7 +235,7 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     raw_alpha=alpha
     alpha=min(alpha,47 if guard['status']=='BLOCK' else 67) if guard['status']!='CLEAR' else alpha
     return {
-      'raw_alpha_score':raw_alpha,'signal_guard':guard,'guard_clear':guard['status']=='CLEAR','raw_short_score':raw_short,'raw_long_score':raw_long,
+      'raw_alpha_score':raw_alpha,'signal_guard':guard,'trap_defense':trap,'guard_clear':guard['status']=='CLEAR','raw_short_score':raw_short,'raw_long_score':raw_long,
       'price':round(last,2),'change':round((last/prev-1)*100,2) if prev else 0,
       'short_score':short,'long_score':long,'alpha_score':alpha,
       'short_signal':'GÜÇLÜ' if short>=80 else 'POZİTİF' if short>=68 else 'NÖTR' if short>=48 else 'ZAYIF',

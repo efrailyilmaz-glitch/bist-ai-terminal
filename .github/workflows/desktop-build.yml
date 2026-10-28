@@ -104,6 +104,7 @@ jobs:
             --hidden-import app.providers `
             --hidden-import app.research_engine `
             --hidden-import app.scoring `
+            --hidden-import app.trap_defense `
             --hidden-import app.universe `
             --collect-all uvicorn --collect-all fastapi --collect-all starlette `
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml `
@@ -147,6 +148,7 @@ jobs:
             --hidden-import app.providers \
             --hidden-import app.research_engine \
             --hidden-import app.scoring \
+            --hidden-import app.trap_defense \
             --hidden-import app.universe \
             --collect-all uvicorn --collect-all fastapi --collect-all starlette \
             --collect-all yfinance --collect-all curl_cffi --collect-all bs4 --collect-all lxml \

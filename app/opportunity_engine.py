@@ -60,18 +60,22 @@ def score_opportunity(t,fundamentals=None,analyst=None,macro=None,kap=None,news=
     if t.get('supertrend')=='BEARISH' and t.get('ichimoku')=='BEARISH':penalty+=7;warn.append('Trend yapısı negatif')
     overall=int(round(_cap(base+bonus-penalty)));short=int(round(_cap(.58*s+.12*smart+.10*ms+.08*ks+.06*ns+.06*ana+bonus*.6-penalty)));long=int(round(_cap(.28*l+.28*fund+.20*ana+.08*ks+.06*ns+.10*ms+bonus*.45-penalty*.65)))
     guard=t.get('signal_guard') or {}
+    trap=t.get('trap_defense') or {}
     guard_status=guard.get('status','UNKNOWN')
     raw_overall=overall
+    trap_score=_v(trap.get('score'),0)
+    if trap.get('status')=='BLOCK': overall=min(overall,42);short=min(short,42);long=min(long,47);warn.insert(0,'Tuzak Savunması BLOCK: güçlü görünen sinyal veto edildi.')
+    elif trap.get('status')=='WAIT': overall=min(overall,64);short=min(short,64);long=min(long,67);warn.insert(0,'Tuzak Savunması WAIT: ek teyit gerekiyor.')
     if guard_status!='CLEAR':
         cap=67 if guard_status=='WAIT' else 47
         overall=min(overall,cap);short=min(short,cap);long=min(long,cap)
         warn.insert(0,'Sinyal kontrolü: '+guard_status+'; teyitli fırsat değildir.')
     grade=('WAIT' if guard_status=='WAIT' else 'BLOCK') if guard_status!='CLEAR' else 'MEGA' if overall>=86 and len(conf)>=5 and risk<72 else 'STRONG' if overall>=78 and len(conf)>=4 else 'WATCH' if overall>=66 else 'NORMAL'
     return {'ticker':t.get('ticker'),'price':t.get('price'),'opportunity_score':overall,'short_opportunity_score':short,'long_opportunity_score':long,'grade':grade,
-            'raw_opportunity_score':raw_overall,'signal_guard':guard,'as_of':t.get('as_of'),'fetched_at':t.get('fetched_at'),'bar_provisional':t.get('bar_provisional'),
+            'raw_opportunity_score':raw_overall,'signal_guard':guard,'trap_defense':trap,'as_of':t.get('as_of'),'fetched_at':t.get('fetched_at'),'bar_provisional':t.get('bar_provisional'),
             'label':'TEYİT BEKLİYOR' if grade=='WAIT' else 'SIRALAMA DIŞI' if grade=='BLOCK' else 'BÜYÜK FIRSAT ADAYI' if grade=='MEGA' else 'GÜÇLÜ FIRSAT' if grade=='STRONG' else 'İZLE' if grade=='WATCH' else 'NORMAL',
             'confidence':int(round(_cap(len(conf)*12+min(35,(a.get('coverage_count') or 0)*10)+min(25,_v(f.get('coverage_pct'),0)*.25)))),
-            'confirmations':conf[:8],'warnings':warn[:6],'targets':_targets(t,a,f),'components':{'technical_short':round(s),'technical_long':round(l),'fundamental':round(fund),'analyst':round(ana),'kap':round(ks),'news':round(ns),'macro':round(ms),'smart_money':round(smart),'risk':round(risk),'anomaly':round(anom)},'avg_value_turnover_20':liq,'updated':time.strftime('%d.%m.%Y %H:%M:%S')}
+            'confirmations':conf[:8],'warnings':warn[:6],'targets':_targets(t,a,f),'components':{'technical_short':round(s),'technical_long':round(l),'fundamental':round(fund),'analyst':round(ana),'kap':round(ks),'news':round(ns),'macro':round(ms),'smart_money':round(smart),'risk':round(risk),'anomaly':round(anom),'trap_risk':round(trap_score)},'avg_value_turnover_20':liq,'updated':time.strftime('%d.%m.%Y %H:%M:%S')}
 def _file():
     if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
     elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'

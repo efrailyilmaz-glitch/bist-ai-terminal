@@ -32,6 +32,7 @@ from .smart_money_engine import smart_money_snapshot, smart_money_radar
 from .decision_levels import decision_levels
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
+from .trap_defense import assess_traps
 from .forecast_lab import forecast
 from .edge_lab import edge_research
 from .edge_catalog import CATALOG
@@ -42,7 +43,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='28.0.1')
+app=FastAPI(title='BIST AI Terminal',version='29.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -356,7 +357,23 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'28.0.1','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'29.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+
+@app.get('/api/trap-defense/{ticker}')
+def trap_defense_api(ticker:str):
+    from .market_data import daily_frames
+    import pandas as pd
+    code=ticker.upper().replace('.IS','')
+    df=daily_frames([code]).get(code,pd.DataFrame())
+    return {'ticker':code,**assess_traps(df)}
+
+@app.get('/api/trap-defense-radar')
+def trap_defense_radar_api(limit:int=80):
+    rows=scan_codes([x['ticker'] for x in get_universe()])
+    out=[{'ticker':r.get('ticker'),'price':r.get('price'),'trap_defense':r.get('trap_defense'),'signal_guard':r.get('signal_guard'),
+          'short_score':r.get('short_score'),'long_score':r.get('long_score'),'alpha_score':r.get('alpha_score'),'risk':r.get('risk')} for r in rows if r.get('trap_defense')]
+    out.sort(key=lambda x:-(x.get('trap_defense') or {}).get('score',0))
+    return {'rows':out[:max(10,min(limit,150))],'analyzed':len(out),'note':'OHLCV deception-risk radar; does not identify intent or a manipulator.'}
 
 @app.get('/api/institutional-providers')
 def institutional_providers():
@@ -428,7 +445,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'28.0.1','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'29.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():

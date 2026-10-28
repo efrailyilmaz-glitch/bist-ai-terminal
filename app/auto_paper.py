@@ -30,7 +30,7 @@ def valuation(a):
 
 def signal(r):
     """Symmetric, fixed rules; guarded cap scores never constitute a buy signal."""
-    if r.get('signal_guard',{}).get('status')!='CLEAR' or r.get('bar_provisional') or r.get('history_bars',0)<200:return None
+    if r.get('signal_guard',{}).get('status')!='CLEAR' or r.get('trap_defense',{}).get('status')!='CLEAR' or r.get('bar_provisional') or r.get('history_bars',0)<200:return None
     if not all(isinstance(r.get(k),(int,float)) and math.isfinite(r[k]) for k in ['short_score','long_score','adx','rsi','atr','price','avg_value_turnover_20']):return None
     if r['avg_value_turnover_20']<10_000_000 or r.get('risk',100)>=80 or r['atr']<=0:return None
     if r['short_score']>=75 and r['long_score']>=68 and r.get('supertrend')=='BULLISH' and r.get('macd_hist',0)>0 and r['adx']>=22 and 45<=r['rsi']<=72:
