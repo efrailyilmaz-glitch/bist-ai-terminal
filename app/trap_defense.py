@@ -63,7 +63,7 @@ def assess_traps(df:pd.DataFrame):
     gap_pct=(o/prev_close-1)*100
     atr_pct=atr/prev_close.replace(0,np.nan)*100
     if _f(gap_pct.iloc[-1])>=max(2.0,_f(atr_pct.iloc[-1])*.8) and _f(c.iloc[-1])<_f(o.iloc[-1]) and _f(clv.iloc[-1])<-.15:
-        flag('GAP_UP_FADE','Yukarı boşluk açılışı gün içinde satılmış; haber/gap kovalamaca tuzağı riski.',26)
+        flag('GAP_UP_FADE','Yukarı boşluk açılışı gün içinde satılmış; haber/gap kovalamaca tuzağı riski.',30)
 
     # 11) marginal breakout: technically above resistance but without enough distance/volume to trust it
     breakout_margin=(c-high20)/atr.replace(0,np.nan)
