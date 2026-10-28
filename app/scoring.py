@@ -240,8 +240,7 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
         bool(len(x)>=2 and _num(x['MACD_HIST'].iloc[-1])<0 and _num(x['MACD_HIST'].iloc[-2])<0),
         bool(len(x)>=2 and _num(x['MINUS_DI'].iloc[-1])>_num(x['PLUS_DI'].iloc[-1]) and _num(x['MINUS_DI'].iloc[-2])>_num(x['PLUS_DI'].iloc[-2]))
     ])
-    directional=max(bull_persistence,bear_persistence)
-    if short>=68 and directional<2:
+    if short>=68 and bull_persistence<2:
         guard['flags'].append({'code':'SINGLE_BAR_CONFIRMATION','message':'Güçlü görünen sinyal iki kapalı barda en az iki bağımsız teyit taşımıyor; ek teyit bekleniyor.','weight':24})
         guard['score']=min(100,max(int(guard.get('score') or 0),24))
         if guard.get('status')=='CLEAR':guard['status']='WAIT'
