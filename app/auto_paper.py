@@ -51,7 +51,7 @@ def fill(a,o,reference,at,quantity=None):
     pnl=None
     if side in {'BUY','SHORT'}:
         if code in a['positions'] or qty*px+fee>a['cash']:raise ValueError('Nakit/teminat veya açık pozisyon sınırı')
-         signed=qty if side=='BUY' else -qty;distance=o['stop_distance'];target_r=o.get('target_r',2.0);trail=o.get('trail_distance')
+        signed=qty if side=='BUY' else -qty;distance=o['stop_distance'];target_r=o.get('target_r',2.0);trail=o.get('trail_distance')
         a['cash']-=qty*px+fee
         target=(px+target_r*distance if signed>0 else px-target_r*distance) if isinstance(target_r,(int,float)) and target_r>0 else None
         a['positions'][code]={'quantity':signed,'avg':px,'fees':fee,'opened_at':at,'entry_bar':at,'stop':px-distance if signed>0 else px+distance,'target':target,'trail_distance':trail,'reason':o['reason']}
