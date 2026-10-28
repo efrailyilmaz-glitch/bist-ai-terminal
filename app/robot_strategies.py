@@ -1,4 +1,5 @@
 """Prospective paper strategies built from public, reproducible principles. No proprietary vendor robot code."""
+# V30 release anchor: strategy logic validated by CI and prospective-paper safety tests.
 from __future__ import annotations
 import math
 import numpy as np
