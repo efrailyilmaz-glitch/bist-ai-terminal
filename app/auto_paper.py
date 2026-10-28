@@ -88,16 +88,19 @@ def process_quote(a,code,q,now):
     # Existing protective exits first. A new entry cannot hit a stop in its own fill bar.
     if p and q['at']>p['entry_bar']:
         long=p['quantity']>0
+        # Protective levels active at bar start are evaluated first. A trailing stop
+        # derived from this bar's close becomes active only for the NEXT bar.
+        active_stop=p['stop'];target_level=p.get('target')
+        stop=q['low']<=active_stop if long else q['high']>=active_stop
+        target=bool(target_level is not None and (q['high']>=target_level if long else q['low']<=target_level))
+        if stop or target:
+            px=(min(q['open'],active_stop) if long else max(q['open'],active_stop)) if stop else target_level
+            o={'id':secrets.token_hex(10),'ticker':code,'side':'SELL' if long else 'COVER','reason':'STOP · aynı barda iki seviye de varsa stop önce varsayılır' if stop else 'KÂR HEDEFİ'}
+            fill(a,o,px,q['at']);a['pending'].pop(code,None);return
         trail=p.get('trail_distance')
         if isinstance(trail,(int,float)) and trail>0:
             candidate=q['close']-trail if long else q['close']+trail
             p['stop']=max(p['stop'],candidate) if long else min(p['stop'],candidate)
-        stop=q['low']<=p['stop'] if long else q['high']>=p['stop']
-        target_level=p.get('target');target=bool(target_level is not None and (q['high']>=target_level if long else q['low']<=target_level))
-        if stop or target:
-            px=(min(q['open'],p['stop']) if long else max(q['open'],p['stop'])) if stop else p['target']
-            o={'id':secrets.token_hex(10),'ticker':code,'side':'SELL' if long else 'COVER','reason':'STOP · aynı barda iki seviye de varsa stop önce varsayılır' if stop else 'KÂR HEDEFİ'}
-            fill(a,o,px,q['at']);a['pending'].pop(code,None);return
     o=a['pending'].get(code)
     if not o:return
     # Price must come from a complete bar starting AFTER the decision was recorded.
