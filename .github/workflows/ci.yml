@@ -296,6 +296,20 @@ jobs:
           b=assess_traps(df2);assert b['score']>=a['score']
           print('V29 trap defense ok',a['score'],b['score'])
           PY
+      - name: V30 trailing stop no-lookahead regression
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from app.auto_paper import fresh,fill,process_quote
+          tr=ZoneInfo('Europe/Istanbul'); a=fresh(); a['enabled']=True
+          fill(a,{'id':'open1','ticker':'TEST','side':'BUY','reason':'test','stop_distance':10,'trail_distance':5,'target_r':None},100,'2026-10-28T11:45:00+03:00',100)
+          q={'open':100,'high':111,'low':95,'close':110,'volume':10000,'start':'2026-10-28T12:00:00+03:00','at':'2026-10-28T12:15:00+03:00'}
+          process_quote(a,'TEST',q,datetime(2026,10,28,12,30,tzinfo=tr))
+          assert 'TEST' in a['positions'], 'same-bar trailing lookahead falsely stopped position'
+          assert abs(a['positions']['TEST']['stop']-105)<1e-9
+          print('V30 trailing stop activates next bar only')
+          PY
       - name: V30 robot strategy and execution profile smoke
         run: |
           python - <<'PY'
