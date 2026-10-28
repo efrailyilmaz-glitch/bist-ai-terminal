@@ -348,7 +348,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'FastAPI 31.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 31.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
