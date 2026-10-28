@@ -296,4 +296,17 @@ jobs:
           b=assess_traps(df2);assert b['score']>=a['score']
           print('V29 trap defense ok',a['score'],b['score'])
           PY
-      - run: python -c "from app.main import app; assert app.version == '29.0.0'; print(app.title, app.version)"
+      - name: V30 robot strategy and execution profile smoke
+        run: |
+          python - <<'PY'
+          from app.robot_strategies import CATALOG,catalog
+          ids={b['id'] for b in CATALOG}
+          for x in ['tsmomentum','donchian55','meanrev','lowvolbreak','defmom','codexpro']:
+              assert x in ids
+          for b in CATALOG:
+              e=b['execution']; assert e['stop_atr']>0
+              if e['target_r'] is None: assert e['trail_atr'] is not None
+          assert len(catalog()['audit'])>=4
+          print('V30 robot catalog/execution profiles ok',len(CATALOG))
+          PY
+      - run: python -c "from app.main import app; assert app.version == '30.0.0'; print(app.title, app.version)"
