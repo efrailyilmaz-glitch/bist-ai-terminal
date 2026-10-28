@@ -33,9 +33,9 @@ def signal(r):
     if r.get('signal_guard',{}).get('status')!='CLEAR' or (r.get('trap_defense') is not None and r.get('trap_defense',{}).get('status')!='CLEAR') or r.get('bar_provisional') or r.get('history_bars',0)<200:return None
     if not all(isinstance(r.get(k),(int,float)) and math.isfinite(r[k]) for k in ['short_score','long_score','adx','rsi','atr','price','avg_value_turnover_20']):return None
     if r['avg_value_turnover_20']<10_000_000 or r.get('risk',100)>=80 or r['atr']<=0:return None
-    if r.get('bull_persistence_2',0)>=2 and r['short_score']>=75 and r['long_score']>=68 and r.get('supertrend')=='BULLISH' and r.get('macd_hist',0)>0 and r['adx']>=22 and 45<=r['rsi']<=72:
+    if (r.get('bull_persistence_2') is None or r.get('bull_persistence_2',0)>=2) and r['short_score']>=75 and r['long_score']>=68 and r.get('supertrend')=='BULLISH' and r.get('macd_hist',0)>0 and r['adx']>=22 and 45<=r['rsi']<=72:
         return ('BUY','Kapanmış günlük bar: kısa ≥75, uzun ≥68, MACD pozitif, Supertrend yukarı, ADX ≥22, RSI 45–72.',r['short_score'])
-    if r.get('bear_persistence_2',0)>=2 and r['short_score']<=30 and r['long_score']<=40 and r.get('supertrend')=='BEARISH' and r.get('macd_hist',0)<0 and r['adx']>=25 and 28<=r['rsi']<=55:
+    if (r.get('bear_persistence_2') is None or r.get('bear_persistence_2',0)>=2) and r['short_score']<=30 and r['long_score']<=40 and r.get('supertrend')=='BEARISH' and r.get('macd_hist',0)<0 and r['adx']>=25 and 28<=r['rsi']<=55:
         return ('SHORT','Kapanmış günlük bar: kısa ≤30, uzun ≤40, MACD negatif, Supertrend aşağı, ADX ≥25, RSI 28–55.',100-r['short_score'])
     return None
 
