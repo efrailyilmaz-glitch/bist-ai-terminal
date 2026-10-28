@@ -51,9 +51,10 @@ def fill(a,o,reference,at,quantity=None):
     pnl=None
     if side in {'BUY','SHORT'}:
         if code in a['positions'] or qty*px+fee>a['cash']:raise ValueError('Nakit/teminat veya açık pozisyon sınırı')
-        signed=qty if side=='BUY' else -qty;distance=o['stop_distance']
+         signed=qty if side=='BUY' else -qty;distance=o['stop_distance'];target_r=o.get('target_r',2.0);trail=o.get('trail_distance')
         a['cash']-=qty*px+fee
-        a['positions'][code]={'quantity':signed,'avg':px,'fees':fee,'opened_at':at,'entry_bar':at,'stop':px-distance if signed>0 else px+distance,'target':px+2*distance if signed>0 else px-2*distance,'reason':o['reason']}
+        target=(px+target_r*distance if signed>0 else px-target_r*distance) if isinstance(target_r,(int,float)) and target_r>0 else None
+        a['positions'][code]={'quantity':signed,'avg':px,'fees':fee,'opened_at':at,'entry_bar':at,'stop':px-distance if signed>0 else px+distance,'target':target,'trail_distance':trail,'reason':o['reason']}
     else:
         p=a['positions'][code];qty=abs(p['quantity']);fee=qty*px*cfg['fee_bps']/10000
         pnl=(px-p['avg'])*p['quantity']-p['fees']-fee
@@ -86,7 +87,13 @@ def process_quote(a,code,q,now):
     a['quotes'][code]=q;p=a['positions'].get(code)
     # Existing protective exits first. A new entry cannot hit a stop in its own fill bar.
     if p and q['at']>p['entry_bar']:
-        long=p['quantity']>0;stop=q['low']<=p['stop'] if long else q['high']>=p['stop'];target=q['high']>=p['target'] if long else q['low']<=p['target']
+        long=p['quantity']>0
+        trail=p.get('trail_distance')
+        if isinstance(trail,(int,float)) and trail>0:
+            candidate=q['close']-trail if long else q['close']+trail
+            p['stop']=max(p['stop'],candidate) if long else min(p['stop'],candidate)
+        stop=q['low']<=p['stop'] if long else q['high']>=p['stop']
+        target_level=p.get('target');target=bool(target_level is not None and (q['high']>=target_level if long else q['low']<=target_level))
         if stop or target:
             px=(min(q['open'],p['stop']) if long else max(q['open'],p['stop'])) if stop else p['target']
             o={'id':secrets.token_hex(10),'ticker':code,'side':'SELL' if long else 'COVER','reason':'STOP · aynı barda iki seviye de varsa stop önce varsayılır' if stop else 'KÂR HEDEFİ'}
@@ -101,7 +108,7 @@ def process_quote(a,code,q,now):
     if not a['enabled'] or a['risk_halt']:a['pending'].pop(code,None);return
     if (now-datetime.fromisoformat(o['created_at'])).total_seconds()>48*3600:
         a['pending'].pop(code,None);event(a,'CANCELLED',code,'Karar 48 saatten eski; yeni analiz gerekli.');return
-    v=valuation(a);cfg=a['config'];px=q['close'];distance=max(o['atr']*2,px*.02)
+    v=valuation(a);cfg=a['config'];px=q['close'];stop_mult=float(o.get('stop_atr',2.0));distance=max(o['atr']*stop_mult,px*.015)
     existing=[x for x in a['positions'] if x not in a['quotes'] or not valid_quote(a['quotes'][x],now)]
     room=max(0,v['equity']*cfg['gross_pct']/100-v['gross'])
     budget=min(max(0,v['equity'])*cfg['position_pct']/100,room,a['cash']/(1+(cfg['fee_bps']+cfg['slippage_bps'])*.0001))
@@ -109,7 +116,7 @@ def process_quote(a,code,q,now):
     qty=math.floor(min(budget/(px*(1+cfg['slippage_bps']/10000)),max(0,v['equity'])*cfg['risk_pct']/100/planned_loss,q['volume']*.01))
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
         a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite sınırı veya eksik güncel fiyat.');return
-    o['stop_distance']=distance;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
+    o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
 
 def risk_check(a,now):
     v=valuation(a);day=str(now.date())
@@ -154,7 +161,7 @@ def choose(a,rows,requested,now,signal_fn=None,exit_fn=None):
         key=code+':'+r['as_of']
         if key in a.setdefault('signal_keys',[]):continue
         a['signal_keys']=(a['signal_keys']+[key])[-5000:]
-        queue(a,code,s[0],s[1],now,atr=r['atr'],signal_as_of=r['as_of'])
+        extra=s[3] if len(s)>3 and isinstance(s[3],dict) else {};queue(a,code,s[0],s[1],now,atr=r['atr'],signal_as_of=r['as_of'],**extra)
     event(a,'SCAN_COMPLETE','','Kapalı bar stratejisi değerlendirildi.',coverage_pct=round(coverage,1),candidates=len(candidates))
 
 def closed_signals(codes,now,enrich=False):
