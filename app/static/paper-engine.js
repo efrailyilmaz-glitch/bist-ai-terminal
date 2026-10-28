@@ -52,6 +52,14 @@
   const level=book[index];if(level.price>maxPrice)return {stop:'ÜST FİYAT SINIRINA ULAŞILDI'};
   return {index,price:level.price,quantity:Math.min(remaining,child,level.quantity)};
  }
+ function excursion(p,candles){
+  const xs=(candles||[]).filter(x=>x&&Number.isFinite(Number(x.high))&&Number.isFinite(Number(x.low)));
+  if(!xs.length||!p||!Number.isFinite(Number(p.avg))||p.avg<=0||!p.quantity)return {mfePct:null,maePct:null};
+  const hi=Math.max(...xs.map(x=>Number(x.high))),lo=Math.min(...xs.map(x=>Number(x.low))),avg=Number(p.avg);
+  return p.quantity>0
+   ? {mfePct:money((hi/avg-1)*100),maePct:money((lo/avg-1)*100)}
+   : {mfePct:money((avg-lo)/avg*100),maePct:money((avg-hi)/avg*100)};
+ }
  function valuation(a,quotes){
   let known=0,unreal=0,missing=0;
   const rows=Object.entries(a.positions).map(([ticker,p])=>{const q=quotes[ticker],price=q?.price,ok=typeof price==='number'&&Number.isFinite(price)&&price>0;
@@ -60,10 +68,10 @@
    let balance=p.quantity,start=null;for(const o of orders){start=o.at;balance-=o.side==='BUY'||o.side==='COVER'?o.quantity:-o.quantity;if(balance===0)break;}
    const pnl=ok?(price-p.avg)*p.quantity-p.entryFees:null,cost=Math.abs(p.quantity)*p.avg+p.entryFees;
    if(ok){unreal+=pnl;known+=p.quantity>0?p.quantity*price:Math.abs(p.quantity)*(2*p.avg-price);}else missing++;
-   return {ticker,...p,price:ok?price:null,asOf:q?.as_of||null,pnl,returnPct:ok?pnl/cost*100:null,openedAt:balance===0?start:null,lastAt:orders[0]?.at||null};
+   return {ticker,...p,price:ok?price:null,asOf:q?.as_of||null,pnl,returnPct:ok?pnl/cost*100:null,openedAt:balance===0?start:null,lastAt:orders[0]?.at||null,mfePct:q?.mfePct??null,maePct:q?.maePct??null};
   });
   return {rows,missing,unrealized:missing?null:money(unreal),knownUnrealized:money(unreal),equity:missing?null:money(a.cash+known),totalPnl:missing?null:money(a.realized+unreal),realized:a.realized,cash:a.cash};
  }
- const api={fresh,trade,levels,slice,lots,amount,valuation};
+ const api={fresh,trade,levels,slice,lots,amount,valuation,excursion};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.BistPaperEngine=api;
 })(typeof window!=='undefined'?window:this);

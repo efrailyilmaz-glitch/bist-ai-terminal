@@ -310,6 +310,22 @@ jobs:
           assert abs(a['positions']['TEST']['stop']-105)<1e-9
           print('V30 trailing stop activates next bar only')
           PY
+      - name: V31 anti-trap persistence smoke
+        run: |
+          python - <<'PY'
+          import numpy as np,pandas as pd
+          from app.trap_defense import assess_traps
+          from app.scoring import score_frame
+          n=120;x=np.arange(n);close=100+x*.08
+          vol=np.ones(n)*1_000_000
+          df=pd.DataFrame({'Open':close-.2,'High':close+.8,'Low':close-.8,'Close':close,'Volume':vol})
+          base=assess_traps(df);assert base['version']>=2
+          # Previous-bar breakout followed by rejection should score as a trap.
+          z=df.copy();ref=float(z['High'].iloc[-22:-2].max());z.loc[n-2,'Close']=ref+2;z.loc[n-2,'High']=ref+2.5;z.loc[n-2,'Volume']=2_000_000;z.loc[n-1,'Open']=ref+1;z.loc[n-1,'High']=ref+1.5;z.loc[n-1,'Low']=ref-1.5;z.loc[n-1,'Close']=ref-.5
+          t=assess_traps(z);assert any(f['code']=='ONE_BAR_BREAKOUT_REJECTION' for f in t['flags'])
+          s=score_frame(df);assert 'bull_persistence_2' in s and 'bear_persistence_2' in s
+          print('V31 anti-trap hardening ok',t['score'],s['bull_persistence_2'])
+          PY
       - name: V30 robot strategy and execution profile smoke
         run: |
           python - <<'PY'
@@ -323,4 +339,4 @@ jobs:
           assert len(catalog()['audit'])>=4
           print('V30 robot catalog/execution profiles ok',len(CATALOG))
           PY
-      - run: python -c "from app.main import app; assert app.version == '30.0.0'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '31.0.0'; print(app.title, app.version)"

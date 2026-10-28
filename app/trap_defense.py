@@ -58,7 +58,30 @@ def assess_traps(df:pd.DataFrame):
     if _f(adv.iloc[-1])<10_000_000:flag('THIN_LIQUIDITY','Likidite düşük; fiyat/hacim sinyalleri daha kolay bozulabilir.',20)
     vcv=v.shift(1).rolling(20).std()/v.shift(1).rolling(20).mean().replace(0,np.nan)
     if _f(vcv.iloc[-1])>1.6:flag('UNSTABLE_VOLUME','Hacim dağılımı çok düzensiz; tekil işlemler göstergeleri bozabilir.',14)
-    # 10) pump-and-fade echo: strong 10d rise then quick reversal on volume
+    # 10) gap-up fade: a large opening gap that is sold into before the close
+    prev_close=c.shift(1)
+    gap_pct=(o/prev_close-1)*100
+    atr_pct=atr/prev_close.replace(0,np.nan)*100
+    if _f(gap_pct.iloc[-1])>=max(2.0,_f(atr_pct.iloc[-1])*.8) and _f(c.iloc[-1])<_f(o.iloc[-1]) and _f(clv.iloc[-1])<-.15:
+        flag('GAP_UP_FADE','Yukarı boşluk açılışı gün içinde satılmış; haber/gap kovalamaca tuzağı riski.',26)
+
+    # 11) marginal breakout: technically above resistance but without enough distance/volume to trust it
+    breakout_margin=(c-high20)/atr.replace(0,np.nan)
+    if _f(c.iloc[-1])>_f(high20.iloc[-1],1e99) and _f(breakout_margin.iloc[-1])<.25 and _f(vr.iloc[-1])<1.4:
+        flag('MARGINAL_BREAKOUT','Direnç üstü kapanış marjı ve hacim zayıf; tek-bar sahte kırılım riski.',18)
+
+    # 12) one-bar breakout rejection: prior breakout immediately falls back under its reference
+    if len(x)>=3:
+        prev_ref=_f(high20.iloc[-2],0)
+        if prev_ref>0 and _f(c.iloc[-2])>prev_ref and _f(c.iloc[-1])<=prev_ref and _f(vr.iloc[-2])>=1.25:
+            flag('ONE_BAR_BREAKOUT_REJECTION','Önceki barın kırılımı bir sonraki kapalı barda geri verilmiş.',32)
+
+    # 13) volume spike with a small body: activity is high but directional conviction is weak
+    body_ratio=(body/rng).replace([np.inf,-np.inf],np.nan)
+    if _f(vr.iloc[-1])>=2.5 and _f(body_ratio.iloc[-1])<=.25 and abs(_f(clv.iloc[-1]))<.30:
+        flag('VOLUME_SPIKE_SMALL_BODY','Çok yüksek hacim küçük gövdeyle birleşiyor; yön teyidi yerine churn/transfer olabilir.',22)
+
+    # 14) pump-and-fade echo: strong 10d rise then quick reversal on volume
     run=(c/c.shift(10)-1)*100
     fade=(c/c.shift(3)-1)*100
     if _f(run.iloc[-4])>=18 and _f(fade.iloc[-1])<=-7 and _f(vr.iloc[-1])>=1.4:flag('PUMP_FADE_ECHO','Hızlı yükseliş sonrası hacimli sert geri verme paterni.',32)
@@ -67,10 +90,12 @@ def assess_traps(df:pd.DataFrame):
     score=min(100,raw)
     critical=any(f['code'] in {'VOLUME_CLIMAX_WEAK_CLOSE','PUMP_FADE_ECHO'} for f in flags)
     status='BLOCK' if score>=60 or (critical and score>=45) else 'WAIT' if score>=28 else 'CLEAR'
-    return {'version':1,'status':status,'score':score,'flags':flags,
+    return {'version':2,'status':status,'score':score,'flags':flags,
             'metrics':{'failed_breakouts_10':int(failed),'upper_wick_cluster_8':int(wick_cluster),'churn_8':int(churn),
                        'ema20_atr_extension':round(_f(ext.iloc[-1]),2),'volume_ratio_median20':round(_f(vr.iloc[-1]),2),
-                       'volatility_ratio_10_60':round(_f(vol10.iloc[-1])/max(_f(vol60.iloc[-1]),1e-9),2)},
+                       'volatility_ratio_10_60':round(_f(vol10.iloc[-1])/max(_f(vol60.iloc[-1]),1e-9),2),
+                       'gap_pct':round(_f(gap_pct.iloc[-1]),2),'breakout_margin_atr':round(_f(breakout_margin.iloc[-1]),2),
+                       'body_to_range':round(_f(body_ratio.iloc[-1]),2)},
             'limits':'Bu motor yalnız fiyat/hacim davranışından risk işaretleri üretir. Manipülasyon, spoofing veya belirli bir kişi/kurumun niyeti OHLCV ile doğrulanamaz; Level-2, emir ekleme/iptal ve işlem tarafı verisi gerekir.'}
 
 def combined_guard(signal_guard,trap):

@@ -228,6 +228,24 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     if ichi=='BULLISH': reasons_long.append('Ichimoku bullish')
     if cross.get('recent_event')=='GOLDEN_CROSS': reasons_long.append('Golden Cross')
 
+    # Anti-trap persistence: a strong one-bar signal is not trusted until independent
+    # momentum/trend confirmations survive two consecutive CLOSED bars.
+    bull_persistence=sum([
+        bool(len(c)>=2 and c.iloc[-1]>_num(ema20.iloc[-1]) and c.iloc[-2]>_num(ema20.iloc[-2])),
+        bool(len(x)>=2 and _num(x['MACD_HIST'].iloc[-1])>0 and _num(x['MACD_HIST'].iloc[-2])>0),
+        bool(len(x)>=2 and _num(x['PLUS_DI'].iloc[-1])>_num(x['MINUS_DI'].iloc[-1]) and _num(x['PLUS_DI'].iloc[-2])>_num(x['MINUS_DI'].iloc[-2]))
+    ])
+    bear_persistence=sum([
+        bool(len(c)>=2 and c.iloc[-1]<_num(ema20.iloc[-1]) and c.iloc[-2]<_num(ema20.iloc[-2])),
+        bool(len(x)>=2 and _num(x['MACD_HIST'].iloc[-1])<0 and _num(x['MACD_HIST'].iloc[-2])<0),
+        bool(len(x)>=2 and _num(x['MINUS_DI'].iloc[-1])>_num(x['PLUS_DI'].iloc[-1]) and _num(x['MINUS_DI'].iloc[-2])>_num(x['PLUS_DI'].iloc[-2]))
+    ])
+    directional=max(bull_persistence,bear_persistence)
+    if short>=68 and directional<2:
+        guard['flags'].append({'code':'SINGLE_BAR_CONFIRMATION','message':'Güçlü görünen sinyal iki kapalı barda en az iki bağımsız teyit taşımıyor; ek teyit bekleniyor.','weight':24})
+        guard['score']=min(100,max(int(guard.get('score') or 0),24))
+        if guard.get('status')=='CLEAR':guard['status']='WAIT'
+
     raw_long=long
     long=min(long,47 if guard['status']=='BLOCK' else 67) if guard['status']!='CLEAR' else long
     raw_short=short
@@ -235,7 +253,7 @@ def score_frame(df: pd.DataFrame, benchmark_return_20=0.0, benchmark_return_60=0
     raw_alpha=alpha
     alpha=min(alpha,47 if guard['status']=='BLOCK' else 67) if guard['status']!='CLEAR' else alpha
     return {
-      'raw_alpha_score':raw_alpha,'signal_guard':guard,'trap_defense':trap,'guard_clear':guard['status']=='CLEAR','raw_short_score':raw_short,'raw_long_score':raw_long,
+      'raw_alpha_score':raw_alpha,'signal_guard':guard,'trap_defense':trap,'guard_clear':guard['status']=='CLEAR','bull_persistence_2':bull_persistence,'bear_persistence_2':bear_persistence,'raw_short_score':raw_short,'raw_long_score':raw_long,
       'price':round(last,2),'change':round((last/prev-1)*100,2) if prev else 0,
       'short_score':short,'long_score':long,'alpha_score':alpha,
       'short_signal':'GÜÇLÜ' if short>=80 else 'POZİTİF' if short>=68 else 'NÖTR' if short>=48 else 'ZAYIF',
