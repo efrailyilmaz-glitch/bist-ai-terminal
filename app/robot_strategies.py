@@ -89,7 +89,7 @@ def entry(strategy,r):
     from .auto_paper import signal
     if strategy=='baseline':
         s=signal(r);return (*s,_profile(strategy)) if s else None
-    if r.get('signal_guard',{}).get('status')!='CLEAR' or r.get('trap_defense',{}).get('status')!='CLEAR' or r.get('bar_provisional') or r.get('history_bars',0)<200:return None
+    if r.get('signal_guard',{}).get('status')!='CLEAR' or (r.get('trap_defense') is not None and r.get('trap_defense',{}).get('status')!='CLEAR') or r.get('bar_provisional') or r.get('history_bars',0)<200:return None
     if not finite(r,'atr','price','avg_value_turnover_20','risk') or r['atr']<=0 or r['price']<=0 or r['avg_value_turnover_20']<15_000_000 or r['risk']>=78:return None
     f=r.get('robot_features',{});s=None;rank=50.
     if strategy in {'alphatrend','ott','tott'}:
