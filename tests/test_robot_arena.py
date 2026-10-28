@@ -13,7 +13,7 @@ class RobotArenaTests(unittest.TestCase):
         self.now=datetime(2026,10,23,11,0,tzinfo=p.TR);self.token='x'*43;self.key=p._key(self.token)
     def tearDown(self):self.env.stop();self.temp.cleanup()
     def row(self):
-        return {'ticker':'TEST','as_of':'2026-10-22','history_bars':250,'signal_guard':{'status':'CLEAR'},'bar_provisional':False,'price':100.,'atr':2.,'short_score':82.,'long_score':78.,'supertrend':'BULLISH','macd_hist':1.,'adx':30.,'rsi':55.,'avg_value_turnover_20':50_000_000.,'risk':40.,'relative_strength_20':5.,'relative_strength_60':10.,'robot_features':{'alpha_bull':True,'alpha_bear':False,'ott_bull':True,'ott_bear':False,'tott_bull':True,'tott_bear':False,'ema50_bull':True,'ema20_bull':True,'benchmark_bull':True,'breakout_prior20':True,'breadth_pct':80.,'volume_confirm':1.5,'close_location':.8,'upper_wick':.1,'gap_atr':.5,'extension_atr':1.}}
+        return {'ticker':'TEST','as_of':'2026-10-22','history_bars':250,'signal_guard':{'status':'CLEAR'},'trap_defense':{'status':'CLEAR','score':0},'bar_provisional':False,'price':100.,'atr':2.,'short_score':82.,'long_score':78.,'supertrend':'BULLISH','macd_hist':1.,'adx':30.,'rsi':55.,'avg_value_turnover_20':50_000_000.,'risk':40.,'volatility':25.,'ichimoku':'BULLISH','relative_strength_20':5.,'relative_strength_60':10.,'robot_features':{'alpha_bull':True,'alpha_bear':False,'ott_bull':True,'ott_bear':False,'tott_bull':True,'tott_bear':False,'ema50_bull':True,'ema20_bull':True,'ema200_bull':True,'benchmark_bull':True,'breakout_prior20':True,'breakout_prior55':True,'mom120':10.,'mom252':15.,'rsi2':5.,'zscore20':-2.5,'vol_ratio_20_60':.5,'breadth_pct':80.,'volume_confirm':1.5,'close_location':.8,'upper_wick':.1,'gap_atr':.5,'extension_atr':1.}}
     def quote(self,minute=0,px=100.,high=101.,low=99.):
         start=self.now+timedelta(minutes=minute);return {'start':start.isoformat(),'at':(start+timedelta(minutes=15)).isoformat(),'open':px,'close':px,'high':high,'low':low,'volume':1_000_000.}
     def running(self):
@@ -21,7 +21,7 @@ class RobotArenaTests(unittest.TestCase):
         for b in root['bots'].values():b['enabled']=True
         return root
     def test_equal_capital_policy_no_copied_vendor_claims(self):
-        root=a.fresh();self.assertEqual(len(root['bots']),6)
+        root=a.fresh();self.assertEqual(len(root['bots']),len(s.CATALOG))
         for b in root['bots'].values():self.assertEqual(b['capital'],1_000_000);self.assertFalse(b['enabled']);self.assertFalse(b['config']['allow_short']);self.assertEqual(b['config'],root['config'])
         self.assertEqual({b['id'] for b in s.CATALOG},set(root['bots']))
         self.assertTrue(all(b['status']!='CONNECTED' for b in s.EXTERNAL))
@@ -39,7 +39,7 @@ class RobotArenaTests(unittest.TestCase):
         self.assertEqual(a.snapshot(self.token)['config']['fee_bps'],10)
     def test_all_strategies_guarded_and_no_symbol_bias(self):
         r=self.row()
-        for sid in ('baseline','alphatrend','ott','tott','momentum','codex'):
+        for sid in [b['id'] for b in s.CATALOG]:
             self.assertEqual(s.entry(sid,r)[0],'BUY');other=copy.deepcopy(r);other['ticker']='AHGAZ';self.assertEqual(s.entry(sid,r),s.entry(sid,other))
             for k,v in [('bar_provisional',True),('history_bars',100),('atr',float('nan')),('avg_value_turnover_20',1)]:
                 bad=copy.deepcopy(r);bad[k]=v;self.assertIsNone(s.entry(sid,bad))
@@ -94,7 +94,7 @@ class RobotArenaTests(unittest.TestCase):
     def test_quotes_download_once_and_ledger_totals_survive_display_retention(self):
         root=self.running();a.apply_scan(root,[self.row()],1,self.now);a._write(self.key,root)
         with patch.object(p,'latest_quote',return_value=self.quote()) as fetch:a.cycle(self.key,self.now+timedelta(minutes=16),'risk')
-        self.assertEqual(fetch.call_count,2)  # TEST once across all six bots, plus benchmark
+        self.assertEqual(fetch.call_count,2)  # TEST once across all bots, plus benchmark
         root=a._read(self.key)
         for b in root['bots'].values():
             p.queue(b,'TEST','SELL','exit',self.now+timedelta(minutes=16));p.process_quote(b,'TEST',self.quote(30,102,103,101),self.now+timedelta(minutes=46))
@@ -121,7 +121,7 @@ class RobotArenaTests(unittest.TestCase):
     def test_api_auth_and_no_live_or_reset_routes(self):
         from app.main import app
         c=TestClient(app);self.assertEqual(c.get('/api/robot-arena/account').status_code,400);h={'X-Bist-Paper-Token':self.token}
-        self.assertFalse(c.get('/api/robot-arena/account',headers=h).json()['exists']);d=c.post('/api/robot-arena/create',headers=h).json();self.assertFalse(d['live_execution']);self.assertEqual(len(d['bots']),6)
+        self.assertFalse(c.get('/api/robot-arena/account',headers=h).json()['exists']);d=c.post('/api/robot-arena/create',headers=h).json();self.assertFalse(d['live_execution']);self.assertEqual(len(d['bots']),len(s.CATALOG))
         self.assertEqual(c.post('/api/robot-arena/control',headers=h,json={'action':'live'}).status_code,400)
         self.assertNotIn('signal_keys',str(d));self.assertNotIn(self.key,str(d));self.assertNotIn(self.token,str(d))
 
