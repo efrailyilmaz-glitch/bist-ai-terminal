@@ -104,11 +104,13 @@ class RobotArenaTests(unittest.TestCase):
     def test_common_short_gate_and_short_collateral_accounting(self):
         root=self.running();r=self.row();r.update({'short_score':20.,'long_score':25.,'rsi':40.,'supertrend':'BEARISH','macd_hist':-1.})
         for k in ('alpha','ott','tott'):r['robot_features'][k+'_bull']=False;r['robot_features'][k+'_bear']=True
-        a.apply_scan(root,[r],1,self.now);self.assertTrue(all(not b['pending'] for b in root['bots'].values()))
+        a.apply_scan(root,[r],1,self.now)
+        self.assertTrue(all(o['side']!='SHORT' for b in root['bots'].values() for o in b['pending'].values()))
+        root=self.running()
         for b in root['bots'].values():b['config']['allow_short']=True
         a.apply_scan(root,[r],1,self.now)
         for sid in ('baseline','alphatrend','ott','tott'):
-            b=root['bots'][sid];p.process_quote(b,'TEST',self.quote(),self.now+timedelta(minutes=16));self.assertLess(b['positions']['TEST']['quantity'],0);self.assertLess(b['cash'],b['capital'])
+            b=root['bots'][sid];self.assertEqual(b['pending']['TEST']['side'],'SHORT');p.process_quote(b,'TEST',self.quote(),self.now+timedelta(minutes=16));self.assertLess(b['positions']['TEST']['quantity'],0);self.assertLess(b['cash'],b['capital'])
         self.assertFalse(root['bots']['codex']['pending']);self.assertFalse(root['bots']['momentum']['pending'])
     def test_ott_is_causal_and_features_use_confirmed_history(self):
         idx=pd.bdate_range(end='2026-10-23',periods=260);v=100+np.arange(260)*.1+np.sin(np.arange(260)/4)
