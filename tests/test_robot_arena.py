@@ -82,7 +82,9 @@ class RobotArenaTests(unittest.TestCase):
             p.process_quote(b,'TEST',self.quote(),self.now+timedelta(minutes=16));self.assertFalse(b['orders'])
             p.process_quote(b,'TEST',self.quote(15),self.now+timedelta(minutes=31));self.assertEqual(len(b['orders']),1);self.assertGreater(b['orders'][0]['fee'],0)
             m=a.metrics(b);self.assertLess(m['return_pct'],0);self.assertEqual(m['closed_trades'],0);self.assertIsNone(m['profit_factor'])
-        self.assertEqual(len({b['orders'][0]['price'] for b in root['bots'].values()}),1)
+        slips=[b['orders'][0]['effective_slippage_bps'] for b in root['bots'].values()]
+        self.assertTrue(all(x>=root['config']['slippage_bps'] for x in slips))
+        self.assertTrue(all(b['orders'][0]['execution_diagnostics']['status'] in {'CLEAR','CAUTION'} for b in root['bots'].values()))
     def test_scan_fetches_once_for_all_bots_and_merges_stop_lane(self):
         root=self.running();b=root['bots']['baseline'];p.choose(b,[self.row()],1,self.now);p.process_quote(b,'TEST',self.quote(),self.now+timedelta(minutes=16));a._write(self.key,root)
         entered=threading.Event();release=threading.Event()

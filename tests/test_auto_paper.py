@@ -42,8 +42,8 @@ class AutoPaperTests(unittest.TestCase):
         m.process_quote(self.a,'TEST',q,self.now+timedelta(minutes=31))
         self.assertFalse(self.a['positions']);self.assertLess(self.a['orders'][0]['price'],90.);self.assertLess(self.a['orders'][0]['pnl'],0)
     def test_entry_bar_cannot_trigger_prior_intrabar_stop(self):
-        m.choose(self.a,[self.row()],1,self.now)
-        q=self.quote(high=110,low=90);m.process_quote(self.a,'TEST',q,self.now+timedelta(minutes=16))
+        r=self.row();r['atr']=.5;m.choose(self.a,[r],1,self.now)
+        q=self.quote(high=101,low=98);m.process_quote(self.a,'TEST',q,self.now+timedelta(minutes=16))
         self.assertEqual(len(self.a['orders']),1);self.assertTrue(self.a['positions'])
     def test_guard_and_partial_scan_no_entries(self):
         for state in ['WAIT','BLOCK','UNKNOWN']:
