@@ -109,7 +109,8 @@ def apply_scan(a,rows,requested,now):
     for r in valid:r.setdefault('robot_features',{})['breadth_pct']=breadth
     a['scan']['breadth_pct']=breadth
     for sid,bot in a['bots'].items():
-        paper.choose(bot,valid,requested,now,signal_fn=lambda r,s=sid:entry(s,r),exit_fn=lambda r,p,s=sid:exit_reason(s,r,p))
+        from .portfolio_guard import portfolio_entry_guard
+        paper.choose(bot,valid,requested,now,signal_fn=lambda r,s=sid:entry(s,r),exit_fn=lambda r,p,s=sid:exit_reason(s,r,p),portfolio_guard_fn=portfolio_entry_guard)
 
 def cycle(key,now=None,lane='scan'):
     if lane not in {'scan','risk'}:raise ValueError('Geçersiz hat')
