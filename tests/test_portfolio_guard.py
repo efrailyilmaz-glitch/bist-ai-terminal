@@ -21,6 +21,15 @@ class PortfolioGuardTests(unittest.TestCase):
         g=assess_frames('NEW',{'A':100},frames,'SHORT')
         self.assertNotEqual(g['status'],'BLOCK')
         self.assertLess(g['max_effective_corr'],0)
+    def test_recent_correlation_spike_blocks_even_if_long_window_is_mixed(self):
+        rng=np.random.default_rng(12);base=rng.normal(.0002,.012,260)
+        other=rng.normal(.0001,.012,260);other[-60:]=base[-60:]
+        frames={'NEW':frame(base,1),'A':frame(other,2),'XU100':frame(base*.7,3)}
+        g=assess_frames('NEW',{'A':100},frames,'BUY')
+        self.assertEqual(g['status'],'BLOCK')
+        self.assertGreaterEqual(g['max_recent60_effective_corr'],.9)
+        self.assertIn('RECENT_CORRELATION_SPIKE',g['flags'])
+
     def test_missing_candidate_history_derisks(self):
         g=assess_frames('NEW',{}, {'NEW':pd.DataFrame({'Close':[1,2,3]})},'BUY')
         self.assertEqual(g['status'],'UNKNOWN');self.assertLess(g['risk_multiplier'],1)
