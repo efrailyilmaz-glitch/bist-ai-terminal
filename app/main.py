@@ -36,6 +36,7 @@ from .trap_defense import assess_traps
 from .adversarial_lab import stress as adversarial_stress
 from .forecast_lab import forecast
 from .edge_lab import edge_research
+from .robustness_lab import robustness_audit
 from .edge_catalog import CATALOG
 from fastapi import HTTPException
 from .opportunity_engine import smart_money_candidates
@@ -344,6 +345,10 @@ def forecast_api(ticker:str,horizon:int=20,cost_bps:float=30):
 def edge_catalog_api():
     return CATALOG
 
+@app.get('/api/robustness-audit/{ticker}')
+def robustness_audit_api(ticker:str,period:str='10y',cost_bps:int=15,slippage_bps:int=10):
+    return robustness_audit(ticker,period,max(0,min(cost_bps,100)),max(0,min(slippage_bps,100)))
+
 @app.get('/api/edge/{ticker}')
 def edge_api(ticker:str,cost_bps:float=30):
     import math
@@ -367,6 +372,7 @@ def system_audit_api():
       {'name':'Weekly Coverage','status':'OK' if weekly_cov>=80 else 'WARMING','detail':f'%{weekly_cov} · {bg.get("weekly_analyzed",0)}/{cycle_total}'},
       {'name':'Trap Defense','status':'OK','detail':'V3 · single-bar breakout, distribution cluster, OBV confirmation and late-stage chase filters active'},
       {'name':'Adversarial Lab','status':'OK','detail':'V1 · fake breakout, gap trap, stop sweep, volume climax and pump-fade synthetic stress tests'},
+      {'name':'Robustness Gate','status':'OK','detail':'PBO/CSCV + IS→OOS parameter-surface correlation + plateau veto; live authorization yok'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
       {'name':'Chart Ruler','status':'OK','detail':'Price %, calendar duration and trading-bar count supported'},
       {'name':'Broker Safety','status':'OK','detail':'Direct live locked · paper risk gates active' if not br.get('direct_live_execution_enabled') else 'Live enabled'},
