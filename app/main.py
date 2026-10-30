@@ -37,6 +37,7 @@ from .adversarial_lab import stress as adversarial_stress
 from .forecast_lab import forecast
 from .edge_lab import edge_research
 from .robustness_lab import robustness_audit
+from .microstructure import microstructure_guard
 from .edge_catalog import CATALOG
 from fastapi import HTTPException
 from .opportunity_engine import smart_money_candidates
@@ -45,7 +46,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='33.0.0')
+app=FastAPI(title='BIST AI Terminal',version='34.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -62,6 +63,10 @@ app.mount('/static',StaticFiles(directory=str(BASE/'static')),name='static')
 
 @app.get('/',response_class=HTMLResponse)
 def index(): return (BASE/'templates/index.html').read_text(encoding='utf-8')
+
+@app.post('/api/microstructure-guard')
+def microstructure_guard_api(payload:dict=Body(...)):
+    return microstructure_guard(payload)
 
 @app.get('/api/universe')
 def universe(force: bool=False):
