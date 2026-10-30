@@ -165,7 +165,14 @@ def choose(a,rows,requested,now,signal_fn=None,exit_fn=None):
         key=code+':'+r['as_of']
         if key in a.setdefault('signal_keys',[]):continue
         a['signal_keys']=(a['signal_keys']+[key])[-5000:]
-        extra=s[3] if len(s)>3 and isinstance(s[3],dict) else {};queue(a,code,s[0],s[1],now,atr=r['atr'],signal_as_of=r['as_of'],**extra)
+        extra=dict(s[3]) if len(s)>3 and isinstance(s[3],dict) else {}
+        from .portfolio_guard import portfolio_entry_guard
+        pg=portfolio_entry_guard(code,a['positions'],s[0])
+        if pg.get('status')=='BLOCK':
+            event(a,'REJECTED',code,'Portföy yoğunlaşma koruması: yeni pozisyon mevcut risk faktörlerine aşırı benzer.',portfolio_guard=pg);continue
+        extra['risk_multiplier']=min(float(extra.get('risk_multiplier',1.0)),float(pg.get('risk_multiplier',1.0)))
+        extra['portfolio_guard']=pg
+        queue(a,code,s[0],s[1],now,atr=r['atr'],signal_as_of=r['as_of'],**extra)
     event(a,'SCAN_COMPLETE','','Kapalı bar stratejisi değerlendirildi.',coverage_pct=round(coverage,1),candidates=len(candidates))
 
 def closed_signals(codes,now,enrich=False):
