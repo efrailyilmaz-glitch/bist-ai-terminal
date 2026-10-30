@@ -20,6 +20,15 @@ class RobotArenaTests(unittest.TestCase):
         root=a.fresh();root['enabled']=True;root['started_at']=self.now.isoformat()
         for b in root['bots'].values():b['enabled']=True
         return root
+    def test_promotion_gate_never_authorizes_live(self):
+        m={'closed_trades':40,'profit_factor':1.5,'max_drawdown_pct':5,'return_pct':12}
+        started=(self.now-timedelta(days=120)).isoformat()
+        with patch.object(p,'now_tr',return_value=self.now):g=a.promotion_status(m,started,5)
+        self.assertEqual(g['status'],'CHALLENGER_ELIGIBLE');self.assertIn('never authorizes live',g['note'])
+        m['closed_trades']=5
+        with patch.object(p,'now_tr',return_value=self.now):g=a.promotion_status(m,started,5)
+        self.assertEqual(g['status'],'OBSERVE')
+
     def test_equal_capital_policy_no_copied_vendor_claims(self):
         root=a.fresh();self.assertEqual(len(root['bots']),len(s.CATALOG))
         for b in root['bots'].values():self.assertEqual(b['capital'],1_000_000);self.assertFalse(b['enabled']);self.assertFalse(b['config']['allow_short']);self.assertEqual(b['config'],root['config'])
