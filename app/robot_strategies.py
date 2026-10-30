@@ -20,7 +20,8 @@ CATALOG=[
  {'id':'codex','name':'Codex Rejim & Teyit V2','origin':'BIST AI özgün','rules':'Breakout + RS + breadth + benchmark + hacim + close-location + gap/extension + Trap Defense CLEAR.','parameters':{'breadth_min':55},'execution':{'stop_atr':2.2,'target_r':3.0,'trail_atr':2.2}},
  {'id':'codexpro','name':'Codex Adaptive Ensemble','origin':'BIST AI özgün','rules':'Rejime göre trend, breakout, mean-reversion ve defensive momentum oylarını birleştirir. Trap Defense CLEAR zorunlu.','parameters':{'min_votes':3},'execution':{'stop_atr':2.4,'target_r':None,'trail_atr':2.4}},
  {'id':'qqe_ssl_wae','name':'QQE + SSL + WAE Fusion','origin':'Kamuya açık QQE/SSL/WAE prensiplerinin bağımsız uyarlaması','rules':'Çift QQE momentumu + SSL trend/baseline + Waddah Attar momentum/volatilite patlaması aynı yönde; benchmark ve Trap Defense teyidi zorunlu.','parameters':{'qqe_factors':[3.0,1.61],'ssl_baseline':60,'wae_fast':20,'wae_slow':40},'execution':{'stop_atr':2.2,'target_r':None,'trail_atr':2.2}},
- {'id':'kama_regime','name':'KAMA Efficiency Regime','origin':'Perry Kaufman adaptive trend prensibi','rules':'KAMA yönü + Efficiency Ratio + ADX + göreli güç + benchmark rejimi; yatay piyasada işlem azaltmayı hedefler.','parameters':{'er_length':10,'fast':2,'slow':30,'er_min':0.35},'execution':{'stop_atr':2.4,'target_r':None,'trail_atr':2.4}}
+ {'id':'kama_regime','name':'KAMA Efficiency Regime','origin':'Perry Kaufman adaptive trend prensibi','rules':'KAMA yönü + Efficiency Ratio + ADX + göreli güç + benchmark rejimi; yatay piyasada işlem azaltmayı hedefler.','parameters':{'er_length':10,'fast':2,'slow':30,'er_min':0.35},'execution':{'stop_atr':2.4,'target_r':None,'trail_atr':2.4}},
+ {'id':'regimemeta','name':'Regime Meta Router','origin':'BIST AI özgün hiyerarşik meta-strateji','rules':'Önce piyasa rejimini sınıflandırır; trend, breakout, adaptive momentum veya mean-reversion alt mantıklarından yalnız uygun olanları oylar. Yüksek risk/volatilitede işlem açmaz.','parameters':{'breadth_bull':55,'breadth_riskoff':38,'high_vol_ratio':1.35,'min_votes':3},'execution':{'stop_atr':2.5,'target_r':None,'trail_atr':2.5}}
 ]
 EXTERNAL=[
  {'name':'IBKR VWAP/TWAP/POV/Adaptive/Accumulate-Distribute','status':'RESEARCHED_PUBLIC_PRINCIPLES','url':'https://www.interactivebrokers.com/en/trading/ordertypes.php','reason':'Execution algoritmalarıdır; yön tahmini robotu değildir. Emir parçalama, katılım oranı ve market-impact prensipleri referans alındı; kod kopyalanmadı.'},
@@ -135,6 +136,14 @@ def features(df,benchmark=None):
         bc=benchmark.Close.astype(float);be=bc.ewm(span=50,adjust=False).mean();out['benchmark_bull']=bool(bc.iloc[-1]>be.iloc[-1] and be.iloc[-1]>be.iloc[-6])
     return out
 
+def regime_state(r):
+    f=r.get('robot_features',{})
+    breadth=f.get('breadth_pct');vr=f.get('vol_ratio_20_60',1);risk=r.get('risk',100);adx=r.get('adx',0)
+    if risk>=75 or f.get('benchmark_bull') is False and isinstance(breadth,(int,float)) and breadth<38:return 'RISK_OFF'
+    if isinstance(vr,(int,float)) and vr>=1.35:return 'HIGH_VOL'
+    if f.get('benchmark_bull') is True and isinstance(breadth,(int,float)) and breadth>=55 and adx>=22:return 'BULL_TREND'
+    return 'RANGE'
+
 def finite(r,*keys):return all(isinstance(r.get(k),(int,float)) and not isinstance(r.get(k),bool) and math.isfinite(r[k]) for k in keys)
 def _profile(strategy):return dict(next(b for b in CATALOG if b['id']==strategy).get('execution') or {})
 
@@ -177,6 +186,21 @@ def entry(strategy,r):
     elif strategy=='kama_regime':
         if f.get('benchmark_bull') is True and f.get('kama_bull') and f.get('kama_er',0)>=.35 and r.get('adx',0)>=20 and r.get('relative_strength_60',0)>0 and r.get('risk',100)<65:s='BUY'
         rank=min(99.,50+f.get('kama_er',0)*30+max(0,r.get('adx',0)-20)+max(0,r.get('relative_strength_60',0))*.4)
+    elif strategy=='regimemeta':
+        state=regime_state(r);votes=0;reasons=[]
+        if state in {'RISK_OFF','HIGH_VOL'}:return None
+        if state=='BULL_TREND':
+            if f.get('ema200_bull') and f.get('mom120',0)>4 and r.get('relative_strength_60',0)>0:votes+=1;reasons.append('trend')
+            if f.get('breakout_prior20') and (f.get('volume_confirm') or 0)>=1.15 and f.get('close_location',0)>=.6:votes+=1;reasons.append('breakout')
+            if f.get('qqe_primary_bull') and f.get('ssl_bull') and f.get('wae_bull'):votes+=1;reasons.append('QQE/SSL/WAE')
+            if f.get('kama_bull') and f.get('kama_er',0)>=.35:votes+=1;reasons.append('KAMA')
+            if r.get('supertrend')=='BULLISH' and r.get('ichimoku')!='BEARISH':votes+=1;reasons.append('trend teyidi')
+        else:
+            if f.get('ema200_bull') and f.get('rsi2',50)<=12 and f.get('zscore20',0)<=-1.8:votes+=2;reasons.append('mean-reversion')
+            if f.get('kama_er',1)<.25:votes+=1;reasons.append('düşük etkinlik/yatay')
+            if r.get('risk',100)<55:votes+=1;reasons.append('düşük risk')
+        if votes>=3 and f.get('benchmark_bull') is not False:s='BUY';rank=min(99.,55+votes*7+max(0,r.get('relative_strength_20',0))*.25)
+        if s:r['_regime_meta']={'state':state,'votes':votes,'reasons':reasons}
     elif strategy=='codexpro':
         if f.get('benchmark_bull') is not True or not finite(f,'breadth_pct') or f['breadth_pct']<52:return None
         votes=0;reasons=[]
@@ -206,6 +230,7 @@ def exit_reason(strategy,r,p):
     elif strategy=='defmom':bad=f.get('ema50_bull') is False or r.get('relative_strength_60',0)<0 or f.get('benchmark_bull') is False
     elif strategy=='qqe_ssl_wae':bad=not f.get('ssl_bull') or not f.get('qqe_secondary_bull') or f.get('benchmark_bull') is False
     elif strategy=='kama_regime':bad=not f.get('kama_bull') or f.get('kama_er',0)<.20 or f.get('benchmark_bull') is False
+    elif strategy=='regimemeta':bad=regime_state(r) in {'RISK_OFF','HIGH_VOL'} or f.get('benchmark_bull') is False
     elif strategy=='codex':bad=f.get('ema20_bull') is False or f.get('benchmark_bull') is False
     else:bad=f.get('ema20_bull') is False or f.get('benchmark_bull') is False or r.get('relative_strength_20',0)<-2
     return 'Kapanmış günlük barda stratejiye özgü çıkış koşulu oluştu.' if bad else None
