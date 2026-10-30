@@ -144,13 +144,32 @@ def regime_state(r):
     if f.get('benchmark_bull') is True and isinstance(breadth,(int,float)) and breadth>=55 and adx>=22:return 'BULL_TREND'
     return 'RANGE'
 
+def adaptive_risk_multiplier(r):
+    f=r.get('robot_features',{});m=1.0
+    risk=r.get('risk',100);breadth=f.get('breadth_pct');vr=f.get('vol_ratio_20_60')
+    if isinstance(risk,(int,float)):
+        if risk>=70:m=min(m,.5)
+        elif risk>=60:m=min(m,.75)
+    if isinstance(breadth,(int,float)):
+        if breadth<40:m=min(m,.4)
+        elif breadth<50:m=min(m,.6)
+        elif breadth<55:m=min(m,.8)
+    if isinstance(vr,(int,float)):
+        if vr>=1.5:m=min(m,.4)
+        elif vr>=1.35:m=min(m,.55)
+        elif vr>=1.15:m=min(m,.8)
+    if f.get('benchmark_bull') is False:m=min(m,.5)
+    return max(.25,min(1.0,round(m,2)))
+
 def finite(r,*keys):return all(isinstance(r.get(k),(int,float)) and not isinstance(r.get(k),bool) and math.isfinite(r[k]) for k in keys)
 def _profile(strategy):return dict(next(b for b in CATALOG if b['id']==strategy).get('execution') or {})
 
 def entry(strategy,r):
     from .auto_paper import signal
     if strategy=='baseline':
-        s=signal(r);return (*s,_profile(strategy)) if s else None
+        s=signal(r)
+        if not s:return None
+        p=_profile(strategy);p['risk_multiplier']=adaptive_risk_multiplier(r);return (*s,p)
     if r.get('signal_guard',{}).get('status')!='CLEAR' or (r.get('trap_defense') is not None and r.get('trap_defense',{}).get('status')!='CLEAR') or r.get('bar_provisional') or r.get('history_bars',0)<200:return None
     if not finite(r,'atr','price','avg_value_turnover_20','risk') or r['atr']<=0 or r['price']<=0 or r['avg_value_turnover_20']<15_000_000 or r['risk']>=78:return None
     f=r.get('robot_features',{});s=None;rank=50.
@@ -213,7 +232,8 @@ def entry(strategy,r):
         if s:r['_codexpro_reasons']=reasons
     if s:
         label=next(b['name'] for b in CATALOG if b['id']==strategy);detail=(' · oylar: '+', '.join(r.get('_codexpro_reasons',[]))) if strategy=='codexpro' else ''
-        return s,label+' · kapanmış günlük bar; Trap Defense CLEAR.'+detail,rank,_profile(strategy)
+        p=_profile(strategy);p['risk_multiplier']=adaptive_risk_multiplier(r)
+        return s,label+' · kapanmış günlük bar; Trap Defense CLEAR.'+detail,rank,p
     return None
 
 def exit_reason(strategy,r,p):
