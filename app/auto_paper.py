@@ -131,9 +131,13 @@ def process_quote(a,code,q,now):
     if ed.get('status')=='CAUTION':qty=math.floor(qty*float(ed.get('risk_multiplier',.65)))
     if ed.get('status')=='BLOCK':qty=0
     if qty>0:ed=execution_diagnostics(q,qty,px,cfg['slippage_bps'],o['side'])
+    from .microstructure_feed import latest_microstructure
+    micro=latest_microstructure(code);mg=micro.get('guard') or {};ms=mg.get('status')
+    if micro.get('configured') and ms=='BAD':qty=0
+    elif micro.get('configured') and ms=='CAUTION':qty=math.floor(qty*float(mg.get('risk_multiplier',.75)))
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
-        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution sınırı veya eksik güncel fiyat.',execution_diagnostics=ed);return
-    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
+        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro);return
+    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['microstructure']=micro;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
 
 def risk_check(a,now):
     v=valuation(a);day=str(now.date())
