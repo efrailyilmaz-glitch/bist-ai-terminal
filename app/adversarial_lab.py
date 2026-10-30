@@ -19,7 +19,7 @@ def _frame(df):
     need=['Open','High','Low','Close','Volume']
     if df is None or len(df)<80 or any(k not in df for k in need):
         raise ValueError('Adversarial lab requires at least 80 OHLCV bars.')
-    x=df[need].apply(pd.to_numeric,errors='coerce').copy()
+    x=df[need].apply(pd.to_numeric,errors='coerce').astype(float).copy()
     if not np.isfinite(x.to_numpy()).all():
         raise ValueError('OHLCV must be finite.')
     return x
