@@ -114,9 +114,10 @@ def process_quote(a,code,q,now):
     v=valuation(a);cfg=a['config'];px=q['close'];stop_mult=float(o.get('stop_atr',2.0));distance=max(o['atr']*stop_mult,px*.015)
     existing=[x for x in a['positions'] if x not in a['quotes'] or not valid_quote(a['quotes'][x],now)]
     room=max(0,v['equity']*cfg['gross_pct']/100-v['gross'])
-    budget=min(max(0,v['equity'])*cfg['position_pct']/100,room,a['cash']/(1+(cfg['fee_bps']+cfg['slippage_bps'])*.0001))
+    rm=float(o.get('risk_multiplier',1.0));rm=max(.25,min(1.0,rm)) if math.isfinite(rm) else 1.0
+    budget=min(max(0,v['equity'])*cfg['position_pct']/100*rm,room,a['cash']/(1+(cfg['fee_bps']+cfg['slippage_bps'])*.0001))
     planned_loss=distance+px*(2*cfg['fee_bps']+2*cfg['slippage_bps'])/10000
-    qty=math.floor(min(budget/(px*(1+cfg['slippage_bps']/10000)),max(0,v['equity'])*cfg['risk_pct']/100/planned_loss,q['volume']*.01))
+    qty=math.floor(min(budget/(px*(1+cfg['slippage_bps']/10000)),max(0,v['equity'])*cfg['risk_pct']/100*rm/planned_loss,q['volume']*.01))
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
         a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite sınırı veya eksik güncel fiyat.');return
     o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
