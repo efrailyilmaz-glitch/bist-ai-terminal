@@ -6,6 +6,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from . import auto_paper as paper
 from .robot_strategies import CATALOG,catalog,entry,exit_reason
+from .meta_governance import rank_forward_bots,meta_decision
 
 _LOCK=threading.RLock();_BUSY=set();_THREADS={}
 
@@ -59,8 +60,12 @@ def snapshot(token):
     for b in CATALOG:
         bot=a['bots'][b['id']];m=metrics(bot);rows.append({**b,'metrics':m,'promotion':promotion_status(m,a['started_at'],bench_adj),'positions':paper.valuation(bot)['positions'],'pending':list(bot['pending'].values()),'orders':bot['orders'][:200],'decisions':bot['decisions'][:100],'curve':bot['curve'][-500:],'risk_halt':bot['risk_halt'],'quote_errors':bot.get('quote_errors',{}),'created_at':bot['created_at']})
     rows.sort(key=lambda r:(-r['metrics']['return_pct'],r['metrics']['max_drawdown_pct'],r['id']))
+    try:days=max(0,(paper.now_tr()-datetime.fromisoformat(a['started_at'])).days) if a['started_at'] else 0
+    except Exception:days=0
+    ranking=rank_forward_bots(rows,days,bench_adj)
+    meta=meta_decision(ranking,None)
     scan={k:v for k,v in a['scan'].items() if k not in {'rows','codes'}};scan['total']=len(a['scan']['codes'])
-    return {'exists':True,'mode':'FORWARD_PAPER','live_execution':False,'validation':'PROSPECTIVE_ONLY','enabled':a['enabled'],'started_at':a['started_at'],'created_at':a['created_at'],'config':a['config'],'scan':scan,'last_risk_check':a['last_risk_check'],'error':a['error'],'benchmark':{'return_pct':ret,'cash_adjusted_pct':bench_adj,'base_at':bench.get('base',{}).get('at'),'last_at':bench.get('last',{}).get('at'),'label':'XU100 fiyat endeksi · masrafsız referans, temettü ve nakit faizi hariç; doğrudan alınabilir ürün değil'},'bots':rows,'external':catalog()['external'],'audit':catalog().get('audit',[]),'adaptation':catalog()['adaptation'],'worker_running':all(_THREADS.get(l) and _THREADS[l].is_alive() for l in ('scan','risk'))}
+    return {'exists':True,'mode':'FORWARD_PAPER','live_execution':False,'validation':'PROSPECTIVE_ONLY','enabled':a['enabled'],'started_at':a['started_at'],'created_at':a['created_at'],'config':a['config'],'scan':scan,'last_risk_check':a['last_risk_check'],'error':a['error'],'benchmark':{'return_pct':ret,'cash_adjusted_pct':bench_adj,'base_at':bench.get('base',{}).get('at'),'last_at':bench.get('last',{}).get('at'),'label':'XU100 fiyat endeksi · masrafsız referans, temettü ve nakit faizi hariç; doğrudan alınabilir ürün değil'},'bots':rows,'meta_governance':{'ranking':ranking,'decision':meta,'days':days,'mode':'FORWARD_PAPER_ONLY'},'external':catalog()['external'],'audit':catalog().get('audit',[]),'adaptation':catalog()['adaptation'],'worker_running':all(_THREADS.get(l) and _THREADS[l].is_alive() for l in ('scan','risk'))}
 
 def configure(token,payload):
     key=paper._key(token)

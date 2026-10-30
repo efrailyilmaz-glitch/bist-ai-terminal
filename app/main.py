@@ -37,6 +37,7 @@ from .adversarial_lab import stress as adversarial_stress
 from .forecast_lab import forecast
 from .edge_lab import edge_research
 from .robustness_lab import robustness_audit
+from .microstructure import microstructure_guard
 from .edge_catalog import CATALOG
 from fastapi import HTTPException
 from .opportunity_engine import smart_money_candidates
@@ -45,7 +46,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='33.0.0')
+app=FastAPI(title='BIST AI Terminal',version='34.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -62,6 +63,10 @@ app.mount('/static',StaticFiles(directory=str(BASE/'static')),name='static')
 
 @app.get('/',response_class=HTMLResponse)
 def index(): return (BASE/'templates/index.html').read_text(encoding='utf-8')
+
+@app.post('/api/microstructure-guard')
+def microstructure_guard_api(payload:dict=Body(...)):
+    return microstructure_guard(payload)
 
 @app.get('/api/universe')
 def universe(force: bool=False):
@@ -365,21 +370,23 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 33.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 34.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
       {'name':'Weekly Coverage','status':'OK' if weekly_cov>=80 else 'WARMING','detail':f'%{weekly_cov} · {bg.get("weekly_analyzed",0)}/{cycle_total}'},
       {'name':'Trap Defense','status':'OK','detail':'V3 · single-bar breakout, distribution cluster, OBV confirmation and late-stage chase filters active'},
       {'name':'Adversarial Lab','status':'OK','detail':'V1 · fake breakout, gap trap, stop sweep, volume climax and pump-fade synthetic stress tests'},
-      {'name':'Robustness Gate','status':'OK','detail':'PBO/CSCV + IS→OOS parameter-surface correlation + plateau veto; live authorization yok'},
+      {'name':'Robustness Gate','status':'OK','detail':'PBO/CSCV + Deflated Sharpe + IS→OOS parameter-surface correlation + plateau + 2x/3x cost stress'},
+      {'name':'Microstructure Guard','status':'OK','detail':'Licensed Level-2/order-event adapter ready; missing data cannot create bullish evidence'},
+      {'name':'Meta Governance','status':'OK','detail':'Forward-only champion/challenger ranking; historical backtests cannot self-promote'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
       {'name':'Chart Ruler','status':'OK','detail':'Price %, calendar duration and trading-bar count supported'},
       {'name':'Broker Safety','status':'OK','detail':'Direct live locked · paper risk gates active' if not br.get('direct_live_execution_enabled') else 'Live enabled'},
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'32.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'34.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):

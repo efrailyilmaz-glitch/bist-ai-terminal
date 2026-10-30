@@ -3,6 +3,7 @@ Designed to reject fragile backtests, not to certify profitability.
 """
 from __future__ import annotations
 import itertools, math
+from statistics import NormalDist
 import numpy as np
 import pandas as pd
 from .backtest import _frame,_positions,_metrics,TRADING_DAYS
@@ -32,6 +33,33 @@ def candidate_returns(df,cost_bps=10,slippage_bps=5):
         except Exception:
             continue
     return pd.DataFrame(cols,index=df.index).fillna(0),meta
+
+def deflated_sharpe(returns):
+    """Approximate Bailey/Lopez de Prado DSR for the best candidate.
+    Uses native-frequency Sharpe ratios and non-excess kurtosis.
+    """
+    r=pd.DataFrame(returns).replace([np.inf,-np.inf],np.nan).dropna(how='all').fillna(0)
+    if len(r)<80 or r.shape[1]<2:return {'status':'INSUFFICIENT_DATA'}
+    sr=[]
+    for col in r.columns:
+        s=r[col];sd=float(s.std())
+        sr.append(float(s.mean()/sd) if sd>0 else 0.0)
+    arr=np.array(sr,float);best=int(np.argmax(arr));n=len(arr)
+    mu=float(np.mean(arr));var=float(np.var(arr,ddof=1)) if n>1 else 0.0
+    nd=NormalDist();gamma=.5772156649015329
+    if n<=1 or var<=0:sr0=mu
+    else:
+        z1=nd.inv_cdf(1-1/n);z2=nd.inv_cdf(1-1/(n*math.e))
+        sr0=mu+math.sqrt(var)*((1-gamma)*z1+gamma*z2)
+    s=r.iloc[:,best];obs=float(arr[best]);skew=float(s.skew());kurt=float(s.kurt()+3.0)
+    den=1-skew*obs+((kurt-1)/4)*(obs**2)
+    if den<=0:return {'status':'UNSTABLE','best_index':best}
+    z=(obs-sr0)*math.sqrt(len(s)-1)/math.sqrt(den)
+    prob=nd.cdf(z)
+    return {'status':'OK','trials':n,'observations':len(s),'best_index':best,
+            'best_native_sharpe':round(obs,5),'expected_max_null_sharpe':round(sr0,5),
+            'dsr_probability_pct':round(prob*100,2),'skew':round(skew,3),'kurtosis_non_excess':round(kurt,3),
+            'interpretation':'Multiple-testing and non-normality adjusted diagnostic; not a guarantee of future returns.'}
 
 def pbo_cscv(returns,slices=8):
     """Approximate Bailey et al. CSCV PBO using equal contiguous blocks."""
@@ -97,7 +125,7 @@ def robustness_audit(ticker,period='10y',cost_bps=15,slippage_bps=10):
     if df is None or len(df)<500:return {'ticker':ticker.upper(),'status':'INSUFFICIENT_HISTORY'}
     returns,meta=candidate_returns(df,cost_bps,slippage_bps)
     if returns.shape[1]<3:return {'ticker':ticker.upper(),'status':'NO_CANDIDATES'}
-    pbo=pbo_cscv(returns);wfc=walk_forward_surface(returns);plateau=stability_map(returns)
+    pbo=pbo_cscv(returns);dsr=deflated_sharpe(returns);wfc=walk_forward_surface(returns);plateau=stability_map(returns)
     stress2,_=candidate_returns(df,cost_bps*2,slippage_bps*2);stress3,_=candidate_returns(df,cost_bps*3,slippage_bps*3)
     full_scores=[_sharpe(returns.iloc[:,j]) for j in range(returns.shape[1])]
     stress2_scores=[_sharpe(stress2.iloc[:,j]) for j in range(stress2.shape[1])] if not stress2.empty else []
@@ -106,6 +134,7 @@ def robustness_audit(ticker,period='10y',cost_bps=15,slippage_bps=10):
     # Deliberately conservative research gate. It authorizes only prospective paper validation.
     reasons=[]
     if pbo.get('pbo_pct',100)>25:reasons.append('PBO_HIGH')
+    if dsr.get('dsr_probability_pct',0)<95:reasons.append('DSR_BELOW_95')
     if wfc.get('median_surface_corr',-1)<.15:reasons.append('LOW_IS_OOS_SURFACE_CORRELATION')
     if wfc.get('positive_selected_oos_folds_pct',0)<60:reasons.append('OOS_FOLD_MAJORITY_FAIL')
     if plateau.get('plateau_pct',0)<15:reasons.append('PARAMETER_CLIFF_RISK')
@@ -113,7 +142,7 @@ def robustness_audit(ticker,period='10y',cost_bps=15,slippage_bps=10):
     gate='PROSPECTIVE_PAPER' if not reasons else 'RESEARCH_ONLY'
     return {'ticker':ticker.upper(),'status':'OK','period':period,'cost_bps':cost_bps,'slippage_bps':slippage_bps,
             'candidate_count':returns.shape[1],'best_full_sample':{**best_meta,'sharpe':round(full_scores[best],3)},
-            'pbo':pbo,'walk_forward_surface':wfc,'stability':plateau,
+            'pbo':pbo,'deflated_sharpe':dsr,'walk_forward_surface':wfc,'stability':plateau,
             'cost_stress':{'base_best_sharpe':round(max(full_scores),3),'double_cost_best_sharpe':round(max(stress2_scores),3) if stress2_scores else None,'triple_cost_best_sharpe':round(max(stress3_scores),3) if stress3_scores else None},
             'gate':gate,'veto_reasons':reasons,
             'limits':'Passing this gate never authorizes live trading. It only means the candidate family is eligible for locked prospective paper testing.'}
