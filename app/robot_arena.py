@@ -34,18 +34,33 @@ def metrics(a):
     stats=a.get('arena_stats',{'closed':len(exits),'wins':len(wins),'profit':sum(wins),'loss':sum(losses),'fees':sum(o['fee'] for o in a['orders'])})
     return {**v,'return_pct':round(v['total_pnl']/a['capital']*100,4),'max_drawdown_pct':round(a.get('max_drawdown_pct',0),4),'closed_trades':stats['closed'],'win_rate_pct':round(stats['wins']/stats['closed']*100,2) if stats['closed'] else None,'profit_factor':round(stats['profit']/stats['loss'],4) if stats['loss'] else None,'profit_factor_note':'Kayıplı kapanış yok; oran hesaplanmadı.' if not stats['loss'] else None,'fees_paid':round(stats['fees'],4),'stale_quotes':[c for c in a['positions'] if not paper.valid_quote(a['quotes'].get(c),paper.now_tr())],'borrow_cost':a['borrow_cost']}
 
+def promotion_status(bot_metrics,started_at,benchmark_return):
+    if not started_at:return {'status':'NOT_STARTED','reasons':['EXPERIMENT_NOT_STARTED']}
+    try:days=max(0,(paper.now_tr()-datetime.fromisoformat(started_at)).days)
+    except Exception:days=0
+    reasons=[]
+    if days<90:reasons.append('MIN_90_CALENDAR_DAYS')
+    if bot_metrics.get('closed_trades',0)<30:reasons.append('MIN_30_CLOSED_TRADES')
+    pf=bot_metrics.get('profit_factor')
+    if not isinstance(pf,(int,float)) or pf<1.2:reasons.append('PROFIT_FACTOR_BELOW_1_2')
+    if bot_metrics.get('max_drawdown_pct',100)>8:reasons.append('MAX_DRAWDOWN_ABOVE_8')
+    if isinstance(benchmark_return,(int,float)) and bot_metrics.get('return_pct',-999)<=benchmark_return:reasons.append('NO_BENCHMARK_EXCESS')
+    return {'status':'CHALLENGER_ELIGIBLE' if not reasons else 'OBSERVE','days':days,'reasons':reasons,
+            'note':'Eligibility is governance for further locked paper validation only; it never authorizes live execution.'}
+
 def snapshot(token):
     key=paper._key(token)
     with _LOCK:
         try:a=_read(key)
         except FileNotFoundError:return {'exists':False,**catalog()}
     rows=[]
+    bench=a['benchmark'];ret=(bench['last']['close']/bench['base']['close']-1)*100 if bench.get('base') and bench.get('last') else None
+    bench_adj=ret*a['config']['gross_pct']/100 if ret is not None else None
     for b in CATALOG:
-        bot=a['bots'][b['id']];rows.append({**b,'metrics':metrics(bot),'positions':paper.valuation(bot)['positions'],'pending':list(bot['pending'].values()),'orders':bot['orders'][:200],'decisions':bot['decisions'][:100],'curve':bot['curve'][-500:],'risk_halt':bot['risk_halt'],'quote_errors':bot.get('quote_errors',{}),'created_at':bot['created_at']})
+        bot=a['bots'][b['id']];m=metrics(bot);rows.append({**b,'metrics':m,'promotion':promotion_status(m,a['started_at'],bench_adj),'positions':paper.valuation(bot)['positions'],'pending':list(bot['pending'].values()),'orders':bot['orders'][:200],'decisions':bot['decisions'][:100],'curve':bot['curve'][-500:],'risk_halt':bot['risk_halt'],'quote_errors':bot.get('quote_errors',{}),'created_at':bot['created_at']})
     rows.sort(key=lambda r:(-r['metrics']['return_pct'],r['metrics']['max_drawdown_pct'],r['id']))
     scan={k:v for k,v in a['scan'].items() if k not in {'rows','codes'}};scan['total']=len(a['scan']['codes'])
-    bench=a['benchmark'];ret=(bench['last']['close']/bench['base']['close']-1)*100 if bench.get('base') and bench.get('last') else None
-    return {'exists':True,'mode':'FORWARD_PAPER','live_execution':False,'validation':'PROSPECTIVE_ONLY','enabled':a['enabled'],'started_at':a['started_at'],'created_at':a['created_at'],'config':a['config'],'scan':scan,'last_risk_check':a['last_risk_check'],'error':a['error'],'benchmark':{'return_pct':ret,'cash_adjusted_pct':ret*a['config']['gross_pct']/100 if ret is not None else None,'base_at':bench.get('base',{}).get('at'),'last_at':bench.get('last',{}).get('at'),'label':'XU100 fiyat endeksi · masrafsız referans, temettü ve nakit faizi hariç; doğrudan alınabilir ürün değil'},'bots':rows,'external':catalog()['external'],'audit':catalog().get('audit',[]),'adaptation':catalog()['adaptation'],'worker_running':all(_THREADS.get(l) and _THREADS[l].is_alive() for l in ('scan','risk'))}
+    return {'exists':True,'mode':'FORWARD_PAPER','live_execution':False,'validation':'PROSPECTIVE_ONLY','enabled':a['enabled'],'started_at':a['started_at'],'created_at':a['created_at'],'config':a['config'],'scan':scan,'last_risk_check':a['last_risk_check'],'error':a['error'],'benchmark':{'return_pct':ret,'cash_adjusted_pct':bench_adj,'base_at':bench.get('base',{}).get('at'),'last_at':bench.get('last',{}).get('at'),'label':'XU100 fiyat endeksi · masrafsız referans, temettü ve nakit faizi hariç; doğrudan alınabilir ürün değil'},'bots':rows,'external':catalog()['external'],'audit':catalog().get('audit',[]),'adaptation':catalog()['adaptation'],'worker_running':all(_THREADS.get(l) and _THREADS[l].is_alive() for l in ('scan','risk'))}
 
 def configure(token,payload):
     key=paper._key(token)

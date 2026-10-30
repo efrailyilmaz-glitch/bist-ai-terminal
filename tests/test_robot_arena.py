@@ -13,13 +13,22 @@ class RobotArenaTests(unittest.TestCase):
         self.now=datetime(2026,10,23,11,0,tzinfo=p.TR);self.token='x'*43;self.key=p._key(self.token)
     def tearDown(self):self.env.stop();self.temp.cleanup()
     def row(self):
-        return {'ticker':'TEST','as_of':'2026-10-22','history_bars':250,'signal_guard':{'status':'CLEAR'},'trap_defense':{'status':'CLEAR','score':0},'bar_provisional':False,'price':100.,'atr':2.,'short_score':82.,'long_score':78.,'supertrend':'BULLISH','macd_hist':1.,'adx':30.,'rsi':55.,'avg_value_turnover_20':50_000_000.,'risk':40.,'volatility':25.,'ichimoku':'BULLISH','relative_strength_20':5.,'relative_strength_60':10.,'robot_features':{'alpha_bull':True,'alpha_bear':False,'ott_bull':True,'ott_bear':False,'tott_bull':True,'tott_bear':False,'ema50_bull':True,'ema20_bull':True,'ema200_bull':True,'benchmark_bull':True,'breakout_prior20':True,'breakout_prior55':True,'mom120':10.,'mom200':15.,'rsi2':5.,'zscore20':-2.5,'vol_ratio_20_60':.5,'breadth_pct':80.,'volume_confirm':1.5,'close_location':.8,'upper_wick':.1,'gap_atr':.5,'extension_atr':1.}}
+        return {'ticker':'TEST','as_of':'2026-10-22','history_bars':250,'signal_guard':{'status':'CLEAR'},'trap_defense':{'status':'CLEAR','score':0},'bar_provisional':False,'price':100.,'atr':2.,'short_score':82.,'long_score':78.,'supertrend':'BULLISH','macd_hist':1.,'adx':30.,'rsi':55.,'avg_value_turnover_20':50_000_000.,'risk':40.,'volatility':25.,'ichimoku':'BULLISH','relative_strength_20':5.,'relative_strength_60':10.,'robot_features':{'alpha_bull':True,'alpha_bear':False,'ott_bull':True,'ott_bear':False,'tott_bull':True,'tott_bear':False,'ema50_bull':True,'ema20_bull':True,'ema200_bull':True,'benchmark_bull':True,'breakout_prior20':True,'breakout_prior55':True,'mom120':10.,'mom200':15.,'rsi2':5.,'zscore20':-2.5,'vol_ratio_20_60':.5,'breadth_pct':80.,'volume_confirm':1.5,'close_location':.8,'upper_wick':.1,'gap_atr':.5,'extension_atr':1.,'qqe_primary_bull':True,'qqe_secondary_bull':True,'ssl_bull':True,'wae_bull':True,'wae_strength':1.5,'kama_bull':True,'kama_er':.6}}
     def quote(self,minute=0,px=100.,high=101.,low=99.):
         start=self.now+timedelta(minutes=minute);return {'start':start.isoformat(),'at':(start+timedelta(minutes=15)).isoformat(),'open':px,'close':px,'high':high,'low':low,'volume':1_000_000.}
     def running(self):
         root=a.fresh();root['enabled']=True;root['started_at']=self.now.isoformat()
         for b in root['bots'].values():b['enabled']=True
         return root
+    def test_promotion_gate_never_authorizes_live(self):
+        m={'closed_trades':40,'profit_factor':1.5,'max_drawdown_pct':5,'return_pct':12}
+        started=(self.now-timedelta(days=120)).isoformat()
+        with patch.object(p,'now_tr',return_value=self.now):g=a.promotion_status(m,started,5)
+        self.assertEqual(g['status'],'CHALLENGER_ELIGIBLE');self.assertIn('never authorizes live',g['note'])
+        m['closed_trades']=5
+        with patch.object(p,'now_tr',return_value=self.now):g=a.promotion_status(m,started,5)
+        self.assertEqual(g['status'],'OBSERVE')
+
     def test_equal_capital_policy_no_copied_vendor_claims(self):
         root=a.fresh();self.assertEqual(len(root['bots']),len(s.CATALOG))
         for b in root['bots'].values():self.assertEqual(b['capital'],1_000_000);self.assertFalse(b['enabled']);self.assertFalse(b['config']['allow_short']);self.assertEqual(b['config'],root['config'])
@@ -44,6 +53,19 @@ class RobotArenaTests(unittest.TestCase):
             for k,v in [('bar_provisional',True),('history_bars',100),('atr',float('nan')),('avg_value_turnover_20',1)]:
                 bad=copy.deepcopy(r);bad[k]=v;self.assertIsNone(s.entry(sid,bad))
             bad=copy.deepcopy(r);bad['signal_guard']['status']='WAIT';self.assertIsNone(s.entry(sid,bad))
+    def test_adaptive_risk_overlay_only_derisks(self):
+        base=self.row();self.assertEqual(s.adaptive_risk_multiplier(base),1.0)
+        bad=self.row();bad['risk']=72;bad['robot_features']['breadth_pct']=35;bad['robot_features']['vol_ratio_20_60']=1.6
+        m=s.adaptive_risk_multiplier(bad);self.assertGreaterEqual(m,.25);self.assertLess(m,1.0)
+        sig=s.entry('regimemeta',base);self.assertEqual(sig[0],'BUY');self.assertEqual(sig[3]['risk_multiplier'],1.0)
+
+    def test_indicator_fusion_and_kama_gates(self):
+        r=self.row();self.assertEqual(s.entry('qqe_ssl_wae',r)[0],'BUY');self.assertEqual(s.entry('kama_regime',r)[0],'BUY')
+        for key in ('qqe_primary_bull','qqe_secondary_bull','ssl_bull','wae_bull'):
+            bad=self.row();bad['robot_features'][key]=False;self.assertIsNone(s.entry('qqe_ssl_wae',bad),key)
+        bad=self.row();bad['robot_features']['kama_er']=.2;self.assertIsNone(s.entry('kama_regime',bad))
+        bad=self.row();bad['robot_features']['kama_bull']=False;self.assertIsNone(s.entry('kama_regime',bad))
+
     def test_codex_requires_every_confirmation_and_has_exit(self):
         for k,v in [('benchmark_bull',False),('breadth_pct',54),('volume_confirm',1.1),('close_location',.5),('upper_wick',.5),('gap_atr',2),('extension_atr',3),('breakout_prior20',False)]:
             r=self.row();r['robot_features'][k]=v;self.assertIsNone(s.entry('codex',r),k)
