@@ -44,6 +44,12 @@ class RobotArenaTests(unittest.TestCase):
             for k,v in [('bar_provisional',True),('history_bars',100),('atr',float('nan')),('avg_value_turnover_20',1)]:
                 bad=copy.deepcopy(r);bad[k]=v;self.assertIsNone(s.entry(sid,bad))
             bad=copy.deepcopy(r);bad['signal_guard']['status']='WAIT';self.assertIsNone(s.entry(sid,bad))
+    def test_adaptive_risk_overlay_only_derisks(self):
+        base=self.row();self.assertEqual(s.adaptive_risk_multiplier(base),1.0)
+        bad=self.row();bad['risk']=72;bad['robot_features']['breadth_pct']=35;bad['robot_features']['vol_ratio_20_60']=1.6
+        m=s.adaptive_risk_multiplier(bad);self.assertGreaterEqual(m,.25);self.assertLess(m,1.0)
+        sig=s.entry('regimemeta',base);self.assertEqual(sig[0],'BUY');self.assertEqual(sig[3]['risk_multiplier'],1.0)
+
     def test_indicator_fusion_and_kama_gates(self):
         r=self.row();self.assertEqual(s.entry('qqe_ssl_wae',r)[0],'BUY');self.assertEqual(s.entry('kama_regime',r)[0],'BUY')
         for key in ('qqe_primary_bull','qqe_secondary_bull','ssl_bull','wae_bull'):
