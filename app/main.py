@@ -33,6 +33,7 @@ from .decision_levels import decision_levels
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
+from .adversarial_lab import stress as adversarial_stress
 from .forecast_lab import forecast
 from .edge_lab import edge_research
 from .edge_catalog import CATALOG
@@ -43,7 +44,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='32.0.0')
+app=FastAPI(title='BIST AI Terminal',version='33.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -321,6 +322,17 @@ def weekly_reversal_api(ticker:str,with_history:bool=True):
 def weekly_reversal_radar_api(limit:int=80,universe_limit:int=0):
     return weekly_reversal_radar(limit=limit,universe_limit=universe_limit)
 
+@app.get('/api/adversarial-stress/{ticker}')
+def adversarial_stress_api(ticker:str,period:str='5y'):
+    from .market_data import yahoo_rows
+    import pandas as pd
+    raw=yahoo_rows(ticker,period=period,interval='1d').get('candles') or []
+    if len(raw)<80: raise HTTPException(422,'At least 80 daily bars are required')
+    df=pd.DataFrame(raw).rename(columns={'open':'Open','high':'High','low':'Low','close':'Close','volume':'Volume'})
+    report=adversarial_stress(df)
+    report['ticker']=ticker.upper();report['period']=period
+    return report
+
 @app.get('/api/forecast/{ticker}')
 def forecast_api(ticker:str,horizon:int=20,cost_bps:float=30):
     import math
@@ -348,12 +360,13 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 32.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 33.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
       {'name':'Weekly Coverage','status':'OK' if weekly_cov>=80 else 'WARMING','detail':f'%{weekly_cov} · {bg.get("weekly_analyzed",0)}/{cycle_total}'},
       {'name':'Trap Defense','status':'OK','detail':'V3 · single-bar breakout, distribution cluster, OBV confirmation and late-stage chase filters active'},
+      {'name':'Adversarial Lab','status':'OK','detail':'V1 · fake breakout, gap trap, stop sweep, volume climax and pump-fade synthetic stress tests'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
       {'name':'Chart Ruler','status':'OK','detail':'Price %, calendar duration and trading-bar count supported'},
       {'name':'Broker Safety','status':'OK','detail':'Direct live locked · paper risk gates active' if not br.get('direct_live_execution_enabled') else 'Live enabled'},
