@@ -365,4 +365,4 @@ jobs:
           assert any(f['code']=='UNCONFIRMED_FIRST_BREAKOUT' for f in t['flags'])
           print('V32 first-bar breakout is not trusted',t['status'],t['score'])
           PY
-      - run: python -c "from app.main import app; assert app.version == '32.0.0'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '33.0.0'; print(app.title, app.version)"
