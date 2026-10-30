@@ -310,6 +310,19 @@ jobs:
           assert abs(a['positions']['TEST']['stop']-105)<1e-9
           print('V30 trailing stop activates next bar only')
           PY
+      - name: V32 paper portfolio and ruler regression
+        run: |
+          node - <<'JS'
+          const P=require('./app/static/paper-engine.js');
+          let a=P.fresh();
+          a=P.trade(a,{id:'x1',ticker:'TEST',side:'BUY',quantity:10,price:100,feeBps:10,at:'2026-10-01T09:00:00Z',stop:94,target:115,note:'test thesis',trapSnapshot:{status:'WAIT',score:33}});
+          if(!a.positions.TEST||a.positions.TEST.stop!==94||a.positions.TEST.target!==115||a.positions.TEST.entryTrap.score!==33)throw Error('paper metadata failed');
+          const v=P.valuation(a,{TEST:{price:110,as_of:'2026-10-30'}});
+          if(v.rows[0].pnl==null||v.rows[0].openedAt!=='2026-10-01T09:00:00.000Z')throw Error('paper valuation/date failed');
+          const D=require('./app/static/chart-drawings.js');
+          if(!D.elapsed('2026-10-01','2026-10-10').includes('9 gün'))throw Error('ruler elapsed failed');
+          console.log('V32 paper/ruler regression ok');
+          JS
       - name: V31 anti-trap persistence smoke
         run: |
           python - <<'PY'
@@ -319,7 +332,7 @@ jobs:
           n=120;x=np.arange(n);close=100+x*.08
           vol=np.ones(n)*1_000_000
           df=pd.DataFrame({'Open':close-.2,'High':close+.8,'Low':close-.8,'Close':close,'Volume':vol})
-          base=assess_traps(df);assert base['version']>=2
+          base=assess_traps(df);assert base['version']>=3
           # Previous-bar breakout followed by rejection should score as a trap.
           z=df.copy();ref=float(z['High'].iloc[-22:-2].max());z.loc[n-2,'Close']=ref+2;z.loc[n-2,'High']=ref+2.5;z.loc[n-2,'Volume']=2_000_000;z.loc[n-1,'Open']=ref+1;z.loc[n-1,'High']=ref+1.5;z.loc[n-1,'Low']=ref-1.5;z.loc[n-1,'Close']=ref-.5
           t=assess_traps(z);assert any(f['code']=='ONE_BAR_BREAKOUT_REJECTION' for f in t['flags'])
@@ -339,4 +352,17 @@ jobs:
           assert len(catalog()['audit'])>=4
           print('V30 robot catalog/execution profiles ok',len(CATALOG))
           PY
-      - run: python -c "from app.main import app; assert app.version == '31.0.0'; print(app.title, app.version)"
+      - name: V32 anti-trap adversarial regression
+        run: |
+          python - <<'PY'
+          import numpy as np,pandas as pd
+          from app.trap_defense import assess_traps
+          n=100;close=np.linspace(100,110,n);vol=np.ones(n)*1_000_000
+          df=pd.DataFrame({'Open':close-.2,'High':close+.8,'Low':close-.8,'Close':close,'Volume':vol})
+          ref=float(df.High.iloc[-22:-2].max())
+          df.loc[n-1,'Close']=ref+1;df.loc[n-1,'High']=ref+1.4;df.loc[n-1,'Volume']=1_050_000
+          t=assess_traps(df)
+          assert any(f['code']=='UNCONFIRMED_FIRST_BREAKOUT' for f in t['flags'])
+          print('V32 first-bar breakout is not trusted',t['status'],t['score'])
+          PY
+      - run: python -c "from app.main import app; assert app.version == '32.0.0'; print(app.title, app.version)"

@@ -86,16 +86,44 @@ def assess_traps(df:pd.DataFrame):
     fade=(c/c.shift(3)-1)*100
     if _f(run.iloc[-4])>=18 and _f(fade.iloc[-1])<=-7 and _f(vr.iloc[-1])>=1.4:flag('PUMP_FADE_ECHO','Hızlı yükseliş sonrası hacimli sert geri verme paterni.',32)
 
+    # 15) first-bar breakout is never trusted on its own.
+    if _f(c.iloc[-1])>_f(high20.iloc[-1],1e99) and _f(c.iloc[-2])<=_f(high20.iloc[-2],1e99):
+        flag('UNCONFIRMED_FIRST_BREAKOUT','Kırılım yalnız son kapalı barda oluştu; en az bir ek kapalı bar teyidi beklenir.',18)
+
+    # 16) distribution-day cluster: repeated down closes on above-normal volume.
+    distribution_days=((ret<=-.008)&(vr>=1.30)).tail(10).sum()
+    if distribution_days>=3:
+        flag('DISTRIBUTION_DAY_CLUSTER',f'Son 10 barda {int(distribution_days)} yüksek hacimli negatif gün var; dağıtım baskısı olabilir.',26)
+
+    # 17) price makes a new local high while OBV fails to confirm.
+    obv=(np.sign(c.diff()).fillna(0)*v).cumsum()
+    obv_ref=obv.shift(1).rolling(20).max()
+    if _f(c.iloc[-1])>_f(high20.iloc[-1],1e99) and _f(obv.iloc[-1])<_f(obv_ref.iloc[-1],-1e99):
+        flag('BREAKOUT_WITHOUT_OBV_CONFIRMATION','Fiyat yeni tepe yaparken OBV teyit etmiyor; kırılım kalitesi düşük.',20)
+
+    # 18) strong up day that closes weakly despite heavy volume.
+    if _f(ret.iloc[-1])*100>=3 and _f(vr.iloc[-1])>=1.6 and _f(clv.iloc[-1])<0:
+        flag('STRONG_UP_WEAK_CLOSE','Sert yükseliş günü yüksek hacme rağmen zayıf kapanmış; kovalamaca riski.',22)
+
+    # 19) late-stage extension: do not chase an already stretched move.
+    run20=(c/c.shift(20)-1)*100
+    if _f(run20.iloc[-1])>=25 and _f(ext.iloc[-1])>=2.2 and _f(vr.iloc[-1])>=1.4:
+        flag('LATE_STAGE_EXTENSION','20 günlük yükseliş ve ATR uzaması birlikte aşırı; geç giriş riski yüksek.',24)
+
+    # 20) failed EMA20 reclaim: a common short-lived relief rally pattern.
+    if len(x)>=3 and _f(c.iloc[-2])>_f(ema20.iloc[-2]) and _f(c.iloc[-3])<=_f(ema20.iloc[-3]) and _f(c.iloc[-1])<_f(ema20.iloc[-1]):
+        flag('FAILED_EMA20_RECLAIM','EMA20 geri alındıktan bir bar sonra tekrar altına inilerek dönüş teyidi bozulmuş.',20)
+
     raw=sum(f['weight'] for f in flags)
     score=min(100,raw)
     critical=any(f['code'] in {'VOLUME_CLIMAX_WEAK_CLOSE','PUMP_FADE_ECHO'} for f in flags)
     status='BLOCK' if score>=60 or (critical and score>=45) else 'WAIT' if score>=28 else 'CLEAR'
-    return {'version':2,'status':status,'score':score,'flags':flags,
+    return {'version':3,'status':status,'score':score,'flags':flags,
             'metrics':{'failed_breakouts_10':int(failed),'upper_wick_cluster_8':int(wick_cluster),'churn_8':int(churn),
                        'ema20_atr_extension':round(_f(ext.iloc[-1]),2),'volume_ratio_median20':round(_f(vr.iloc[-1]),2),
                        'volatility_ratio_10_60':round(_f(vol10.iloc[-1])/max(_f(vol60.iloc[-1]),1e-9),2),
                        'gap_pct':round(_f(gap_pct.iloc[-1]),2),'breakout_margin_atr':round(_f(breakout_margin.iloc[-1]),2),
-                       'body_to_range':round(_f(body_ratio.iloc[-1]),2)},
+                       'body_to_range':round(_f(body_ratio.iloc[-1]),2),'distribution_days_10':int(distribution_days),'run20_pct':round(_f(run20.iloc[-1]),2)},
             'limits':'Bu motor yalnız fiyat/hacim davranışından risk işaretleri üretir. Manipülasyon, spoofing veya belirli bir kişi/kurumun niyeti OHLCV ile doğrulanamaz; Level-2, emir ekleme/iptal ve işlem tarafı verisi gerekir.'}
 
 def combined_guard(signal_guard,trap):

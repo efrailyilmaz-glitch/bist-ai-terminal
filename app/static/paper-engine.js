@@ -16,7 +16,7 @@
   const qty=lots(o.quantity),price=amount(o.price),feeBps=Number(o.feeBps??10);
   if(!Number.isFinite(feeBps)||feeBps<0||feeBps>100)throw Error('Komisyon 0–100 baz puan olmalı.');
   if(account.orders.some(x=>x.id===o.id))throw Error('Bu işlem zaten kaydedildi.');
-  const a=JSON.parse(JSON.stringify(account)),p=a.positions[o.ticker]||{quantity:0,avg:0,entryFees:0};
+  const a=JSON.parse(JSON.stringify(account)),p=a.positions[o.ticker]||{quantity:0,avg:0,entryFees:0,openedAt:null,note:'',stop:null,target:null,entryTrap:null};
   const notional=qty*price,fee=notional*feeBps/10000,opening=['BUY','SHORT'].includes(o.side);
   if(!Number.isFinite(notional)||notional>250000)throw Error('Simülasyonda emir başına üst sınır 250.000 TL.');
   if(opening && (Math.abs(p.quantity)+qty)*price>a.capital*.12)throw Error('Simülasyonda hisse başına üst sınır başlangıç sermayesinin %12’si.');
@@ -25,6 +25,11 @@
   if(o.side==='BUY'||o.side==='SHORT'){
    if((o.side==='BUY'&&p.quantity<0)||(o.side==='SHORT'&&p.quantity>0))throw Error('Önce karşı yöndeki pozisyonu kapatın.');
    const old=Math.abs(p.quantity);p.avg=(old*p.avg+notional)/(old+qty);p.entryFees+=fee;
+   if(old===0){p.openedAt=new Date(stamp).toISOString();p.entryTrap=o.trapSnapshot||null;p.note=String(o.note||'').slice(0,500);}
+   else if(o.trapSnapshot&&(!p.entryTrap||Number(o.trapSnapshot.score||0)>Number(p.entryTrap.score||0)))p.entryTrap=o.trapSnapshot;
+   if(o.note)p.note=String(o.note).slice(0,500);
+   if(Number.isFinite(Number(o.stop))&&Number(o.stop)>0)p.stop=Number(o.stop);
+   if(Number.isFinite(Number(o.target))&&Number(o.target)>0)p.target=Number(o.target);
    p.quantity+=(o.side==='BUY'?qty:-qty);a.cash-=notional+fee;
   }else{
    if((o.side==='SELL'&&p.quantity<=0)||(o.side==='COVER'&&p.quantity>=0)||qty>Math.abs(p.quantity))throw Error('Kapatılacak yeterli pozisyon yok.');
@@ -35,7 +40,7 @@
   }
   if(p.quantity)a.positions[o.ticker]=p;else delete a.positions[o.ticker];
   a.cash=money(a.cash);a.realized=money(a.realized);a.revision++;
-  a.orders.unshift({id:o.id,ticker:o.ticker,side:o.side,quantity:qty,price,fee:money(fee),pnl:pnl===null?null:money(pnl),at:new Date(stamp).toISOString(),recordedAt:new Date().toISOString(),source:o.source||'USER_SIMULATION',runId:o.runId||null});
+  a.orders.unshift({id:o.id,ticker:o.ticker,side:o.side,quantity:qty,price,fee:money(fee),pnl:pnl===null?null:money(pnl),at:new Date(stamp).toISOString(),recordedAt:new Date().toISOString(),source:o.source||'USER_SIMULATION',runId:o.runId||null,note:String(o.note||'').slice(0,500),stop:Number.isFinite(Number(o.stop))?Number(o.stop):null,target:Number.isFinite(Number(o.target))?Number(o.target):null,trapSnapshot:o.trapSnapshot||null});
   return a;
  }
  function levels(text){
@@ -68,7 +73,7 @@
    let balance=p.quantity,start=null;for(const o of orders){start=o.at;balance-=o.side==='BUY'||o.side==='COVER'?o.quantity:-o.quantity;if(balance===0)break;}
    const pnl=ok?(price-p.avg)*p.quantity-p.entryFees:null,cost=Math.abs(p.quantity)*p.avg+p.entryFees;
    if(ok){unreal+=pnl;known+=p.quantity>0?p.quantity*price:Math.abs(p.quantity)*(2*p.avg-price);}else missing++;
-   return {ticker,...p,price:ok?price:null,asOf:q?.as_of||null,pnl,returnPct:ok?pnl/cost*100:null,openedAt:balance===0?start:null,lastAt:orders[0]?.at||null,mfePct:q?.mfePct??null,maePct:q?.maePct??null};
+   const opened=p.openedAt||(balance===0?start:null);const plan=p.quantity>0?(ok&&p.stop&&price<=p.stop?'STOP ALTI':ok&&p.target&&price>=p.target?'HEDEF ÜSTÜ':'İZLE'):(ok&&p.stop&&price>=p.stop?'STOP ÜSTÜ':ok&&p.target&&price<=p.target?'HEDEF ALTI':'İZLE');return {ticker,...p,price:ok?price:null,asOf:q?.as_of||null,pnl,returnPct:ok?pnl/cost*100:null,openedAt:opened,lastAt:orders[0]?.at||null,mfePct:q?.mfePct??null,maePct:q?.maePct??null,planStatus:plan};
   });
   return {rows,missing,unrealized:missing?null:money(unreal),knownUnrealized:money(unreal),equity:missing?null:money(a.cash+known),totalPnl:missing?null:money(a.realized+unreal),realized:a.realized,cash:a.cash};
  }
