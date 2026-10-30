@@ -62,7 +62,7 @@ def fill(a,o,reference,at,quantity=None):
         pnl=(px-p['avg'])*p['quantity']-p['fees']-fee
         a['cash']+=qty*px-fee if p['quantity']>0 else qty*(2*p['avg']-px)-fee
         a['realized']+=pnl;del a['positions'][code]
-    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics')}
+    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics'),'microstructure':o.get('microstructure')}
     stats=a.get('arena_stats')
     if stats is not None:
         stats['fees']+=fee
@@ -131,9 +131,13 @@ def process_quote(a,code,q,now):
     if ed.get('status')=='CAUTION':qty=math.floor(qty*float(ed.get('risk_multiplier',.65)))
     if ed.get('status')=='BLOCK':qty=0
     if qty>0:ed=execution_diagnostics(q,qty,px,cfg['slippage_bps'],o['side'])
+    from .microstructure_feed import latest_microstructure
+    micro=latest_microstructure(code);mg=micro.get('guard') or {};ms=mg.get('status')
+    if micro.get('configured') and ms=='BAD':qty=0
+    elif micro.get('configured') and ms=='CAUTION':qty=math.floor(qty*float(mg.get('risk_multiplier',.75)))
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
-        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution sınırı veya eksik güncel fiyat.',execution_diagnostics=ed);return
-    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
+        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro);return
+    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['microstructure']=micro;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
 
 def risk_check(a,now):
     v=valuation(a);day=str(now.date())
