@@ -62,7 +62,7 @@ def fill(a,o,reference,at,quantity=None):
         pnl=(px-p['avg'])*p['quantity']-p['fees']-fee
         a['cash']+=qty*px-fee if p['quantity']>0 else qty*(2*p['avg']-px)-fee
         a['realized']+=pnl;del a['positions'][code]
-    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics')}
+    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics'),'microstructure':o.get('microstructure')}
     stats=a.get('arena_stats')
     if stats is not None:
         stats['fees']+=fee
