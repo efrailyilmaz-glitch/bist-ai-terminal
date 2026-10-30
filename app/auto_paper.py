@@ -45,8 +45,10 @@ def queue(a,code,side,reason,now,**extra):
     event(a,'QUEUED',code,reason,side=side)
 
 def fill(a,o,reference,at,quantity=None):
+    from .execution_intelligence import slippage_price
     code=o['ticker'];side=o['side'];cfg=a['config'];qty=int(quantity if quantity is not None else o.get('quantity',abs(a['positions'].get(code,{}).get('quantity',0))))
-    buy=side in {'BUY','COVER'};px=reference*(1+(1 if buy else -1)*cfg['slippage_bps']/10000);fee=qty*px*cfg['fee_bps']/10000
+    eff_slip=max(float(cfg['slippage_bps']),float(o.get('effective_slippage_bps',cfg['slippage_bps'])))
+    px=slippage_price(reference,side,eff_slip);fee=qty*px*cfg['fee_bps']/10000
     if not math.isfinite(px) or px<=0 or qty<1:raise ValueError('Geçersiz sanal dolum')
     pnl=None
     if side in {'BUY','SHORT'}:
@@ -60,7 +62,7 @@ def fill(a,o,reference,at,quantity=None):
         pnl=(px-p['avg'])*p['quantity']-p['fees']-fee
         a['cash']+=qty*px-fee if p['quantity']>0 else qty*(2*p['avg']-px)-fee
         a['realized']+=pnl;del a['positions'][code]
-    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR'}
+    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics')}
     stats=a.get('arena_stats')
     if stats is not None:
         stats['fees']+=fee
@@ -95,7 +97,9 @@ def process_quote(a,code,q,now):
         target=bool(target_level is not None and (q['high']>=target_level if long else q['low']<=target_level))
         if stop or target:
             px=(min(q['open'],active_stop) if long else max(q['open'],active_stop)) if stop else target_level
-            o={'id':secrets.token_hex(10),'ticker':code,'side':'SELL' if long else 'COVER','reason':'STOP · aynı barda iki seviye de varsa stop önce varsayılır' if stop else 'KÂR HEDEFİ'}
+            from .execution_intelligence import execution_diagnostics
+            side='SELL' if long else 'COVER';ed=execution_diagnostics(q,abs(p['quantity']),px,a['config']['slippage_bps'],side)
+            o={'id':secrets.token_hex(10),'ticker':code,'side':side,'reason':'STOP · aynı barda iki seviye de varsa stop önce varsayılır' if stop else 'KÂR HEDEFİ','effective_slippage_bps':ed['effective_slippage_bps'],'execution_diagnostics':ed}
             fill(a,o,px,q['at']);a['pending'].pop(code,None);return
         trail=p.get('trail_distance')
         if isinstance(trail,(int,float)) and trail>0:
@@ -106,7 +110,11 @@ def process_quote(a,code,q,now):
     # Price must come from a complete bar starting AFTER the decision was recorded.
     if datetime.fromisoformat(q['start'])<datetime.fromisoformat(o['created_at']):return
     if o['side'] in {'SELL','COVER'}:
-        if code in a['positions']:fill(a,o,q['close'],q['at'])
+        if code in a['positions']:
+            from .execution_intelligence import execution_diagnostics
+            ed=execution_diagnostics(q,abs(a['positions'][code]['quantity']),q['close'],a['config']['slippage_bps'],o['side'])
+            o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed
+            fill(a,o,q['close'],q['at'])
         a['pending'].pop(code,None);return
     if not a['enabled'] or a['risk_halt']:a['pending'].pop(code,None);return
     if (now-datetime.fromisoformat(o['created_at'])).total_seconds()>48*3600:
@@ -118,9 +126,14 @@ def process_quote(a,code,q,now):
     budget=min(max(0,v['equity'])*cfg['position_pct']/100*rm,room,a['cash']/(1+(cfg['fee_bps']+cfg['slippage_bps'])*.0001))
     planned_loss=distance+px*(2*cfg['fee_bps']+2*cfg['slippage_bps'])/10000
     qty=math.floor(min(budget/(px*(1+cfg['slippage_bps']/10000)),max(0,v['equity'])*cfg['risk_pct']/100*rm/planned_loss,q['volume']*.01))
+    from .execution_intelligence import execution_diagnostics
+    ed=execution_diagnostics(q,qty,px,cfg['slippage_bps'],o['side'])
+    if ed.get('status')=='CAUTION':qty=math.floor(qty*float(ed.get('risk_multiplier',.65)))
+    if ed.get('status')=='BLOCK':qty=0
+    if qty>0:ed=execution_diagnostics(q,qty,px,cfg['slippage_bps'],o['side'])
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
-        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite sınırı veya eksik güncel fiyat.');return
-    o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
+        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution sınırı veya eksik güncel fiyat.',execution_diagnostics=ed);return
+    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
 
 def risk_check(a,now):
     v=valuation(a);day=str(now.date())
