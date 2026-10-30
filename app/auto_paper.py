@@ -141,7 +141,7 @@ def risk_check(a,now):
         for code,p in a['positions'].items():queue(a,code,'SELL' if p['quantity']>0 else 'COVER',halt,now)
     a['last_equity']=v['equity'];return v
 
-def choose(a,rows,requested,now,signal_fn=None,exit_fn=None):
+def choose(a,rows,requested,now,signal_fn=None,exit_fn=None,portfolio_guard_fn=None):
     from datetime import timedelta
     expected=now.date() if (now.hour,now.minute)>=(18,20) else now.date()-timedelta(days=1)
     while expected.weekday()>=5:expected-=timedelta(days=1)
@@ -166,8 +166,7 @@ def choose(a,rows,requested,now,signal_fn=None,exit_fn=None):
         if key in a.setdefault('signal_keys',[]):continue
         a['signal_keys']=(a['signal_keys']+[key])[-5000:]
         extra=dict(s[3]) if len(s)>3 and isinstance(s[3],dict) else {}
-        from .portfolio_guard import portfolio_entry_guard
-        pg=portfolio_entry_guard(code,a['positions'],s[0])
+        pg=(portfolio_guard_fn(code,a['positions'],s[0]) if portfolio_guard_fn else {'status':'UNKNOWN','risk_multiplier':1.0,'flags':['PORTFOLIO_GUARD_NOT_REQUESTED']})
         if pg.get('status')=='BLOCK':
             event(a,'REJECTED',code,'Portföy yoğunlaşma koruması: yeni pozisyon mevcut risk faktörlerine aşırı benzer.',portfolio_guard=pg);continue
         extra['risk_multiplier']=min(float(extra.get('risk_multiplier',1.0)),float(pg.get('risk_multiplier',1.0)))
@@ -307,7 +306,8 @@ def cycle(key,now=None,lane='combined'):
                         scan['last_batch_at']=now.isoformat();scan['next_due']=0;scan['retry_at']=0
                         if scan['cursor']>=len(universe):
                             values=list(scan['rows'].values());latest=max((r['as_of'] for r in values),default='')
-                            choose(a,[r for r in values if r['as_of']==latest],len(universe),now)
+                            from .portfolio_guard import portfolio_entry_guard
+                            choose(a,[r for r in values if r['as_of']==latest],len(universe),now,portfolio_guard_fn=portfolio_entry_guard)
                             scan.update({'cursor':0,'rows':{},'completed_at':now.isoformat(),'completed_count':len(universe),'next_due':now.timestamp()+600})
                             scan['duration_sec']=round((now-datetime.fromisoformat(scan['started_at'])).total_seconds(),1)
                 elif data_error:scan['retry_at']=now.timestamp()+30
