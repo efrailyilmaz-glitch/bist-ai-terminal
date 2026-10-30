@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from . import auto_paper as paper
 from .robot_strategies import CATALOG,catalog,entry,exit_reason
 from .meta_governance import rank_forward_bots,meta_decision
+from .strategy_decay import detect_decay
 
 _LOCK=threading.RLock();_BUSY=set();_THREADS={}
 
@@ -58,7 +59,9 @@ def snapshot(token):
     bench=a['benchmark'];ret=(bench['last']['close']/bench['base']['close']-1)*100 if bench.get('base') and bench.get('last') else None
     bench_adj=ret*a['config']['gross_pct']/100 if ret is not None else None
     for b in CATALOG:
-        bot=a['bots'][b['id']];m=metrics(bot);rows.append({**b,'metrics':m,'promotion':promotion_status(m,a['started_at'],bench_adj),'positions':paper.valuation(bot)['positions'],'pending':list(bot['pending'].values()),'orders':bot['orders'][:200],'decisions':bot['decisions'][:100],'curve':bot['curve'][-500:],'risk_halt':bot['risk_halt'],'quote_errors':bot.get('quote_errors',{}),'created_at':bot['created_at']})
+        bot=a['bots'][b['id']];m=metrics(bot);decay=detect_decay(bot);promo=promotion_status(m,a['started_at'],bench_adj)
+        if decay.get('status')=='DECAY':promo={**promo,'status':'OBSERVE','reasons':list(dict.fromkeys((promo.get('reasons') or [])+['STRATEGY_DECAY']))}
+        rows.append({**b,'metrics':m,'decay':decay,'promotion':promo,'positions':paper.valuation(bot)['positions'],'pending':list(bot['pending'].values()),'orders':bot['orders'][:200],'decisions':bot['decisions'][:100],'curve':bot['curve'][-500:],'risk_halt':bot['risk_halt'],'quote_errors':bot.get('quote_errors',{}),'created_at':bot['created_at']})
     rows.sort(key=lambda r:(-r['metrics']['return_pct'],r['metrics']['max_drawdown_pct'],r['id']))
     try:days=max(0,(paper.now_tr()-datetime.fromisoformat(a['started_at'])).days) if a['started_at'] else 0
     except Exception:days=0
