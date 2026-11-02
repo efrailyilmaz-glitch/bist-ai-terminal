@@ -2,70 +2,82 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BIST AI Terminal V32.0.0</title>
-<link rel="stylesheet" href="/static/styles.css?v=32.0.0">
+<title>BIST AI Terminal V41.0.0</title>
+<link rel="stylesheet" href="/static/styles.css?v=41.0.0">
 <script src="https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <div class="shell">
 <aside class="sidebar">
-  <div class="brand"><div class="mark">B</div><div><strong>BIST AI</strong><span>QUANT RESEARCH TERMINAL V32.0.0</span></div></div>
+  <div class="brand"><div class="mark">B</div><div><strong>BIST AI</strong><span>QUANT RESEARCH TERMINAL V41.0.0</span></div></div>
   <nav>
-    <button class="nav" data-view="robotarena">⚗ Robot Laboratuvarı</button>
-    <button class="nav" data-view="autopaper">▶ Otomatik Sanal İşlem</button>
-    <button class="nav" data-view="community">◈ <span>Topluluk Göstergeleri</span></button>
-    <button class="nav" data-view="documentlab">◇ <span>Belge & AI Merkezi</span></button>
-    <button class="nav active" data-view="overview">⌂ <span>Komuta Merkezi</span></button>
-    <button class="nav" data-view="opportunity">🔥 <span>Fırsat Avcısı</span></button>
-    <button class="nav" data-view="premium">◈ <span>Premium Lab</span></button>
-    <button class="nav" data-view="committee">⚖ <span>Investment Committee</span></button>
-    <button class="nav" data-view="execution">⇧ <span>Execution Center</span></button>
-    <button class="nav" data-view="experience">🧠 <span>Experience Lab</span></button>
-    <button class="nav" data-view="smartmoney">◉ <span>Smart Money</span></button>
-    <button class="nav" data-view="smradar">⌁ <span>Pre-Markup Radar</span></button>
-    <button class="nav" data-view="protools">⌘ <span>Pro Toolkit</span></button>
-    <button class="nav" data-view="peers">≋ <span>Peer Comparison</span></button>
-    <button class="nav" data-view="compare">⇄ <span>Sembol Karşılaştır</span></button>
-    <button class="nav" data-view="proalerts">🔔 <span>Pro Alert Center</span></button>
-    <button class="nav" data-view="regime">◐ <span>Market Regime</span></button>
-    <button class="nav" data-view="rrg">◎ <span>Relative Rotation</span></button>
-    <button class="nav" data-view="seasonality">◷ <span>Seasonality Lab</span></button>
-    <button class="nav" data-view="cycles">↻ <span>Cycle Radar</span></button>
-    <button class="nav" data-view="weeklyreversal">↗ <span>Weekly Reversal</span></button>
-    <button class="nav" data-view="riskintel">△ <span>Risk Intelligence</span></button>
-    <button class="nav" data-view="heatmap">▦ <span>Watchlist Heatmap</span></button>
-    <button class="nav" data-view="paperportfolio">◉ <span>Sanal Portföyüm</span></button>
-    <button class="nav" data-view="signalguard">◈ <span>Sinyal Kontrolü</span></button>
-    <button class="nav" data-view="trapdefense">🛡 <span>Tuzak Savunması</span></button>
-    <button class="nav" data-view="screener">⌕ <span>Hisse Tarama</span></button>
-    <button class="nav" data-view="edges">◇ <span>Strateji Araştırması</span></button>
-    <button class="nav" data-view="forecast">◈ <span>Olasılık Laboratuvarı</span></button>
-    <button class="nav" data-view="alpha">◎ <span>Alpha Validation</span></button>
-    <button class="nav" data-view="ensemble">Σ <span>Ensemble Model</span></button>
-    <button class="nav" data-view="sectors">↗ <span>Sektör Rotasyonu</span></button>
-    <button class="nav" data-view="eventstudy">◇ <span>KAP Event Study</span></button>
-    <button class="nav" data-view="multichart">▦ <span>Multi Chart</span></button>
-    <button class="nav" data-view="replay">▶ <span>Bar Replay</span></button>
-    <button class="nav" data-view="alerts">✉ <span>Signal Inbox</span></button>
-    <button class="nav" data-view="internals">◫ <span>Market Internals</span></button>
-    <button class="nav" data-view="all">▤ <span>Tüm BIST</span></button>
-    <button class="nav" data-view="short">⚡ <span>Kısa Vade</span></button>
-    <button class="nav" data-view="long">◆ <span>Uzun Vade</span></button>
-    <button class="nav" data-view="factors">▦ <span>Factor Lab</span></button>
-    <button class="nav" data-view="fundamental">▣ <span>Temel Analiz</span></button>
-    <button class="nav" data-view="setups">✦ <span>Setup Radar</span></button>
-    <button class="nav" data-view="anomaly">◈ <span>Anomali Radar</span></button>
-    <button class="nav" data-view="portfolio">◉ <span>Model Portföy</span></button>
-    <button class="nav" data-view="watchlist">☆ <span>Watchlist</span></button>
-    <button class="nav" data-view="detail">⌁ <span>Hisse Analizi</span></button>
-    <button class="nav" data-view="backtest">↺ <span>Strategy Lab</span></button>
-    <button class="nav" data-view="catalysts">◇ <span>Catalyst Calendar</span></button>
-    <button class="nav" data-view="journal">✎ <span>Research Journal</span></button>
-    <button class="nav" data-view="health">● <span>Data Health</span></button>
-    <button class="nav" data-view="systemaudit">✓ <span>System Audit</span></button>
-    <button class="nav" data-view="kap">◫ <span>KAP & Haber</span></button>
+    <details class="navGroup" open><summary>01 · GÜNLÜK KARAR</summary>
+      <button class="nav active" data-view="overview">⌂ <span>Komuta Merkezi</span></button>
+      <button class="nav" data-view="opportunity">🔥 <span>Fırsat Avcısı</span></button>
+      <button class="nav" data-view="watchlist">☆ <span>Watchlist</span></button>
+      <button class="nav" data-view="alerts">✉ <span>Signal Inbox</span></button>
+      <button class="nav" data-view="autopaper">▶ <span>Otomatik Sanal İşlem</span></button>
+      <button class="nav" data-view="paperportfolio">◉ <span>Sanal Portföyüm</span></button>
+    </details>
+    <details class="navGroup" open><summary>02 · TARAMA & SİNYAL</summary>
+      <button class="nav" data-view="screener">⌕ <span>Hisse Tarama</span></button>
+      <button class="nav" data-view="all">▤ <span>Tüm BIST</span></button>
+      <button class="nav" data-view="short">⚡ <span>Kısa Vade</span></button>
+      <button class="nav" data-view="long">◆ <span>Uzun Vade</span></button>
+      <button class="nav" data-view="setups">✦ <span>Setup Radar</span></button>
+      <button class="nav" data-view="weeklyreversal">↗ <span>Weekly Reversal</span></button>
+      <button class="nav" data-view="smradar">⌁ <span>Pre-Markup Radar</span></button>
+      <button class="nav" data-view="smartmoney">◉ <span>Smart Money</span></button>
+      <button class="nav" data-view="signalguard">◈ <span>Sinyal Kontrolü</span></button>
+      <button class="nav" data-view="trapdefense">🛡 <span>Tuzak Savunması</span></button>
+      <button class="nav" data-view="anomaly">◈ <span>Anomali Radar</span></button>
+    </details>
+    <details class="navGroup" open><summary>03 · RİSK & İŞLEM</summary>
+      <button class="nav" data-view="committee">⚖ <span>Investment Committee</span></button>
+      <button class="nav" data-view="execution">⇧ <span>Execution Center</span></button>
+      <button class="nav" data-view="riskintel">△ <span>Risk Intelligence</span></button>
+      <button class="nav" data-view="forecast">◈ <span>Olasılık Laboratuvarı</span></button>
+      <button class="nav" data-view="portfolio">◉ <span>Model Portföy</span></button>
+      <button class="nav" data-view="robotarena">⚗ <span>Robot Laboratuvarı</span></button>
+      <button class="nav" data-view="proalerts">🔔 <span>Pro Alert Center</span></button>
+    </details>
+    <details class="navGroup"><summary>04 · PİYASA & HİSSE ANALİZİ</summary>
+      <button class="nav" data-view="detail">⌁ <span>Hisse Analizi</span></button>
+      <button class="nav" data-view="regime">◐ <span>Market Regime</span></button>
+      <button class="nav" data-view="internals">◫ <span>Market Internals</span></button>
+      <button class="nav" data-view="heatmap">▦ <span>Watchlist Heatmap</span></button>
+      <button class="nav" data-view="fundamental">▣ <span>Temel Analiz</span></button>
+      <button class="nav" data-view="kap">◫ <span>KAP & Haber</span></button>
+      <button class="nav" data-view="factors">▦ <span>Factor Lab</span></button>
+      <button class="nav" data-view="sectors">↗ <span>Sektör Rotasyonu</span></button>
+      <button class="nav" data-view="rrg">◎ <span>Relative Rotation</span></button>
+      <button class="nav" data-view="peers">≋ <span>Peer Comparison</span></button>
+      <button class="nav" data-view="compare">⇄ <span>Sembol Karşılaştır</span></button>
+      <button class="nav" data-view="multichart">▦ <span>Multi Chart</span></button>
+      <button class="nav" data-view="seasonality">◷ <span>Seasonality Lab</span></button>
+      <button class="nav" data-view="cycles">↻ <span>Cycle Radar</span></button>
+      <button class="nav" data-view="catalysts">◇ <span>Catalyst Calendar</span></button>
+      <button class="nav" data-view="eventstudy">◇ <span>KAP Event Study</span></button>
+    </details>
+    <details class="navGroup"><summary>05 · ARAŞTIRMA & DOĞRULAMA</summary>
+      <button class="nav" data-view="edges">◇ <span>Strateji Araştırması</span></button>
+      <button class="nav" data-view="backtest">↺ <span>Strategy Lab</span></button>
+      <button class="nav" data-view="alpha">◎ <span>Alpha Validation</span></button>
+      <button class="nav" data-view="ensemble">Σ <span>Ensemble Model</span></button>
+      <button class="nav" data-view="community">◈ <span>Topluluk Göstergeleri</span></button>
+      <button class="nav" data-view="replay">▶ <span>Bar Replay</span></button>
+      <button class="nav" data-view="experience">🧠 <span>Experience Lab</span></button>
+      <button class="nav" data-view="premium">◈ <span>Premium Lab</span></button>
+      <button class="nav" data-view="protools">⌘ <span>Pro Toolkit</span></button>
+      <button class="nav" data-view="journal">✎ <span>Research Journal</span></button>
+    </details>
+    <details class="navGroup"><summary>06 · SİSTEM & ARAÇLAR</summary>
+      <button class="nav" data-view="health">● <span>Data Health</span></button>
+      <button class="nav" data-view="systemaudit">✓ <span>System Audit</span></button>
+      <button class="nav" data-view="documentlab">◇ <span>Belge & AI Merkezi</span></button>
+    </details>
   </nav>
-  <div class="side-status"><i></i><div><b id="systemMode">V32.0.0 başlatılıyor</b><small id="scanStatus">Evren yükleniyor…</small></div></div>
+  <div class="side-status"><i></i><div><b id="systemMode">V41.0.0 başlatılıyor</b><small id="scanStatus">Evren yükleniyor…</small></div></div>
 </aside>
 <main>
 <header>
@@ -77,8 +89,8 @@
 <footer>Veri durumu ekranda açıkça belirtilir · Model çıktıları nicel araştırma sinyalidir, yatırım tavsiyesi değildir · Lisans gerektiren Level-2/takas verisi sahte üretilmez.</footer>
 </main>
 </div>
-<script src="/static/ranking-engine.js?v=32.0"></script>
-<script src="/static/app.js?v=32.0"></script>
+<script src="/static/ranking-engine.js?v=41.0"></script>
+<script src="/static/app.js?v=41.0"></script>
 <script src="/static/research.js"></script>
 <script src="/static/v5.js"></script>
 <script src="/static/v6.js"></script>
@@ -94,20 +106,20 @@
 <script src="/static/v16.js"></script>
 <script src="/static/v17.js"></script>
 <script src="/static/v18.js"></script>
-<script src="/static/v19.js?v=32.0"></script>
-<script src="/static/v20.js?v=32.0"></script>
-<script src="/static/paper-engine.js?v=32.0"></script>
-<script src="/static/chart-drawings.js?v=32.0"></script>
-<script src="/static/v21.js?v=32.0"></script>
-<script src="/static/screener-engine.js?v=32.0"></script>
-<script src="/static/v22.js?v=32.0"></script>
-<script src="/static/v23.js?v=32.0"></script>
-<script src="/static/notification-engine.js?v=32.0"></script>
-<script src="/static/v24.js?v=32.0"></script>
-<script src="/static/v25.js?v=32.0"></script>
-<script src="/static/v26.js?v=32.0"></script>
-<script src="/static/stock-switcher.js?v=32.0"></script>
-<script src="/static/auto-paper.js?v=32.0"></script>
-<script src="/static/robot-arena.js?v=32.0.0"></script>
-<script src="/static/v29.js?v=32.0.0"></script>
+<script src="/static/v19.js?v=41.0"></script>
+<script src="/static/v20.js?v=41.0"></script>
+<script src="/static/paper-engine.js?v=41.0"></script>
+<script src="/static/chart-drawings.js?v=41.0"></script>
+<script src="/static/v21.js?v=41.0"></script>
+<script src="/static/screener-engine.js?v=41.0"></script>
+<script src="/static/v22.js?v=41.0"></script>
+<script src="/static/v23.js?v=41.0"></script>
+<script src="/static/notification-engine.js?v=41.0"></script>
+<script src="/static/v24.js?v=41.0"></script>
+<script src="/static/v25.js?v=41.0"></script>
+<script src="/static/v26.js?v=41.0"></script>
+<script src="/static/stock-switcher.js?v=41.0"></script>
+<script src="/static/auto-paper.js?v=41.0"></script>
+<script src="/static/robot-arena.js?v=41.0.0"></script>
+<script src="/static/v29.js?v=41.0.0"></script>
 </body></html>
