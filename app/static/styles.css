@@ -104,3 +104,7 @@ html,body{height:100%;overflow:hidden}.shell{height:100vh;min-height:0}.sidebar{
 .arena #arenaStatus{padding:12px;background:#192d3c;line-height:1.7;border-radius:8px}.arena select{background:#0c1b26;color:#d5e8ef;border:1px solid #375365;border-radius:6px;padding:9px;max-width:100%}.arena summary{cursor:pointer;padding:12px 0;font-weight:600}.arena svg{width:100%;max-height:300px}.arena button:disabled{opacity:.5;cursor:wait}
 
 .trapClear{border-color:#245d48}.trapWait{border-color:#735a25}.trapBlock{border-color:#6b2e3b}.guardCard .down{color:#ff7f90}.guardCard .amber{color:#f6c76a}
+
+/* V41 workflow-grouped sidebar */
+.navGroup{border:0;margin:0 0 7px;padding:0}.navGroup>summary{list-style:none;cursor:pointer;color:#557084;font-size:8px;font-weight:800;letter-spacing:1.05px;padding:9px 9px 6px;text-transform:uppercase;user-select:none}.navGroup>summary::-webkit-details-marker{display:none}.navGroup>summary:after{content:'›';float:right;transition:transform .15s;color:#416277}.navGroup[open]>summary:after{transform:rotate(90deg)}.navGroup[open]>summary{color:#7fa8bd}.navGroup .nav{padding:9px 10px;margin:1px 0;font-size:11px}.navGroup+.navGroup{border-top:1px solid #10212e;padding-top:3px}
+@media(max-width:1100px){.navGroup>summary{font-size:0;text-align:center;padding:6px 0}.navGroup>summary:after{font-size:12px;float:none}.navGroup .nav{padding:9px 4px}}
