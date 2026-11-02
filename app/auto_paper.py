@@ -141,9 +141,11 @@ def process_quote(a,code,q,now,reality_fn=None):
     micro=latest_microstructure(code);mg=micro.get('guard') or {};ms=mg.get('status')
     if micro.get('configured') and ms=='BAD':qty=0
     elif micro.get('configured') and ms=='CAUTION':qty=math.floor(qty*float(mg.get('risk_multiplier',.75)))
-    target_r=float(o.get('target_r',2.0));target=px+target_r*distance if o['side']=='BUY' else px-target_r*distance
-    reality={'status':'NOT_RUN'}
-    if reality_fn:
+    target_r_raw=o.get('target_r',2.0)
+    target_r=float(target_r_raw) if isinstance(target_r_raw,(int,float)) and math.isfinite(float(target_r_raw)) and float(target_r_raw)>0 else None
+    target=(px+target_r*distance if o['side']=='BUY' else px-target_r*distance) if target_r else None
+    reality={'status':'NOT_APPLICABLE' if target is None else 'NOT_RUN'}
+    if reality_fn and target is not None:
         try:reality=reality_fn(code,px,px-distance if o['side']=='BUY' else px+distance,target,o['side'])
         except Exception as e:reality={'status':'ERROR','error':str(e)[:120]}
         if reality.get('status')=='OK':
