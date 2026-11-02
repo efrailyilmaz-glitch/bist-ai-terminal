@@ -39,6 +39,7 @@ from .edge_lab import edge_research
 from .robustness_lab import robustness_audit
 from .microstructure import microstructure_guard
 from .microstructure_feed import latest_microstructure
+from .trade_reality import trade_reality
 from .edge_catalog import CATALOG
 from fastapi import HTTPException
 from .opportunity_engine import smart_money_candidates
@@ -47,7 +48,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='40.0.0')
+app=FastAPI(title='BIST AI Terminal',version='41.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -64,6 +65,10 @@ app.mount('/static',StaticFiles(directory=str(BASE/'static')),name='static')
 
 @app.get('/',response_class=HTMLResponse)
 def index(): return (BASE/'templates/index.html').read_text(encoding='utf-8')
+
+@app.get('/api/trade-reality/{ticker}')
+def trade_reality_api(ticker:str,entry:float,stop:float,target:float,side:str='BUY',simulations:int=10000,seed:int=41,block_bars:int=3):
+    return trade_reality(ticker,entry,stop,target,side=side,simulations=simulations,seed=seed,block_bars=block_bars)
 
 @app.get('/api/microstructure/{ticker}')
 def microstructure_live_api(ticker:str):
@@ -375,7 +380,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 40.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 41.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -387,6 +392,8 @@ def system_audit_api():
       {'name':'Meta Governance','status':'OK','detail':'Forward-only champion/challenger ranking; historical backtests cannot self-promote'},
       {'name':'Strategy Decay','status':'OK','detail':'Forward expectancy/PF/win-rate/equity degradation monitor; DECAY vetoes promotion, does not auto-liquidate'},
       {'name':'Meta Portfolio Brain','status':'OK','detail':'Forward-only regime-aware robot allocation with explicit cash floors and 25% per-bot cap'},
+      {'name':'Trade Reality Engine','status':'OK','detail':'Prior-session intraday block-bootstrap stress test with stop-first ambiguity; can only veto/derisk paper entries'},
+      {'name':'Risk Passport','status':'OK','detail':'Initial entry/stop/target plan is locked and fingerprinted on each paper position'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'Dynamic delayed-bar slippage + participation + intrabar-range guard; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -395,7 +402,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'40.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'41.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):

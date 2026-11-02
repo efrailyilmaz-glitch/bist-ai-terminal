@@ -22,6 +22,7 @@ class AutoPaperTests(unittest.TestCase):
         for short in [False,True]:
             self.a=m.fresh();self.a['enabled']=True;self.enter(short)
             p=self.a['positions']['TEST'];self.assertLess(p['quantity'],0) if short else self.assertGreater(p['quantity'],0)
+            self.assertTrue(p['trade_plan_locked']);self.assertEqual(p['initial_stop'],p['stop']);self.assertTrue(p['risk_passport'])
             self.assertLess(self.a['cash'],1_000_000)
             m.queue(self.a,'TEST','COVER' if short else 'SELL','exit',self.now+timedelta(minutes=16))
             q=self.quote(30,98 if short else 102,103.,97.)

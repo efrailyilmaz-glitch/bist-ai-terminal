@@ -56,13 +56,19 @@ def fill(a,o,reference,at,quantity=None):
         signed=qty if side=='BUY' else -qty;distance=o['stop_distance'];target_r=o.get('target_r',2.0);trail=o.get('trail_distance')
         a['cash']-=qty*px+fee
         target=(px+target_r*distance if signed>0 else px-target_r*distance) if isinstance(target_r,(int,float)) and target_r>0 else None
-        a['positions'][code]={'quantity':signed,'avg':px,'fees':fee,'opened_at':at,'entry_bar':at,'stop':px-distance if signed>0 else px+distance,'target':target,'trail_distance':trail,'reason':o['reason']}
+        initial_stop=px-distance if signed>0 else px+distance
+        passport_raw=f"{code}|{side}|{round(px,6)}|{round(initial_stop,6)}|{round(target,6) if target is not None else 'NONE'}|{qty}|{o.get('signal_as_of','')}"
+        passport=hashlib.sha256(passport_raw.encode()).hexdigest()[:20]
+        a['positions'][code]={'quantity':signed,'avg':px,'fees':fee,'opened_at':at,'entry_bar':at,'stop':initial_stop,'target':target,
+                            'initial_stop':initial_stop,'initial_target':target,'trade_plan_locked':True,'risk_passport':passport,
+                            'trade_reality':o.get('trade_reality'),'microstructure':o.get('microstructure'),
+                            'execution_diagnostics':o.get('execution_diagnostics'),'trail_distance':trail,'reason':o['reason']}
     else:
         p=a['positions'][code];qty=abs(p['quantity']);fee=qty*px*cfg['fee_bps']/10000
         pnl=(px-p['avg'])*p['quantity']-p['fees']-fee
         a['cash']+=qty*px-fee if p['quantity']>0 else qty*(2*p['avg']-px)-fee
         a['realized']+=pnl;del a['positions'][code]
-    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics'),'microstructure':o.get('microstructure')}
+    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics'),'microstructure':o.get('microstructure'),'trade_reality':o.get('trade_reality'),'risk_passport':a.get('positions',{}).get(code,{}).get('risk_passport') if side in {'BUY','SHORT'} else None}
     stats=a.get('arena_stats')
     if stats is not None:
         stats['fees']+=fee
@@ -77,7 +83,7 @@ def valid_quote(q,now):
         return start.tzinfo is not None and end.tzinfo is not None and now.weekday()<5 and start.astimezone(TR).date()==now.date() and start.astimezone(TR).hour>=10 and end.astimezone(TR).hour<=18 and 0<=(now-end).total_seconds()<=45*60 and start<end and all(math.isfinite(v) for v in vals) and min(vals[:4])>0 and vals[4]>0 and q['high']>=max(q['open'],q['close'],q['low']) and q['low']<=min(q['open'],q['close'],q['high'])
     except (ValueError,KeyError,TypeError):return False
 
-def process_quote(a,code,q,now):
+def process_quote(a,code,q,now,reality_fn=None):
     if not valid_quote(q,now):return
     old=a['quotes'].get(code)
     if old and q['at']<=old['at']:return
@@ -135,9 +141,21 @@ def process_quote(a,code,q,now):
     micro=latest_microstructure(code);mg=micro.get('guard') or {};ms=mg.get('status')
     if micro.get('configured') and ms=='BAD':qty=0
     elif micro.get('configured') and ms=='CAUTION':qty=math.floor(qty*float(mg.get('risk_multiplier',.75)))
+    target_r_raw=o.get('target_r',2.0)
+    target_r=float(target_r_raw) if isinstance(target_r_raw,(int,float)) and math.isfinite(float(target_r_raw)) and float(target_r_raw)>0 else None
+    target=(px+target_r*distance if o['side']=='BUY' else px-target_r*distance) if target_r else None
+    reality={'status':'NOT_APPLICABLE' if target is None else 'NOT_RUN'}
+    if reality_fn and target is not None:
+        try:reality=reality_fn(code,px,px-distance if o['side']=='BUY' else px+distance,target,o['side'])
+        except Exception as e:reality={'status':'ERROR','error':str(e)[:120]}
+        if reality.get('status')=='OK':
+            if reality.get('verdict')=='UNFAVORABLE':qty=0
+            elif reality.get('verdict')=='MARGINAL':qty=math.floor(qty*.70)
+        elif reality.get('status') in {'INSUFFICIENT_DATA','ERROR'}:
+            qty=math.floor(qty*.75)
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
-        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro);return
-    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['microstructure']=micro;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
+        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı/Trade Reality sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro,trade_reality=reality);return
+    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['microstructure']=micro;o['trade_reality']=reality;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
 
 def risk_check(a,now):
     v=valuation(a);day=str(now.date())
@@ -308,7 +326,9 @@ def cycle(key,now=None,lane='combined'):
             if lane!='scan':
                 risk_check(a,now)
                 for c,q in quotes.items():
-                    if q:process_quote(a,c,q,now);risk_check(a,now)
+                    if q:
+                        from .trade_reality import trade_reality
+                        process_quote(a,c,q,now,reality_fn=trade_reality);risk_check(a,now)
                 v=risk_check(a,now);a['curve'].append({'time':now.isoformat(),'equity':v['equity']});a['curve']=a['curve'][-2000:]
                 a['last_risk_check']=now.isoformat()
             if lane!='risk':

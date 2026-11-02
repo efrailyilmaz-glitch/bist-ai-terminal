@@ -159,7 +159,9 @@ def cycle(key,now=None,lane='scan'):
                 for b in a['bots'].values():
                     paper.risk_check(b,now)
                     for c in sorted(set(b['positions'])|set(b['pending'])):
-                        if quotes.get(c):paper.process_quote(b,c,quotes[c],now);paper.risk_check(b,now)
+                        if quotes.get(c):
+                            from .trade_reality import trade_reality
+                            paper.process_quote(b,c,quotes[c],now,reality_fn=trade_reality);paper.risk_check(b,now)
                     v=paper.risk_check(b,now);b['max_drawdown_pct']=max(b.get('max_drawdown_pct',0),max(0,(1-v['equity']/b['peak'])*100))
                     b['curve'].append({'time':now.isoformat(),'equity':v['equity']});b['curve']=b['curve'][-2000:];b['last_risk_check']=now.isoformat()
                 q=quotes.get('XU100')
