@@ -77,7 +77,7 @@ def valid_quote(q,now):
         return start.tzinfo is not None and end.tzinfo is not None and now.weekday()<5 and start.astimezone(TR).date()==now.date() and start.astimezone(TR).hour>=10 and end.astimezone(TR).hour<=18 and 0<=(now-end).total_seconds()<=45*60 and start<end and all(math.isfinite(v) for v in vals) and min(vals[:4])>0 and vals[4]>0 and q['high']>=max(q['open'],q['close'],q['low']) and q['low']<=min(q['open'],q['close'],q['high'])
     except (ValueError,KeyError,TypeError):return False
 
-def process_quote(a,code,q,now):
+def process_quote(a,code,q,now,reality_fn=None):
     if not valid_quote(q,now):return
     old=a['quotes'].get(code)
     if old and q['at']<=old['at']:return
@@ -135,9 +135,19 @@ def process_quote(a,code,q,now):
     micro=latest_microstructure(code);mg=micro.get('guard') or {};ms=mg.get('status')
     if micro.get('configured') and ms=='BAD':qty=0
     elif micro.get('configured') and ms=='CAUTION':qty=math.floor(qty*float(mg.get('risk_multiplier',.75)))
+    target_r=float(o.get('target_r',2.0));target=px+target_r*distance if o['side']=='BUY' else px-target_r*distance
+    reality={'status':'NOT_RUN'}
+    if reality_fn:
+        try:reality=reality_fn(code,px,px-distance if o['side']=='BUY' else px+distance,target,o['side'])
+        except Exception as e:reality={'status':'ERROR','error':str(e)[:120]}
+        if reality.get('status')=='OK':
+            if reality.get('verdict')=='UNFAVORABLE':qty=0
+            elif reality.get('verdict')=='MARGINAL':qty=math.floor(qty*.70)
+        elif reality.get('status') in {'INSUFFICIENT_DATA','ERROR'}:
+            qty=math.floor(qty*.75)
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
-        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro);return
-    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['microstructure']=micro;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
+        a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı/Trade Reality sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro,trade_reality=reality);return
+    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['microstructure']=micro;o['trade_reality']=reality;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
 
 def risk_check(a,now):
     v=valuation(a);day=str(now.date())
@@ -308,7 +318,9 @@ def cycle(key,now=None,lane='combined'):
             if lane!='scan':
                 risk_check(a,now)
                 for c,q in quotes.items():
-                    if q:process_quote(a,c,q,now);risk_check(a,now)
+                    if q:
+                        from .trade_reality import trade_reality
+                        process_quote(a,c,q,now,reality_fn=trade_reality);risk_check(a,now)
                 v=risk_check(a,now);a['curve'].append({'time':now.isoformat(),'equity':v['equity']});a['curve']=a['curve'][-2000:]
                 a['last_risk_check']=now.isoformat()
             if lane!='risk':
