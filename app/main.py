@@ -48,7 +48,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='44.0.0')
+app=FastAPI(title='BIST AI Terminal',version='45.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -380,7 +380,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 44.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 45.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -388,7 +388,7 @@ def system_audit_api():
       {'name':'Trap Defense','status':'OK','detail':'V3 · single-bar breakout, distribution cluster, OBV confirmation and late-stage chase filters active'},
       {'name':'Adversarial Lab','status':'OK','detail':'V1 · fake breakout, gap trap, stop sweep, volume climax and pump-fade synthetic stress tests'},
       {'name':'Robustness Gate','status':'OK','detail':'PBO/CSCV + DSR + IS→OOS surface + plateau + same-candidate 2x/3x cost stress + causality invariant + capacity/turnover'},
-      {'name':'Microstructure Guard','status':'OK','detail':'Licensed Level-2/order-event adapter + freshness/auth/failure guard; only entry derisk/veto, never blocks exits'},
+      {'name':'Microstructure Guard','status':'OK','detail':'Licensed Level-2/order-event adapter + V45 footprint intelligence (absorption, sweep, replenishment, liquidity vacuum, spoof-like churn risk) + freshness/auth/failure guard; only entry derisk/veto, never blocks exits'},
       {'name':'Meta Governance','status':'OK','detail':'Forward-only champion/challenger ranking; historical backtests cannot self-promote'},
       {'name':'Strategy Decay','status':'OK','detail':'Forward expectancy/PF/win-rate/equity degradation monitor; DECAY vetoes promotion, does not auto-liquidate'},
       {'name':'Meta Portfolio Brain','status':'OK','detail':'Forward-only regime-aware robot allocation with explicit cash floors and 25% per-bot cap'},
@@ -404,7 +404,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'44.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'45.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -496,7 +496,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'44.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'45.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():

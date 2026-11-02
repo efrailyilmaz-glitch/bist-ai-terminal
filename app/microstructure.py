@@ -66,7 +66,7 @@ def microstructure_guard(snapshot):
     if not isinstance(snapshot,dict):
         return {'status':'UNKNOWN','score':0,'flags':['NO_MICROSTRUCTURE_DATA'],'risk_multiplier':1.0}
     bids=snapshot.get('bids') or [];asks=snapshot.get('asks') or [];events=snapshot.get('events') or []
-    imb=book_imbalance(bids,asks,5);spr=spread_bps(bids,asks);flow=normalized_order_flow(events);ofi=flow['ofi'];cancel=cancellation_asymmetry(events)
+    imb=book_imbalance(bids,asks,5);spr=spread_bps(bids,asks);flow=normalized_order_flow(events);ofi=flow['ofi'];cancel=cancellation_asymmetry(events);foot=footprint_features(snapshot)
     flags=[];score=50
     if spr is None:flags.append('SPREAD_UNKNOWN')
     elif spr>80:flags.append('WIDE_SPREAD');score-=25
@@ -83,12 +83,97 @@ def microstructure_guard(snapshot):
         score+=max(-8,min(8,cancel*10))
         if cancel<-.55:flags.append('BID_CANCELLATION_PRESSURE')
     if flow['event_count'] and flow['event_count']<20:flags.append('LOW_EVENT_SAMPLE')
+    flags+= [x for x in (foot.get('flags') or []) if x not in flags]
+    if foot.get('liquidity_vacuum_score',0)>=65:score-=15
+    if foot.get('spoof_like_risk_score',0)>=65:score-=12
+    if foot.get('sweep_score',0)>=85:score-=8
     score=max(0,min(100,round(score)))
-    hard=any(x in flags for x in ['WIDE_SPREAD','NEGATIVE_ORDER_FLOW','BID_CANCELLATION_PRESSURE'])
+    hard=any(x in flags for x in ['WIDE_SPREAD','NEGATIVE_ORDER_FLOW','BID_CANCELLATION_PRESSURE','LIQUIDITY_VACUUM']) or foot.get('spoof_like_risk_score',0)>=85
     status='BAD' if hard or score<35 else 'CAUTION' if score<50 or 'LOW_EVENT_SAMPLE' in flags else 'GOOD'
     rm=.5 if status=='BAD' else .75 if status=='CAUTION' else 1.0
     return {'status':status,'score':score,'flags':flags,'risk_multiplier':rm,
             'book_imbalance':None if imb is None else round(imb,4),'spread_bps':None if spr is None else round(spr,2),
             'ofi':None if ofi is None else round(ofi,4),'cancellation_asymmetry':None if cancel is None else round(cancel,4),
-            'event_count':flow['event_count'],
-            'limits':'Order-flow evidence is short-horizon and venue/feed dependent. GOOD never authorizes leverage or bypasses other risk gates.'}
+            'event_count':flow['event_count'],'footprint':foot,
+            'limits':'Order-flow evidence is short-horizon and venue/feed dependent. Footprint flags are observable-pattern heuristics, not intent attribution. GOOD never authorizes leverage or bypasses other risk gates.'}
+
+
+def footprint_features(snapshot):
+    """Event-stream footprint diagnostics from licensed order-book updates.
+    Heuristics detect observable patterns, never intent.
+    Expected event fields can include: action, side, qty, price, aggressor_side, timestamp.
+    """
+    if not isinstance(snapshot,dict):
+        return {'status':'UNKNOWN','flags':['NO_FOOTPRINT_DATA']}
+    events=[e for e in (snapshot.get('events') or []) if isinstance(e,dict)]
+    bids=snapshot.get('bids') or [];asks=snapshot.get('asks') or []
+    if len(events)<8:
+        return {'status':'INSUFFICIENT','event_count':len(events),'flags':['LOW_EVENT_SAMPLE']}
+    best_bid=float(bids[0]['price']) if bids and _num(bids[0].get('price')) else None
+    best_ask=float(asks[0]['price']) if asks and _num(asks[0].get('price')) else None
+    buy_trade=sell_trade=0.0;bid_add=ask_add=bid_cancel=ask_cancel=0.0
+    buy_trade_n=sell_trade_n=0;trade_prices=[]
+    for e in events:
+        q=e.get('qty')
+        if not _num(q) or float(q)<=0:continue
+        q=float(q);act=str(e.get('action','')).upper();side=str(e.get('side','')).upper()
+        if act=='TRADE':
+            ag=str(e.get('aggressor_side','')).upper()
+            if ag in {'BUY','BID'}:buy_trade+=q;buy_trade_n+=1
+            elif ag in {'SELL','ASK'}:sell_trade+=q;sell_trade_n+=1
+            if _num(e.get('price')):trade_prices.append(float(e['price']))
+        elif act=='ADD':
+            if side=='BID':bid_add+=q
+            elif side=='ASK':ask_add+=q
+        elif act=='CANCEL':
+            if side=='BID':bid_cancel+=q
+            elif side=='ASK':ask_cancel+=q
+    traded=buy_trade+sell_trade;adds=bid_add+ask_add;cancels=bid_cancel+ask_cancel
+    # Absorption proxy: heavy aggressive flow without corresponding price displacement.
+    displacement_bps=None
+    if len(trade_prices)>=2:
+        mid=(trade_prices[0]+trade_prices[-1])/2
+        if mid>0:displacement_bps=abs(trade_prices[-1]-trade_prices[0])/mid*10000
+    absorption_score=0
+    if traded>0 and displacement_bps is not None:
+        dominance=abs(buy_trade-sell_trade)/traded
+        if traded>0 and dominance>.55 and displacement_bps<12:absorption_score=min(100,round(55+dominance*45))
+    # Replenishment proxy: additions on a side are large relative to trade depletion.
+    bid_replenish=bid_add/max(1.0,sell_trade)
+    ask_replenish=ask_add/max(1.0,buy_trade)
+    replenishment_score=min(100,round(max(bid_replenish,ask_replenish)*35))
+    replenish_side='BID' if bid_replenish>ask_replenish else 'ASK'
+    # Sweep proxy: repeated same-direction aggressive trades across multiple distinct prices.
+    sweep_side=None;sweep_score=0
+    for ag in ('BUY','SELL'):
+        prices=[float(e['price']) for e in events if str(e.get('action','')).upper()=='TRADE' and str(e.get('aggressor_side','')).upper()==ag and _num(e.get('price'))]
+        if len(prices)>=3 and len(set(round(x,6) for x in prices))>=3:
+            span=(max(prices)-min(prices))/max(1e-9,sum(prices)/len(prices))*10000
+            score=min(100,round(35+len(prices)*4+min(30,span)))
+            if score>sweep_score:sweep_score=score;sweep_side=ag
+    # Liquidity vacuum: wide spread + shallow displayed depth + cancellations dominating additions.
+    depth=sum(float(x.get('qty',0)) for x in bids[:3] if _num(x.get('qty')))+sum(float(x.get('qty',0)) for x in asks[:3] if _num(x.get('qty')))
+    spr=spread_bps(bids,asks)
+    vacuum_score=0
+    if spr is not None:
+        cancel_ratio=cancels/max(1.0,adds)
+        shallow=1.0 if depth<=0 else min(1.0,5000/max(depth,1.0))
+        vacuum_score=min(100,round(min(55,spr*.55)+min(25,cancel_ratio*18)+shallow*20))
+    # Spoof-like risk symptom: large add/cancel churn with little executed volume.
+    churn=(adds+cancels)/max(1.0,traded)
+    cancel_share=cancels/max(1.0,adds+cancels)
+    spoof_risk=min(100,round(max(0,churn-2)*12 + max(0,cancel_share-.55)*90))
+    flags=[]
+    if absorption_score>=70:flags.append('ABSORPTION_PATTERN')
+    if replenishment_score>=70:flags.append('REPLENISHMENT_PATTERN')
+    if sweep_score>=70:flags.append('SWEEP_PATTERN')
+    if vacuum_score>=65:flags.append('LIQUIDITY_VACUUM')
+    if spoof_risk>=65:flags.append('SPOOF_LIKE_CHURN_RISK')
+    adverse=sum(x in flags for x in ['LIQUIDITY_VACUUM','SPOOF_LIKE_CHURN_RISK'])
+    status='BAD' if adverse>=2 or vacuum_score>=85 else 'CAUTION' if adverse or sweep_score>=85 else 'OBSERVED'
+    return {'status':status,'event_count':len(events),'flags':flags,
+            'aggressive_buy_qty':round(buy_trade,2),'aggressive_sell_qty':round(sell_trade,2),
+            'absorption_score':absorption_score,'replenishment_score':replenishment_score,'replenishment_side':replenish_side if replenishment_score else None,
+            'sweep_score':sweep_score,'sweep_side':sweep_side,'liquidity_vacuum_score':vacuum_score,
+            'spoof_like_risk_score':spoof_risk,'trade_displacement_bps':None if displacement_bps is None else round(displacement_bps,2),
+            'note':'Observable order-flow heuristics only. Spoof-like/churn labels indicate suspicious symptoms, not manipulation intent or identity.'}
