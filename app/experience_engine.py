@@ -62,7 +62,8 @@ def record_signal(signal,committee=None):
         bench=float(_latest_price('XU100') or 0)
         setup={'confirmations':signal.get('confirmations'),'warnings':signal.get('warnings'),'components':signal.get('components'),
                'targets':signal.get('targets'),'committee_evidence':committee.get('evidence'),'vetoes':committee.get('vetoes'),
-               'signal_guard':signal.get('signal_guard'),'trap_defense':signal.get('trap_defense')}
+               'signal_guard':signal.get('signal_guard'),'trap_defense':signal.get('trap_defense'),
+               'governance_challenger_score':signal.get('governance_challenger_score'),'governance_score_delta':signal.get('governance_score_delta'),'governance_details':signal.get('governance_details')}
         immutable=_immutable(now,ticker,signal.get('grade'),signal.get('opportunity_score'),committee.get('decision'),committee.get('committee_score'),committee.get('regime'),entry,bench,signal.get('as_of'),setup,pit['status'],pit['flags'])
         payload_hash=hashlib.sha256(_canon(immutable).encode()).hexdigest()
         last=c.execute('SELECT ledger_hash FROM signals WHERE ledger_hash IS NOT NULL ORDER BY id DESC LIMIT 1').fetchone()
