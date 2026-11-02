@@ -56,13 +56,19 @@ def fill(a,o,reference,at,quantity=None):
         signed=qty if side=='BUY' else -qty;distance=o['stop_distance'];target_r=o.get('target_r',2.0);trail=o.get('trail_distance')
         a['cash']-=qty*px+fee
         target=(px+target_r*distance if signed>0 else px-target_r*distance) if isinstance(target_r,(int,float)) and target_r>0 else None
-        a['positions'][code]={'quantity':signed,'avg':px,'fees':fee,'opened_at':at,'entry_bar':at,'stop':px-distance if signed>0 else px+distance,'target':target,'trail_distance':trail,'reason':o['reason']}
+        initial_stop=px-distance if signed>0 else px+distance
+        passport_raw=f"{code}|{side}|{round(px,6)}|{round(initial_stop,6)}|{round(target,6) if target is not None else 'NONE'}|{qty}|{o.get('signal_as_of','')}"
+        passport=hashlib.sha256(passport_raw.encode()).hexdigest()[:20]
+        a['positions'][code]={'quantity':signed,'avg':px,'fees':fee,'opened_at':at,'entry_bar':at,'stop':initial_stop,'target':target,
+                            'initial_stop':initial_stop,'initial_target':target,'trade_plan_locked':True,'risk_passport':passport,
+                            'trade_reality':o.get('trade_reality'),'microstructure':o.get('microstructure'),
+                            'execution_diagnostics':o.get('execution_diagnostics'),'trail_distance':trail,'reason':o['reason']}
     else:
         p=a['positions'][code];qty=abs(p['quantity']);fee=qty*px*cfg['fee_bps']/10000
         pnl=(px-p['avg'])*p['quantity']-p['fees']-fee
         a['cash']+=qty*px-fee if p['quantity']>0 else qty*(2*p['avg']-px)-fee
         a['realized']+=pnl;del a['positions'][code]
-    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics'),'microstructure':o.get('microstructure')}
+    order={'id':o['id'],'time':at,'recorded_at':stamp(),'ticker':code,'side':side,'quantity':qty,'price':round(px,6),'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR','effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics'),'microstructure':o.get('microstructure'),'trade_reality':o.get('trade_reality'),'risk_passport':a.get('positions',{}).get(code,{}).get('risk_passport') if side in {'BUY','SHORT'} else None}
     stats=a.get('arena_stats')
     if stats is not None:
         stats['fees']+=fee
