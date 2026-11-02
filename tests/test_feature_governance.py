@@ -1,6 +1,9 @@
 import unittest
 from unittest.mock import patch
 from app import feature_governance as fg
+import app.experience_engine as ex
+import tempfile, json, time
+from pathlib import Path
 
 class FeatureGovernanceTests(unittest.TestCase):
     def setUp(self):
@@ -26,6 +29,23 @@ class FeatureGovernanceTests(unittest.TestCase):
         good=next(x for x in r['rows'] if x['feature']=='confirm:Good')
         self.assertEqual(good['state'],'SUPPORTED')
         self.assertEqual(good['challenger_multiplier'],1.0)
+    def test_shadow_ab_requires_forward_evidence(self):
+        tmp=tempfile.TemporaryDirectory();db=Path(tmp.name)/'experience.db'
+        with patch.object(ex,'_db',return_value=db):
+            con=ex._conn();now=time.time()
+            for i in range(50):
+                champ=82;chall=82 if i<25 else 70
+                setup={'governance_challenger_score':chall}
+                excess=1.2 if i<25 else -1.0
+                con.execute('''INSERT INTO signals(created_epoch,created_at,ticker,grade,opportunity_score,entry_price,benchmark_price,setup_json,settled_20,excess_20)
+                               VALUES(?,?,?,?,?,?,?,?,1,?)''',(now+i,str(i),f'T{i}','STRONG',champ,100,10000,json.dumps(setup),excess))
+            con.commit();con.close()
+            r=fg.ab_report(20,threshold=78,min_samples=20)
+        tmp.cleanup()
+        self.assertEqual(r['status'],'OK')
+        self.assertEqual(r['recommendation'],'CHALLENGER_ELIGIBLE_FOR_PROMOTION_REVIEW')
+        self.assertLess(r['champion_only_rejected_by_challenger']['mean_excess_pct'],0)
+
     def test_challenger_adjustment_never_positive(self):
         with patch('app.feature_governance.governance_report',return_value={'rows':[{'feature':'confirm:Bad','challenger_multiplier':0.0}]}):
             x=fg.challenger_adjustment(['Bad'],{})
