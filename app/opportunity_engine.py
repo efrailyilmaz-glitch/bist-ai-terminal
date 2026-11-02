@@ -8,6 +8,7 @@ from .fundamentals import get_fundamentals
 from .kap_engine import disclosures
 from .news_engine import headlines
 from .analyst_engine import trusted_research
+from .feature_governance import challenger_adjustment
 
 _LOCK=threading.Lock();_WAKE=threading.Event();_THREAD=None;INTERVAL=15*60
 RANKING_VERSION=2
@@ -71,11 +72,13 @@ def score_opportunity(t,fundamentals=None,analyst=None,macro=None,kap=None,news=
         overall=min(overall,cap);short=min(short,cap);long=min(long,cap)
         warn.insert(0,'Sinyal kontrolü: '+guard_status+'; teyitli fırsat değildir.')
     grade=('WAIT' if guard_status=='WAIT' else 'BLOCK') if guard_status!='CLEAR' else 'MEGA' if overall>=86 and len(conf)>=5 and risk<72 else 'STRONG' if overall>=78 and len(conf)>=4 else 'WATCH' if overall>=66 else 'NORMAL'
+    components={'technical_short':round(s),'technical_long':round(l),'fundamental':round(fund),'analyst':round(ana),'kap':round(ks),'news':round(ns),'macro':round(ms),'smart_money':round(smart),'risk':round(risk),'anomaly':round(anom),'trap_risk':round(trap_score)}
+    gov=challenger_adjustment(conf,components);challenger=max(0,min(100,round(overall+gov['score_delta'])))
     return {'ticker':t.get('ticker'),'price':t.get('price'),'opportunity_score':overall,'short_opportunity_score':short,'long_opportunity_score':long,'grade':grade,
             'raw_opportunity_score':raw_overall,'signal_guard':guard,'trap_defense':trap,'as_of':t.get('as_of'),'fetched_at':t.get('fetched_at'),'bar_provisional':t.get('bar_provisional'),
             'label':'TEYİT BEKLİYOR' if grade=='WAIT' else 'SIRALAMA DIŞI' if grade=='BLOCK' else 'BÜYÜK FIRSAT ADAYI' if grade=='MEGA' else 'GÜÇLÜ FIRSAT' if grade=='STRONG' else 'İZLE' if grade=='WATCH' else 'NORMAL',
             'confidence':int(round(_cap(len(conf)*12+min(35,(a.get('coverage_count') or 0)*10)+min(25,_v(f.get('coverage_pct'),0)*.25)))),
-            'confirmations':conf[:8],'warnings':warn[:6],'targets':_targets(t,a,f),'components':{'technical_short':round(s),'technical_long':round(l),'fundamental':round(fund),'analyst':round(ana),'kap':round(ks),'news':round(ns),'macro':round(ms),'smart_money':round(smart),'risk':round(risk),'anomaly':round(anom),'trap_risk':round(trap_score)},'avg_value_turnover_20':liq,'updated':time.strftime('%d.%m.%Y %H:%M:%S')}
+            'confirmations':conf[:8],'warnings':warn[:6],'targets':_targets(t,a,f),'components':components,'governance_challenger_score':challenger,'governance_score_delta':gov['score_delta'],'governance_details':gov['details'],'avg_value_turnover_20':liq,'updated':time.strftime('%d.%m.%Y %H:%M:%S')}
 def _file():
     if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
     elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
