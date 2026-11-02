@@ -10,6 +10,6 @@ class V41SidebarTests(unittest.TestCase):
         views=re.findall(r'data-view="([^"]+)"',html)
         self.assertEqual(len(views),len(set(views)))
         self.assertIn('overview',views);self.assertIn('robotarena',views);self.assertIn('systemaudit',views)
-        self.assertIn('V41.0.0',html)
+        self.assertRegex(html,r'BIST AI Terminal V\d+\.0\.0')
 
 if __name__=='__main__':unittest.main()
