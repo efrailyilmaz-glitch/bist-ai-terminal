@@ -38,6 +38,16 @@ def _latest_price(ticker):
 def _canon(x):
     return json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':'),default=str)
 
+def _num(x):
+    try:return None if x is None else float(x)
+    except Exception:return None
+
+def _immutable(created_epoch,ticker,grade,opportunity_score,committee_decision,committee_score,regime,entry_price,benchmark_price,source_as_of,setup,pit_status,pit_flags):
+    return {'created_epoch':round(float(created_epoch),6),'ticker':str(ticker),'grade':grade,'opportunity_score':_num(opportunity_score),
+            'committee_decision':committee_decision,'committee_score':_num(committee_score),'regime':regime,
+            'entry_price':_num(entry_price),'benchmark_price':_num(benchmark_price),'source_as_of':source_as_of,
+            'setup':setup,'pit_status':pit_status,'pit_flags':list(pit_flags or [])}
+
 def record_signal(signal,committee=None):
     ticker=(signal or {}).get('ticker')
     if not ticker:return None
@@ -53,9 +63,7 @@ def record_signal(signal,committee=None):
         setup={'confirmations':signal.get('confirmations'),'warnings':signal.get('warnings'),'components':signal.get('components'),
                'targets':signal.get('targets'),'committee_evidence':committee.get('evidence'),'vetoes':committee.get('vetoes'),
                'signal_guard':signal.get('signal_guard'),'trap_defense':signal.get('trap_defense')}
-        immutable={'created_epoch':round(now,6),'ticker':ticker,'grade':signal.get('grade'),'opportunity_score':signal.get('opportunity_score'),
-                   'committee_decision':committee.get('decision'),'committee_score':committee.get('committee_score'),'regime':committee.get('regime'),
-                   'entry_price':entry,'benchmark_price':bench,'source_as_of':signal.get('as_of'),'setup':setup,'pit_status':pit['status'],'pit_flags':pit['flags']}
+        immutable=_immutable(now,ticker,signal.get('grade'),signal.get('opportunity_score'),committee.get('decision'),committee.get('committee_score'),committee.get('regime'),entry,bench,signal.get('as_of'),setup,pit['status'],pit['flags'])
         payload_hash=hashlib.sha256(_canon(immutable).encode()).hexdigest()
         last=c.execute('SELECT ledger_hash FROM signals WHERE ledger_hash IS NOT NULL ORDER BY id DESC LIMIT 1').fetchone()
         prev_hash=(last[0] if last and last[0] else 'GENESIS')
@@ -131,10 +139,7 @@ def verify_ledger():
     for r in rows:
         try:
             setup=json.loads(r.get('setup_json') or '{}');flags=json.loads(r.get('pit_flags_json') or '[]')
-            immutable={'created_epoch':round(float(r['created_epoch']),6),'ticker':r['ticker'],'grade':r.get('grade'),'opportunity_score':r.get('opportunity_score'),
-                       'committee_decision':r.get('committee_decision'),'committee_score':r.get('committee_score'),'regime':r.get('regime'),
-                       'entry_price':r.get('entry_price'),'benchmark_price':r.get('benchmark_price'),'source_as_of':r.get('source_as_of'),
-                       'setup':setup,'pit_status':r.get('pit_status'),'pit_flags':flags}
+            immutable=_immutable(r['created_epoch'],r['ticker'],r.get('grade'),r.get('opportunity_score'),r.get('committee_decision'),r.get('committee_score'),r.get('regime'),r.get('entry_price'),r.get('benchmark_price'),r.get('source_as_of'),setup,r.get('pit_status'),flags)
             ph=hashlib.sha256(_canon(immutable).encode()).hexdigest();lh=hashlib.sha256((prev+'|'+ph).encode()).hexdigest()
             if ph!=r.get('payload_hash') or r.get('prev_hash')!=prev or lh!=r.get('ledger_hash'):bad.append(r['id'])
             prev=r.get('ledger_hash') or prev
