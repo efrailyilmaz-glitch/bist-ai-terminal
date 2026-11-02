@@ -93,3 +93,43 @@ def challenger_adjustment(confirmations,components):
             lost=(1-m)*2.0;delta-=lost
             details.append({'feature':f,'multiplier':m,'score_delta':round(-lost,3)})
     return {'score_delta':round(min(0.0,delta),3),'details':details}
+
+
+def ab_report(horizon=20,threshold=78,min_samples=20):
+    """Forward champion-vs-governance-challenger shadow comparison.
+    Challenger may only reject/downscore; it never creates extra accepted signals.
+    """
+    if horizon not in (5,20,60):raise ValueError('horizon must be 5, 20 or 60')
+    import json
+    from . import experience_engine as ex
+    with ex._LOCK:
+        db=ex._conn();db.row_factory=__import__('sqlite3').Row
+        rows=[dict(x) for x in db.execute(f'''SELECT opportunity_score,setup_json,excess_{horizon} AS excess
+                                              FROM signals WHERE settled_{horizon}=1 AND excess_{horizon} IS NOT NULL''').fetchall()];db.close()
+    champ=[];chall=[];rejected=[]
+    for r in rows:
+        try:s=json.loads(r.get('setup_json') or '{}')
+        except Exception:s={}
+        cs=r.get('opportunity_score');gs=s.get('governance_challenger_score')
+        if not isinstance(cs,(int,float)) or not isinstance(gs,(int,float)):continue
+        x=float(r['excess'])
+        if float(cs)>=threshold:champ.append(x)
+        if float(gs)>=threshold:chall.append(x)
+        elif float(cs)>=threshold:rejected.append(x)
+    def stats(a):
+        if not a:return {'n':0}
+        return {'n':len(a),'mean_excess_pct':round(sum(a)/len(a),3),
+                'median_excess_pct':round(__import__('statistics').median(a),3),
+                'hit_rate_pct':round(sum(1 for x in a if x>0)/len(a)*100,1)}
+    cs,hs,rs=stats(champ),stats(chall),stats(rejected)
+    status='INSUFFICIENT_DATA'
+    recommendation='KEEP_CHAMPION'
+    if hs['n']>=min_samples and rs['n']>=min_samples:
+        status='OK'
+        # Promotion only when rejected names are clearly harmful and challenger subset
+        # has at least as good forward mean. No auto-promotion is performed.
+        if rs.get('mean_excess_pct',0)<0 and hs.get('mean_excess_pct',-999)>=cs.get('mean_excess_pct',-999):
+            recommendation='CHALLENGER_ELIGIBLE_FOR_PROMOTION_REVIEW'
+    return {'status':status,'horizon':horizon,'threshold':threshold,'champion':cs,'challenger':hs,
+            'champion_only_rejected_by_challenger':rs,'recommendation':recommendation,
+            'note':'Shadow A/B on prospective settled signals. Recommendation never auto-promotes or changes production scoring.'}
