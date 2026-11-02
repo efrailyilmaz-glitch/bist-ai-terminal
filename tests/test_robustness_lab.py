@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import pandas as pd
-from app.robustness_lab import pbo_cscv,walk_forward_surface,stability_map,deflated_sharpe
+from app.robustness_lab import pbo_cscv,walk_forward_surface,stability_map,deflated_sharpe,causality_check,candidate_capacity
 
 class RobustnessLabTests(unittest.TestCase):
     def test_pbo_and_surface_are_finite(self):
@@ -32,6 +32,22 @@ class RobustnessLabTests(unittest.TestCase):
     def test_plateau_reports_width(self):
         rng=np.random.default_rng(2);r=pd.DataFrame({f's{i}':rng.normal(.0003,.01,500) for i in range(5)})
         x=stability_map(r);self.assertEqual(x['candidate_count'],5);self.assertTrue(0<x['plateau_pct']<=100)
+    def test_causality_invariant_passes_for_causal_strategies(self):
+        rng=np.random.default_rng(17);n=520
+        close=100*np.cumprod(1+rng.normal(.0003,.01,n))
+        df=pd.DataFrame({'Open':close*(1-rng.normal(0,.001,n)),'High':close*1.01,'Low':close*.99,'Close':close,'Volume':rng.integers(100000,1000000,n)})
+        x=causality_check(df)
+        self.assertEqual(x['status'],'PASS');self.assertGreater(x['checks'],0)
+
+    def test_capacity_reports_turnover_and_liquidity_proxy(self):
+        rng=np.random.default_rng(3);n=300
+        close=100*np.cumprod(1+rng.normal(.0002,.01,n))
+        df=pd.DataFrame({'Open':close,'High':close*1.01,'Low':close*.99,'Close':close,'Volume':np.full(n,500000)})
+        x=candidate_capacity(df,'ma_trend',20,50)
+        self.assertGreaterEqual(x['annual_turnover_x'],0)
+        self.assertGreater(x['median_60d_value_turnover'],0)
+        self.assertGreater(x['capacity_1pct_adv_try'],0)
+
     def test_short_samples_rejected(self):
         r=pd.DataFrame({'a':[0.0]*50,'b':[0.0]*50,'c':[0.0]*50})
         self.assertEqual(pbo_cscv(r)['status'],'INSUFFICIENT_DATA')
