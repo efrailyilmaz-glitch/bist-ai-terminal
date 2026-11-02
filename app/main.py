@@ -27,7 +27,7 @@ from .pro_alert_engine import start_alert_engine, add_rule, delete_rule, list_ru
 from .market_intelligence import seasonality, rolling_risk, relative_rotation, watchlist_heatmap, market_regime_dashboard
 from .broker_bridge import broker_status, order_preview, paper_order, orders as broker_orders, set_kill_switch, update_risk
 from .background_supervisor import start_background_supervisor, status as background_status, alerts as background_alerts
-from .experience_engine import history as experience_history, calibration as experience_calibration, settle_due as experience_settle
+from .experience_engine import history as experience_history, calibration as experience_calibration, settle_due as experience_settle, verify_ledger
 from .smart_money_engine import smart_money_snapshot, smart_money_radar
 from .decision_levels import decision_levels
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
@@ -48,7 +48,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='42.0.0')
+app=FastAPI(title='BIST AI Terminal',version='43.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -380,7 +380,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 42.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 43.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -394,6 +394,8 @@ def system_audit_api():
       {'name':'Meta Portfolio Brain','status':'OK','detail':'Forward-only regime-aware robot allocation with explicit cash floors and 25% per-bot cap'},
       {'name':'Trade Reality Engine','status':'OK','detail':'Prior-session intraday block-bootstrap stress test with stop-first ambiguity; can only veto/derisk paper entries'},
       {'name':'Risk Passport','status':'OK','detail':'Initial entry/stop/target plan is locked and fingerprinted on each paper position'},
+      {'name':'Point-in-Time Integrity','status':'OK','detail':'Prospective evidence blocks provisional/future-dated inputs; missing timestamps only downgrade confidence'},
+      {'name':'Forward Evidence Ledger','status':verify_ledger().get('status','WARN'),'detail':f"Hash-chain rows {verify_ledger().get('rows',0)} · bad {len(verify_ledger().get('bad_ids') or [])}"},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'Dynamic delayed-bar slippage + participation + intrabar-range guard; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -402,7 +404,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'42.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'43.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -451,6 +453,10 @@ def portfolio_allocations(codes:str):
     selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
     return compare_allocations(selected)
 
+@app.get('/api/evidence-ledger/verify')
+def evidence_ledger_verify_api():
+    return verify_ledger()
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -490,7 +496,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'32.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'43.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
