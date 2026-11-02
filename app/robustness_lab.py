@@ -120,17 +120,57 @@ def stability_map(returns):
             'best_index':int(order[0]),
             'note':'A broader near-best plateau is preferred to a single sharp optimum.'}
 
+
+def candidate_capacity(df,strategy,fast,slow):
+    """Transparent turnover/capacity proxy for a single-asset strategy."""
+    pos=_positions(df,strategy,fast,slow).astype(float).fillna(0)
+    changes=pos.diff().abs().fillna(pos.abs())
+    years=max(len(pos)/TRADING_DAYS,1/TRADING_DAYS)
+    annual_turnover_x=float(changes.sum()/years)
+    value=(pd.to_numeric(df['Close'],errors='coerce')*pd.to_numeric(df['Volume'],errors='coerce')).replace([np.inf,-np.inf],np.nan).dropna()
+    med_adv=float(value.tail(60).median()) if len(value) else 0.0
+    return {'annual_turnover_x':round(annual_turnover_x,2),
+            'median_60d_value_turnover':round(med_adv,2),
+            'capacity_1pct_adv_try':round(med_adv*.01,2),
+            'capacity_5pct_adv_try':round(med_adv*.05,2),
+            'note':'Liquidity capacity proxy only; real capacity depends on spread, queue priority, impact, volatility and market regime.'}
+
+def causality_check(df):
+    """Property-style no-look-ahead invariant: prefix signals must not change when future bars are appended."""
+    if len(df)<220:return {'status':'INSUFFICIENT_DATA'}
+    cutpoints=sorted(set([len(df)//2,max(120,len(df)-252),len(df)-63]))
+    failures=[];checks=0
+    for strategy,fast,slow in CANDIDATES:
+        try:
+            full=_positions(df,strategy,fast,slow)
+            for cut in cutpoints:
+                if cut<80 or cut>=len(df):continue
+                short=_positions(df.iloc[:cut].copy(),strategy,fast,slow)
+                n=min(len(short),cut)
+                a=np.asarray(full.iloc[:n],float);b=np.asarray(short.iloc[:n],float)
+                checks+=1
+                if len(a)!=len(b) or not np.allclose(a,b,equal_nan=True):
+                    failures.append({'id':f'{strategy}:{fast}:{slow}','cut':int(cut)})
+        except Exception as e:
+            failures.append({'id':f'{strategy}:{fast}:{slow}','error':str(e)[:80]})
+    return {'status':'PASS' if not failures else 'FAIL','checks':checks,'failures':failures[:20],
+            'note':'Future bars must never alter already-emitted positions at tested prefixes.'}
+
 def robustness_audit(ticker,period='10y',cost_bps=15,slippage_bps=10):
     df,_=_frame(ticker,period)
     if df is None or len(df)<500:return {'ticker':ticker.upper(),'status':'INSUFFICIENT_HISTORY'}
     returns,meta=candidate_returns(df,cost_bps,slippage_bps)
     if returns.shape[1]<3:return {'ticker':ticker.upper(),'status':'NO_CANDIDATES'}
-    pbo=pbo_cscv(returns);dsr=deflated_sharpe(returns);wfc=walk_forward_surface(returns);plateau=stability_map(returns)
+    pbo=pbo_cscv(returns);dsr=deflated_sharpe(returns);wfc=walk_forward_surface(returns);plateau=stability_map(returns);causality=causality_check(df)
     stress2,_=candidate_returns(df,cost_bps*2,slippage_bps*2);stress3,_=candidate_returns(df,cost_bps*3,slippage_bps*3)
     full_scores=[_sharpe(returns.iloc[:,j]) for j in range(returns.shape[1])]
     stress2_scores=[_sharpe(stress2.iloc[:,j]) for j in range(stress2.shape[1])] if not stress2.empty else []
     stress3_scores=[_sharpe(stress3.iloc[:,j]) for j in range(stress3.shape[1])] if not stress3.empty else []
     best=int(np.argmax(full_scores));best_meta=meta[best]
+    selected_id=returns.columns[best]
+    selected2=_sharpe(stress2[selected_id]) if selected_id in stress2.columns else None
+    selected3=_sharpe(stress3[selected_id]) if selected_id in stress3.columns else None
+    capacity=candidate_capacity(df,best_meta['strategy'],best_meta['fast'],best_meta['slow'])
     # Deliberately conservative research gate. It authorizes only prospective paper validation.
     reasons=[]
     if pbo.get('pbo_pct',100)>25:reasons.append('PBO_HIGH')
@@ -138,11 +178,13 @@ def robustness_audit(ticker,period='10y',cost_bps=15,slippage_bps=10):
     if wfc.get('median_surface_corr',-1)<.15:reasons.append('LOW_IS_OOS_SURFACE_CORRELATION')
     if wfc.get('positive_selected_oos_folds_pct',0)<60:reasons.append('OOS_FOLD_MAJORITY_FAIL')
     if plateau.get('plateau_pct',0)<15:reasons.append('PARAMETER_CLIFF_RISK')
-    if not stress2_scores or max(stress2_scores)<=0:reasons.append('DOUBLE_COST_EDGE_LOST')
+    if selected2 is None or selected2<=0:reasons.append('SELECTED_DOUBLE_COST_EDGE_LOST')
+    if selected3 is None or selected3<=0:reasons.append('SELECTED_TRIPLE_COST_EDGE_LOST')
+    if causality.get('status')!='PASS':reasons.append('LOOKAHEAD_INVARIANT_FAIL')
     gate='PROSPECTIVE_PAPER' if not reasons else 'RESEARCH_ONLY'
     return {'ticker':ticker.upper(),'status':'OK','period':period,'cost_bps':cost_bps,'slippage_bps':slippage_bps,
             'candidate_count':returns.shape[1],'best_full_sample':{**best_meta,'sharpe':round(full_scores[best],3)},
-            'pbo':pbo,'deflated_sharpe':dsr,'walk_forward_surface':wfc,'stability':plateau,
-            'cost_stress':{'base_best_sharpe':round(max(full_scores),3),'double_cost_best_sharpe':round(max(stress2_scores),3) if stress2_scores else None,'triple_cost_best_sharpe':round(max(stress3_scores),3) if stress3_scores else None},
+            'pbo':pbo,'deflated_sharpe':dsr,'walk_forward_surface':wfc,'stability':plateau,'causality':causality,'capacity':capacity,
+            'cost_stress':{'selected_id':selected_id,'selected_base_sharpe':round(full_scores[best],3),'selected_double_cost_sharpe':None if selected2 is None else round(selected2,3),'selected_triple_cost_sharpe':None if selected3 is None else round(selected3,3),'family_double_cost_best_sharpe':round(max(stress2_scores),3) if stress2_scores else None,'family_triple_cost_best_sharpe':round(max(stress3_scores),3) if stress3_scores else None},
             'gate':gate,'veto_reasons':reasons,
             'limits':'Passing this gate never authorizes live trading. It only means the candidate family is eligible for locked prospective paper testing.'}
