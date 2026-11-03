@@ -142,3 +142,27 @@ def lineage(rebalance_id):
     try:ranking=json.loads(reb.get('ranking_snapshot_json') or '[]')
     except Exception:ranking=[]
     return {'status':'OK','rebalance':reb,'portfolio':dict(p) if p else None,'ranking_snapshot':ranking,'model_artifact':artifact}
+
+
+def verify_lineage_ledger():
+    """Verify V59+ rebalance lineage hash chain; legacy rows without hashes are excluded."""
+    with _LOCK:
+        c=_conn();c.row_factory=sqlite3.Row
+        rows=[dict(x) for x in c.execute('SELECT * FROM rebalances WHERE ledger_hash IS NOT NULL ORDER BY id').fetchall()];c.close()
+    prev='GENESIS';bad=[]
+    for r in rows:
+        try:
+            targets=json.loads(r.get('target_json') or '[]')
+            ranking=json.loads(r.get('ranking_snapshot_json') or '[]')
+            immutable={'portfolio_id':int(r['portfolio_id']),'epoch':round(float(r['epoch']),6),'targets':targets,
+                       'turnover_pct':round(float(r.get('turnover_pct') or 0),8),'cost':round(float(r.get('cost') or 0),8),
+                       'equity_before':round(float(r.get('equity_before') or 0),8),'equity_after':round(float(r.get('equity_after') or 0),8),
+                       'model_registry_id':r.get('model_registry_id'),'model_fingerprint':r.get('model_fingerprint'),
+                       'ranking_as_of':r.get('ranking_as_of'),'ranking_snapshot':ranking}
+            ph=hashlib.sha256(json.dumps(immutable,ensure_ascii=False,sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest()
+            lh=hashlib.sha256((prev+'|'+ph).encode()).hexdigest()
+            if ph!=r.get('payload_hash') or r.get('prev_hash')!=prev or lh!=r.get('ledger_hash'):bad.append(r['id'])
+            prev=r.get('ledger_hash') or prev
+        except Exception:bad.append(r.get('id'))
+    return {'status':'PASS' if not bad else 'FAIL','rows':len(rows),'bad_ids':bad[:20],
+            'note':'V59+ XS rebalance lineage is hash-chained; legacy pre-V59 rows remain outside this chain.'}
