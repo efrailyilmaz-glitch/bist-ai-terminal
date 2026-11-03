@@ -50,6 +50,8 @@ def feature_frame_from_rows(rows):
       'macd_hist':(macd-sig)/c.replace(0,np.nan),
       'atr_pct':atr/c.replace(0,np.nan)
     })
+    out['price']=c
+    out['value_turnover']=c*v
     out['label_5d']=c.shift(-5)/c-1
     if 'time' in df.columns:out.index=df['time'].astype(str)
     out.index.name='datetime'
