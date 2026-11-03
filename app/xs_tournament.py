@@ -8,6 +8,7 @@ from pathlib import Path
 from . import xs_paper
 from .meta_governance import conservative_score, meta_decision
 from .promotion_governance import evaluate as promotion_gate
+from .statistical_promotion import evaluate as statistical_gate
 
 _LOCK=threading.RLock()
 
@@ -108,10 +109,12 @@ def snapshot(tournament_id):
     for vid,name,method,pid in ch:
         h=xs_paper.history(int(pid),500)
         promo=promotion_gate(h,days)
+        stats=statistical_gate(h,test_count=max(1,len(ch))) if promo.get('status')=='PROMOTION_REVIEW' else {'status':'NOT_RUN','reasons':['HARD_GATE_NOT_PASSED']}
         metrics=_metrics(h,days)
-        metrics['status']='ELIGIBLE' if promo.get('status')=='PROMOTION_REVIEW' else 'OBSERVE'
-        metrics['reasons']=promo.get('reasons') or []
-        rows.append({'id':vid,'name':name,'method':method,'portfolio_id':pid,'metrics':metrics,'promotion_gate':promo,'paper':h})
+        eligible=promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS'
+        metrics['status']='ELIGIBLE' if eligible else 'OBSERVE'
+        metrics['reasons']=list(dict.fromkeys((promo.get('reasons') or [])+(stats.get('reasons') or [])))
+        rows.append({'id':vid,'name':name,'method':method,'portfolio_id':pid,'metrics':metrics,'promotion_gate':promo,'statistical_gate':stats,'paper':h})
     ranking=[{'id':r['id'],'name':r['name'],'score':r['metrics']['score'],'status':r['metrics']['status'],'reasons':r['metrics']['reasons']} for r in rows]
     ranking.sort(key=lambda x:(x['status']!='ELIGIBLE',-x['score'],x['id']))
     decision=meta_decision(ranking,td.get('champion'))
