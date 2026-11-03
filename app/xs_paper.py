@@ -2,7 +2,7 @@
 Prospective only. No broker calls and no live order path.
 """
 from __future__ import annotations
-import json, math, sqlite3, threading, time
+import hashlib, json, math, sqlite3, threading, time
 from pathlib import Path
 from .market_data import yahoo_rows
 
@@ -25,7 +25,7 @@ def _conn():
       model_registry_id INTEGER, model_fingerprint TEXT, ranking_as_of TEXT, ranking_snapshot_json TEXT
     )''')
     cols={r[1] for r in c.execute('PRAGMA table_info(rebalances)').fetchall()}
-    for name,typ in [('model_registry_id','INTEGER'),('model_fingerprint','TEXT'),('ranking_as_of','TEXT'),('ranking_snapshot_json','TEXT')]:
+    for name,typ in [('model_registry_id','INTEGER'),('model_fingerprint','TEXT'),('ranking_as_of','TEXT'),('ranking_snapshot_json','TEXT'),('payload_hash','TEXT'),('prev_hash','TEXT'),('ledger_hash','TEXT')]:
         if name not in cols:c.execute(f'ALTER TABLE rebalances ADD COLUMN {name} {typ}')
     c.execute('''CREATE TABLE IF NOT EXISTS positions(
       portfolio_id INTEGER, ticker TEXT, weight REAL, units REAL, entry_price REAL,
