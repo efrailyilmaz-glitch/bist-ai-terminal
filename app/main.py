@@ -33,6 +33,7 @@ from .decision_levels import decision_levels
 from .decision_attribution import attribution as decision_attribution, feature_report as decision_feature_report
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
+from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -51,7 +52,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='48.0.0')
+app=FastAPI(title='BIST AI Terminal',version='49.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -383,7 +384,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 48.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 49.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -402,6 +403,7 @@ def system_audit_api():
       {'name':'Decision Attribution','status':'OK','detail':'Forward-only settled-ledger feature attribution with UNKNOWN/POSSIBLE/CONSISTENT/NEGATIVE labels; no automatic strategy mutation'},
       {'name':'Adaptive Feature Governance','status':'OK','detail':'Champion unchanged; challenger-only quarantine/downweight/disable policy with prospective shadow A/B promotion review'},
       {'name':'Model Zoo Challenger Lab','status':'OK','detail':'External Qlib/Hugging Face/FinRL-style candidates require license, model-card, PIT, causality, cost, robustness, execution and forward-paper gates before challenger eligibility'},
+      {'name':'Qlib Feature Bridge','status':qlib_adapter_status().get('status','ADAPTER_UNAVAILABLE'),'detail':'Causal BIST feature bridge is always available; optional LightGBM/Qlib packages remain lab-only and are never auto-installed'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -410,7 +412,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'48.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'49.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -493,6 +495,22 @@ def model_zoo_validate_api(payload:dict=Body(...)):
 def model_zoo_lab_api(payload:list[dict]=Body(...)):
     return model_zoo_summary(payload[:100])
 
+@app.get('/api/qlib-bridge/status')
+def qlib_bridge_status_api():
+    return qlib_adapter_status()
+
+@app.get('/api/qlib-bridge/dataset/{ticker}')
+def qlib_bridge_dataset_api(ticker:str,period:str='5y'):
+    d=qlib_dataset_payload(ticker,period)
+    frame=d.pop('frame',None)
+    if frame is not None:
+        d['preview']=frame.tail(5).reset_index().to_dict(orient='records')
+    return d
+
+@app.get('/api/qlib-bridge/lab/{ticker}')
+def qlib_bridge_lab_api(ticker:str,period:str='5y'):
+    return qlib_fit_predict_lab(ticker,period)
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -532,7 +550,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'48.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'49.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
