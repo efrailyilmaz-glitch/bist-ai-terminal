@@ -219,3 +219,46 @@ def purged_walk_forward_cost_reality(tickers=None,period='5y',limit=120,train_da
     reality.update({'symbols':ds['symbols'],'dates':ds['dates'],'purge_days':purge_days,'embargo_days':embargo_days,
                     'note':'Purged rolling OOS implementation reality. Net edge must survive costs and capacity checks before promotion review.'})
     return reality
+
+
+def current_ranking(tickers=None,period='5y',limit=120):
+    """Train only on label-complete historical rows, then score the latest causal feature row.
+    Prospective research ranking only. Requires optional LightGBM adapter.
+    """
+    st=adapter_status()
+    if not st.get('lightgbm_installed'):
+        return {'status':'ADAPTER_UNAVAILABLE',**st}
+    names=tickers or [x['ticker'] for x in get_universe()[:max(5,min(limit,500))]]
+    ds=build_panel(names,period,limit)
+    if ds.get('status')!='OK':return {k:v for k,v in ds.items() if k!='frame'}
+    latest=[]
+    for t in names:
+        try:
+            f=feature_frame(t,period)
+            if f.empty:continue
+            r=f.iloc[-1]
+            if any(pd.isna(r.get(k)) for k in FEATURES):continue
+            latest.append({'ticker':t,'date':str(f.index[-1]),**{k:float(r[k]) for k in FEATURES},
+                           'price':float(r.get('price') or 0),'value_turnover':float(r.get('value_turnover') or 0)})
+        except Exception:continue
+    if len(latest)<10:return {'status':'INSUFFICIENT_CURRENT_UNIVERSE','symbols':len(latest)}
+    cur=pd.DataFrame(latest)
+    for k in FEATURES:
+        sd=float(cur[k].std())
+        cur['xs_'+k]=(cur[k]-float(cur[k].mean()))/(sd if sd>0 else 1.0)
+    feats=ds['features'];train=ds['frame'].sort_values(['date','ticker'])
+    # Five-day labels require a conservative five-date gap before current scoring.
+    td=sorted(train.date.unique())
+    if len(td)>5:train=train[train.date.isin(set(td[:-5]))]
+    if len(train)<500:return {'status':'INSUFFICIENT_TRAINING_ROWS','rows':len(train)}
+    import lightgbm as lgb
+    model=lgb.LGBMRegressor(n_estimators=120,max_depth=4,num_leaves=31,learning_rate=.03,
+                            subsample=.8,colsample_bytree=.8,random_state=56,verbosity=-1)
+    model.fit(train[feats],train['label_excess_5d'])
+    cur['score']=model.predict(cur[feats])
+    cur=cur.sort_values('score',ascending=False)
+    rows=[{'ticker':r.ticker,'score':round(float(r.score),6),'price':round(float(r.price),6),
+           'value_turnover':round(float(r.value_turnover),2),'as_of':str(r.date)}
+          for r in cur.itertuples()]
+    return {'status':'OK','as_of':str(cur.iloc[0]['date']),'symbols':len(rows),'rows':rows,
+            'train_rows':len(train),'policy':'Latest features are causal; training excludes the most recent five labeled dates. Prospective paper use only.'}
