@@ -34,7 +34,7 @@ from .decision_attribution import attribution as decision_attribution, feature_r
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
-from .cross_sectional_ml import build_panel as xs_build_panel, run_lab as xs_run_lab
+from .cross_sectional_ml import build_panel as xs_build_panel, run_lab as xs_run_lab, purged_walk_forward_lab as xs_purged_walk_forward_lab
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -53,7 +53,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='50.0.0')
+app=FastAPI(title='BIST AI Terminal',version='51.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -385,7 +385,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 50.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 51.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -406,6 +406,7 @@ def system_audit_api():
       {'name':'Model Zoo Challenger Lab','status':'OK','detail':'External Qlib/Hugging Face/FinRL-style candidates require license, model-card, PIT, causality, cost, robustness, execution and forward-paper gates before challenger eligibility'},
       {'name':'Qlib Feature Bridge','status':qlib_adapter_status().get('status','ADAPTER_UNAVAILABLE'),'detail':'Causal BIST feature bridge is always available; optional LightGBM/Qlib packages remain lab-only and are never auto-installed'},
       {'name':'Cross-Sectional ML Challenger','status':'OK','detail':'Same-date BIST relative-ranking lab using cross-sectional z-scored causal features, rank IC and top-bottom forward excess spread; lab-only'},
+      {'name':'Purged Walk-Forward XS Validation','status':'OK','detail':'Rolling cross-sectional OOS folds with 5d label purge and configurable embargo to reduce boundary leakage; lab-only'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -414,7 +415,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'50.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'51.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -527,6 +528,13 @@ def xs_ml_lab_api(codes:str|None=None,period:str='5y',limit:int=120):
     tickers=[x.strip().upper() for x in codes.split(',') if x.strip()] if codes else None
     return xs_run_lab(tickers,period,max(5,min(limit,500)))
 
+@app.get('/api/xs-ml/purged-walk-forward')
+def xs_ml_purged_walk_forward_api(codes:str|None=None,period:str='5y',limit:int=120,train_days:int=252,test_days:int=63,purge_days:int=5,embargo_days:int=5):
+    tickers=[x.strip().upper() for x in codes.split(',') if x.strip()] if codes else None
+    return xs_purged_walk_forward_lab(tickers,period,max(5,min(limit,500)),
+        max(120,min(train_days,756)),max(20,min(test_days,126)),
+        max(5,min(purge_days,20)),max(0,min(embargo_days,20)))
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -566,7 +574,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'50.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'51.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
