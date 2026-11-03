@@ -36,7 +36,7 @@ from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as m
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
 from .cross_sectional_ml import build_panel as xs_build_panel, run_lab as xs_run_lab, purged_walk_forward_lab as xs_purged_walk_forward_lab, purged_walk_forward_cost_reality as xs_cost_reality
 from .xs_portfolio import construct as xs_portfolio_construct
-from .xs_paper import create as xs_paper_create, rebalance as xs_paper_rebalance, mark as xs_paper_mark, history as xs_paper_history, lineage as xs_paper_lineage
+from .xs_paper import create as xs_paper_create, rebalance as xs_paper_rebalance, mark as xs_paper_mark, history as xs_paper_history, lineage as xs_paper_lineage, verify_lineage_ledger as xs_verify_lineage_ledger
 from .xs_tournament import create as xs_tournament_create, start as xs_tournament_start, rebalance_variant as xs_tournament_rebalance, mark_all as xs_tournament_mark, snapshot as xs_tournament_snapshot
 from .xs_scheduler import configure as xs_scheduler_configure, state as xs_scheduler_state, run_once as xs_scheduler_run_once, start_worker as xs_scheduler_start_worker
 from .model_registry import history as model_registry_history, get as model_registry_get
@@ -58,7 +58,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='58.0.0')
+app=FastAPI(title='BIST AI Terminal',version='59.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -390,7 +390,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 58.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 59.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -419,6 +419,7 @@ def system_audit_api():
       {'name':'XS Autonomous Rebalance Scheduler','status':'OK','detail':'Paper-only daily mark and configurable rebalance cadence using prospective current XS ranking; missing model dependency waits without fallback'},
       {'name':'Model Reproducibility Registry','status':'OK','detail':'Prospective XS model decisions persist feature/data/dependency/model fingerprints, seed and training cutoff for auditability'},
       {'name':'Decision-to-Model Lineage','status':'OK','detail':'Each XS rebalance persists ranking snapshot plus model registry link, enabling rebalance→portfolio→ranking→model→training-data traceability'},
+      {'name':'XS Lineage Hash Chain','status':xs_verify_lineage_ledger().get('status','WARN'),'detail':f"Hash-chain rows {xs_verify_lineage_ledger().get('rows',0)} · bad {len(xs_verify_lineage_ledger().get('bad_ids') or [])}"},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -427,7 +428,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'58.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'59.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -639,6 +640,10 @@ def model_registry_get_api(registry_id:int):
 def xs_lineage_api(rebalance_id:int):
     return xs_paper_lineage(rebalance_id)
 
+@app.get('/api/xs-lineage/verify')
+def xs_lineage_verify_api():
+    return xs_verify_lineage_ledger()
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -678,7 +683,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'58.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'59.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
