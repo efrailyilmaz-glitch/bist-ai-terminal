@@ -35,6 +35,7 @@ from .feature_governance import governance_report as feature_governance_report, 
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
 from .cross_sectional_ml import build_panel as xs_build_panel, run_lab as xs_run_lab, purged_walk_forward_lab as xs_purged_walk_forward_lab, purged_walk_forward_cost_reality as xs_cost_reality
+from .xs_portfolio import construct as xs_portfolio_construct
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -53,7 +54,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='52.0.0')
+app=FastAPI(title='BIST AI Terminal',version='53.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -385,7 +386,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 52.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 53.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -408,6 +409,7 @@ def system_audit_api():
       {'name':'Cross-Sectional ML Challenger','status':'OK','detail':'Same-date BIST relative-ranking lab using cross-sectional z-scored causal features, rank IC and top-bottom forward excess spread; lab-only'},
       {'name':'Purged Walk-Forward XS Validation','status':'OK','detail':'Rolling cross-sectional OOS folds with 5d label purge and configurable embargo to reduce boundary leakage; lab-only'},
       {'name':'XS Cost & Turnover Reality','status':'OK','detail':'Cross-sectional challenger diagnostics include rebalance turnover, explicit cost drag and ADV-based capacity flags; costs never improve an edge'},
+      {'name':'XS Portfolio Constructor','status':'OK','detail':'Paper-only constrained allocation with score/inverse-vol weighting, max-name cap, ADV capacity derisk and portfolio-guard checks'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -416,7 +418,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'52.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'53.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -545,6 +547,16 @@ def xs_ml_cost_reality_api(codes:str|None=None,period:str='5y',limit:int=120,tra
         max(0,min(one_way_cost_bps,200)),max(1,min(rebalance_every,20)),
         max(10000,min(portfolio_value,1000000000)),max(.1,min(adv_limit_pct,10)))
 
+@app.post('/api/xs-ml/portfolio')
+def xs_ml_portfolio_api(payload:dict=Body(...)):
+    ranked=payload.get('ranked') or []
+    return xs_portfolio_construct(ranked,
+        max(10000,min(float(payload.get('portfolio_value') or 1000000),1000000000)),
+        max(3,min(int(payload.get('max_names') or 10),20)),
+        max(.05,min(float(payload.get('max_weight') or .15),.50)),
+        max(.1,min(float(payload.get('adv_limit_pct') or 1.0),10)),
+        str(payload.get('method') or 'score_inverse_vol'))
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -584,7 +596,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'52.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'53.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
