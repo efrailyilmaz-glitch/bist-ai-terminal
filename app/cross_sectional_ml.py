@@ -185,3 +185,37 @@ def cost_turnover_reality_from_ranked(days,one_way_cost_bps=20,rebalance_every=5
             'net_positive_pct':round(float(np.mean(np.array(net)>0)*100),1),
             'capacity_flagged_rebalances':cap_flags,'rows':rows[-50:],
             'policy':'Costs and capacity can only reduce or veto an edge; they never improve expected performance.'}
+
+
+def purged_walk_forward_cost_reality(tickers=None,period='5y',limit=120,train_days=252,test_days=63,purge_days=5,embargo_days=5,one_way_cost_bps=20,rebalance_every=5,portfolio_value=1_000_000,adv_limit_pct=1.0):
+    """Purged rolling validation plus implementation-cost and capacity diagnostics."""
+    ds=build_panel(tickers,period,limit)
+    if ds.get('status')!='OK':return {k:v for k,v in ds.items() if k!='frame'}
+    st=adapter_status()
+    if not st.get('lightgbm_installed'):
+        return {'status':'ADAPTER_UNAVAILABLE','symbols':ds['symbols'],'dates':ds['dates'],**st}
+    import lightgbm as lgb
+    df=ds['frame'].sort_values(['date','ticker']).copy();dates=sorted(df.date.unique())
+    train_days=max(120,int(train_days));test_days=max(20,int(test_days));purge_days=max(5,int(purge_days));embargo_days=max(0,int(embargo_days))
+    if len(dates)<train_days+test_days+purge_days+20:
+        return {'status':'INSUFFICIENT_DATES','dates':len(dates),'required':train_days+test_days+purge_days+20}
+    feats=ds['features'];cursor=train_days;ranked_days=[]
+    while cursor+purge_days+test_days<=len(dates):
+        train_end=cursor-purge_days;train_start=max(0,train_end-train_days);test_start=cursor;test_end=min(len(dates),test_start+test_days)
+        tr_dates=set(dates[train_start:train_end]);te_dates=set(dates[test_start:test_end])
+        train=df[df.date.isin(tr_dates)];test=df[df.date.isin(te_dates)].copy()
+        if train.empty or test.empty:break
+        model=lgb.LGBMRegressor(n_estimators=120,max_depth=4,num_leaves=31,learning_rate=.03,
+                                subsample=.8,colsample_bytree=.8,random_state=52,verbosity=-1)
+        model.fit(train[feats],train['label_excess_5d']);test['prediction']=model.predict(test[feats])
+        for d,g in test.groupby('date'):
+            rows=[]
+            for r in g.itertuples():
+                rows.append({'ticker':r.ticker,'score':float(r.prediction),'label_excess_5d':float(r.label_excess_5d),
+                             'value_turnover':float(getattr(r,'value_turnover',0) or 0)})
+            ranked_days.append({'date':d,'rows':rows})
+        cursor=test_end+embargo_days
+    reality=cost_turnover_reality_from_ranked(ranked_days,one_way_cost_bps,rebalance_every,portfolio_value,adv_limit_pct)
+    reality.update({'symbols':ds['symbols'],'dates':ds['dates'],'purge_days':purge_days,'embargo_days':embargo_days,
+                    'note':'Purged rolling OOS implementation reality. Net edge must survive costs and capacity checks before promotion review.'})
+    return reality
