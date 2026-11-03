@@ -118,3 +118,18 @@ def history(portfolio_id,limit=200):
         rebs=[dict(x) for x in c.execute('SELECT * FROM rebalances WHERE portfolio_id=? ORDER BY id DESC LIMIT 100',(int(portfolio_id),)).fetchall()]
         pos=[dict(x) for x in c.execute('SELECT * FROM positions WHERE portfolio_id=? ORDER BY weight DESC',(int(portfolio_id),)).fetchall()];c.close()
     return {'status':'OK','portfolio':dict(p),'curve':curve,'rebalances':rebs,'positions':pos}
+
+
+def lineage(rebalance_id):
+    from .model_registry import get as get_model_artifact
+    with _LOCK:
+        c=_conn();c.row_factory=sqlite3.Row
+        r=c.execute('SELECT * FROM rebalances WHERE id=?',(int(rebalance_id),)).fetchone()
+        if not r:c.close();return {'status':'NOT_FOUND'}
+        reb=dict(r)
+        p=c.execute('SELECT * FROM portfolios WHERE id=?',(int(reb['portfolio_id']),)).fetchone()
+        c.close()
+    artifact=get_model_artifact(reb.get('model_registry_id')) if reb.get('model_registry_id') else {'status':'NOT_LINKED'}
+    try:ranking=json.loads(reb.get('ranking_snapshot_json') or '[]')
+    except Exception:ranking=[]
+    return {'status':'OK','rebalance':reb,'portfolio':dict(p) if p else None,'ranking_snapshot':ranking,'model_artifact':artifact}
