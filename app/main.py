@@ -37,6 +37,7 @@ from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_pay
 from .cross_sectional_ml import build_panel as xs_build_panel, run_lab as xs_run_lab, purged_walk_forward_lab as xs_purged_walk_forward_lab, purged_walk_forward_cost_reality as xs_cost_reality
 from .xs_portfolio import construct as xs_portfolio_construct
 from .xs_paper import create as xs_paper_create, rebalance as xs_paper_rebalance, mark as xs_paper_mark, history as xs_paper_history
+from .xs_tournament import create as xs_tournament_create, start as xs_tournament_start, rebalance_variant as xs_tournament_rebalance, mark_all as xs_tournament_mark, snapshot as xs_tournament_snapshot
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -55,7 +56,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='54.0.0')
+app=FastAPI(title='BIST AI Terminal',version='55.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -387,7 +388,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 54.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 55.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -412,6 +413,7 @@ def system_audit_api():
       {'name':'XS Cost & Turnover Reality','status':'OK','detail':'Cross-sectional challenger diagnostics include rebalance turnover, explicit cost drag and ADV-based capacity flags; costs never improve an edge'},
       {'name':'XS Portfolio Constructor','status':'OK','detail':'Paper-only constrained allocation with score/inverse-vol weighting, max-name cap, ADV capacity derisk and portfolio-guard checks'},
       {'name':'XS Paper Portfolio Engine','status':'OK','detail':'Persistent prospective paper ledger with rebalances, cost, turnover, mark-to-market, drawdown and XU100 excess tracking; no broker path'},
+      {'name':'XS Autonomous Paper Tournament','status':'OK','detail':'Equal-capital prospective challenger portfolios with forward-only ranking, >=90d gate and champion/challenger governance; no live path'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -420,7 +422,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'54.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'55.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -578,6 +580,29 @@ def xs_paper_mark_api(portfolio_id:int):
 def xs_paper_history_api(portfolio_id:int,limit:int=200):
     return xs_paper_history(portfolio_id,max(1,min(limit,1000)))
 
+@app.post('/api/xs-tournament/create')
+def xs_tournament_create_api(payload:dict=Body(default={})):
+    return xs_tournament_create(
+        max(10000,min(float(payload.get('capital_each') or 1000000),1000000000)),
+        str(payload.get('benchmark') or 'XU100'))
+
+@app.post('/api/xs-tournament/{tournament_id}/start')
+def xs_tournament_start_api(tournament_id:int):
+    return xs_tournament_start(tournament_id)
+
+@app.post('/api/xs-tournament/{tournament_id}/{variant_id}/rebalance')
+def xs_tournament_rebalance_api(tournament_id:int,variant_id:str,payload:dict=Body(...)):
+    return xs_tournament_rebalance(tournament_id,variant_id,payload.get('rows') or [],
+        max(0,min(float(payload.get('one_way_cost_bps') or 20),200)))
+
+@app.post('/api/xs-tournament/{tournament_id}/mark')
+def xs_tournament_mark_api(tournament_id:int):
+    return xs_tournament_mark(tournament_id)
+
+@app.get('/api/xs-tournament/{tournament_id}')
+def xs_tournament_snapshot_api(tournament_id:int):
+    return xs_tournament_snapshot(tournament_id)
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -617,7 +642,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'54.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'55.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
