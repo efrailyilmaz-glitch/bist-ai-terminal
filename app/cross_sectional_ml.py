@@ -148,3 +148,74 @@ def purged_walk_forward_lab(tickers=None,period='5y',limit=120,train_days=252,te
             'aggregate_mean_top_bottom_spread_5d':None if not all_spreads else round(float(np.mean(all_spreads)),5),
             'aggregate_positive_spread_pct':None if not all_spreads else round(float(np.mean(np.array(all_spreads)>0)*100),1),
             'note':'Purged/embargoed rolling OOS research validation. No production or order path is enabled.'}
+
+
+def _basket_turnover(prev,current):
+    prev=set(prev or []);current=set(current or [])
+    if not prev and not current:return 0.0
+    if not prev:return 1.0
+    return 1.0-len(prev&current)/max(1,len(current))
+
+def cost_turnover_reality_from_ranked(days,one_way_cost_bps=20,rebalance_every=5,portfolio_value=1_000_000,adv_limit_pct=1.0):
+    """Turnover/cost/capacity diagnostics for ranked cross-sectional snapshots."""
+    one_way=max(0,float(one_way_cost_bps));rebalance=max(1,int(rebalance_every));pv=max(1,float(portfolio_value));adv_lim=max(.1,min(float(adv_limit_pct),10))/100
+    prev_top=[];gross=[];net=[];turns=[];cap_flags=0;rows=[]
+    for i,d in enumerate(days or []):
+        if i%rebalance!=0:continue
+        z=sorted(d.get('rows') or [],key=lambda x:float(x.get('score') or -1e18))
+        if len(z)<10:continue
+        k=max(1,len(z)//10);low=z[:k];top=z[-k:]
+        top_names=[x.get('ticker') for x in top];turn=_basket_turnover(prev_top,top_names);prev_top=top_names
+        g=float(np.mean([float(x.get('label_excess_5d') or 0) for x in top])-np.mean([float(x.get('label_excess_5d') or 0) for x in low]))
+        cost=(2*one_way/10000)*turn;n=g-cost
+        gross.append(g);net.append(n);turns.append(turn)
+        alloc=pv/max(1,k);caps=[]
+        for x in top:
+            adv=float(x.get('value_turnover') or 0)
+            if adv<=0 or alloc>adv*adv_lim:caps.append(x.get('ticker'))
+        if caps:cap_flags+=1
+        rows.append({'date':d.get('date'),'basket_size':k,'turnover_pct':round(turn*100,1),
+                     'gross_spread_5d':round(g,5),'cost_drag_5d':round(cost,5),'net_spread_5d':round(n,5),
+                     'capacity_flags':caps[:20]})
+    if not rows:return {'status':'NO_REBALANCES'}
+    return {'status':'OK','rebalances':len(rows),'one_way_cost_bps':one_way,'rebalance_every':rebalance,
+            'mean_turnover_pct':round(float(np.mean(turns))*100,1),
+            'gross_mean_spread_5d':round(float(np.mean(gross)),5),
+            'net_mean_spread_5d':round(float(np.mean(net)),5),
+            'net_positive_pct':round(float(np.mean(np.array(net)>0)*100),1),
+            'capacity_flagged_rebalances':cap_flags,'rows':rows[-50:],
+            'policy':'Costs and capacity can only reduce or veto an edge; they never improve expected performance.'}
+
+
+def purged_walk_forward_cost_reality(tickers=None,period='5y',limit=120,train_days=252,test_days=63,purge_days=5,embargo_days=5,one_way_cost_bps=20,rebalance_every=5,portfolio_value=1_000_000,adv_limit_pct=1.0):
+    """Purged rolling validation plus implementation-cost and capacity diagnostics."""
+    ds=build_panel(tickers,period,limit)
+    if ds.get('status')!='OK':return {k:v for k,v in ds.items() if k!='frame'}
+    st=adapter_status()
+    if not st.get('lightgbm_installed'):
+        return {'status':'ADAPTER_UNAVAILABLE','symbols':ds['symbols'],'dates':ds['dates'],**st}
+    import lightgbm as lgb
+    df=ds['frame'].sort_values(['date','ticker']).copy();dates=sorted(df.date.unique())
+    train_days=max(120,int(train_days));test_days=max(20,int(test_days));purge_days=max(5,int(purge_days));embargo_days=max(0,int(embargo_days))
+    if len(dates)<train_days+test_days+purge_days+20:
+        return {'status':'INSUFFICIENT_DATES','dates':len(dates),'required':train_days+test_days+purge_days+20}
+    feats=ds['features'];cursor=train_days;ranked_days=[]
+    while cursor+purge_days+test_days<=len(dates):
+        train_end=cursor-purge_days;train_start=max(0,train_end-train_days);test_start=cursor;test_end=min(len(dates),test_start+test_days)
+        tr_dates=set(dates[train_start:train_end]);te_dates=set(dates[test_start:test_end])
+        train=df[df.date.isin(tr_dates)];test=df[df.date.isin(te_dates)].copy()
+        if train.empty or test.empty:break
+        model=lgb.LGBMRegressor(n_estimators=120,max_depth=4,num_leaves=31,learning_rate=.03,
+                                subsample=.8,colsample_bytree=.8,random_state=52,verbosity=-1)
+        model.fit(train[feats],train['label_excess_5d']);test['prediction']=model.predict(test[feats])
+        for d,g in test.groupby('date'):
+            rows=[]
+            for r in g.itertuples():
+                rows.append({'ticker':r.ticker,'score':float(r.prediction),'label_excess_5d':float(r.label_excess_5d),
+                             'value_turnover':float(getattr(r,'value_turnover',0) or 0)})
+            ranked_days.append({'date':d,'rows':rows})
+        cursor=test_end+embargo_days
+    reality=cost_turnover_reality_from_ranked(ranked_days,one_way_cost_bps,rebalance_every,portfolio_value,adv_limit_pct)
+    reality.update({'symbols':ds['symbols'],'dates':ds['dates'],'purge_days':purge_days,'embargo_days':embargo_days,
+                    'note':'Purged rolling OOS implementation reality. Net edge must survive costs and capacity checks before promotion review.'})
+    return reality
