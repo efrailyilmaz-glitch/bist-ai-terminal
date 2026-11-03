@@ -21,8 +21,12 @@ def _conn():
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS rebalances(
       id INTEGER PRIMARY KEY AUTOINCREMENT, portfolio_id INTEGER, epoch REAL, at TEXT,
-      target_json TEXT, turnover_pct REAL, cost REAL, equity_before REAL, equity_after REAL
+      target_json TEXT, turnover_pct REAL, cost REAL, equity_before REAL, equity_after REAL,
+      model_registry_id INTEGER, model_fingerprint TEXT, ranking_as_of TEXT, ranking_snapshot_json TEXT
     )''')
+    cols={r[1] for r in c.execute('PRAGMA table_info(rebalances)').fetchall()}
+    for name,typ in [('model_registry_id','INTEGER'),('model_fingerprint','TEXT'),('ranking_as_of','TEXT'),('ranking_snapshot_json','TEXT')]:
+        if name not in cols:c.execute(f'ALTER TABLE rebalances ADD COLUMN {name} {typ}')
     c.execute('''CREATE TABLE IF NOT EXISTS positions(
       portfolio_id INTEGER, ticker TEXT, weight REAL, units REAL, entry_price REAL,
       PRIMARY KEY(portfolio_id,ticker)
