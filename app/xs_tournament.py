@@ -60,12 +60,12 @@ def start(tournament_id):
         c.close()
     return snapshot(tournament_id)
 
-def rebalance_variant(tournament_id,variant_id,rows,one_way_cost_bps=20):
+def rebalance_variant(tournament_id,variant_id,rows,one_way_cost_bps=20,lineage=None):
     with _LOCK:
         c=_conn();r=c.execute('SELECT portfolio_id FROM challengers WHERE tournament_id=? AND variant_id=?',
             (int(tournament_id),str(variant_id))).fetchone();c.close()
     if not r:return {'status':'NOT_FOUND'}
-    return xs_paper.rebalance(int(r[0]),rows,one_way_cost_bps)
+    return xs_paper.rebalance(int(r[0]),rows,one_way_cost_bps,lineage)
 
 def mark_all(tournament_id):
     with _LOCK:

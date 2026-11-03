@@ -109,7 +109,8 @@ def run_once(tournament_id,today=None,force_rebalance=False):
                         max_weight=st['max_weight'],adv_limit_pct=st['adv_limit_pct'],method=method)
         if built.get('status')!='OK':
             results.append({'variant_id':ch.get('id'),'status':'CONSTRUCT_WAIT','detail':built.get('status')});continue
-        rb=xs_tournament.rebalance_variant(tournament_id,ch.get('id'),built.get('rows') or [],st['cost_bps'])
+        lineage={'model_artifact':ranking.get('model_artifact'),'ranking_as_of':ranking.get('as_of'),'ranking_snapshot':(ranking.get('rows') or [])[:100]}
+        rb=xs_tournament.rebalance_variant(tournament_id,ch.get('id'),built.get('rows') or [],st['cost_bps'],lineage)
         results.append({'variant_id':ch.get('id'),'status':rb.get('status'),'rebalance':rb,
                         'model_artifact':ranking.get('model_artifact'),
                         'portfolio_stats':{k:built.get(k) for k in ['annual_volatility_pct','avg_correlation','liquidity_flags']}})
