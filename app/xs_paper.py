@@ -73,10 +73,19 @@ def rebalance(portfolio_id,target_rows,one_way_cost_bps=20,lineage=None):
             applied.append({'ticker':code,'weight_pct':round(w*100,3),'units':round(units,6),'entry_price':round(px,4)})
         now=time.time()
         lineage=lineage or {};artifact=lineage.get('model_artifact') or {}
+        ranking_json=json.dumps(lineage.get('ranking_snapshot') or [],ensure_ascii=False,sort_keys=True,separators=(',',':'))
+        immutable={'portfolio_id':int(portfolio_id),'epoch':round(float(now),6),'targets':applied,'turnover_pct':round(float(turn*100),8),
+                   'cost':round(float(cost),8),'equity_before':round(float(equity),8),'equity_after':round(float(equity_after),8),
+                   'model_registry_id':artifact.get('registry_id'),'model_fingerprint':artifact.get('model_fingerprint'),
+                   'ranking_as_of':lineage.get('ranking_as_of'),'ranking_snapshot':lineage.get('ranking_snapshot') or []}
+        payload_hash=hashlib.sha256(json.dumps(immutable,ensure_ascii=False,sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest()
+        last=c.execute('SELECT ledger_hash FROM rebalances WHERE ledger_hash IS NOT NULL ORDER BY id DESC LIMIT 1').fetchone()
+        prev_hash=(last[0] if last and last[0] else 'GENESIS')
+        ledger_hash=hashlib.sha256((prev_hash+'|'+payload_hash).encode()).hexdigest()
         c.execute('''INSERT INTO rebalances(portfolio_id,epoch,at,target_json,turnover_pct,cost,equity_before,equity_after,
-                  model_registry_id,model_fingerprint,ranking_as_of,ranking_snapshot_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
+                  model_registry_id,model_fingerprint,ranking_as_of,ranking_snapshot_json,payload_hash,prev_hash,ledger_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                   (int(portfolio_id),now,time.strftime('%d.%m.%Y %H:%M:%S'),json.dumps(applied,ensure_ascii=False),turn*100,cost,equity,equity_after,
-                   artifact.get('registry_id'),artifact.get('model_fingerprint'),lineage.get('ranking_as_of'),json.dumps(lineage.get('ranking_snapshot') or [],ensure_ascii=False)))
+                   artifact.get('registry_id'),artifact.get('model_fingerprint'),lineage.get('ranking_as_of'),ranking_json,payload_hash,prev_hash,ledger_hash))
         c.execute('UPDATE portfolios SET last_equity=? WHERE id=?',(equity_after,int(portfolio_id)));c.commit();c.close()
     return {'status':'OK','portfolio_id':portfolio_id,'turnover_pct':round(turn*100,2),'cost':round(cost,2),'equity_after_cost':round(equity_after,2),'positions':applied,
             'model_registry_id':(lineage or {}).get('model_artifact',{}).get('registry_id') if lineage else None}
