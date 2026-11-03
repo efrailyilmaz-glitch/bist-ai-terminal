@@ -91,3 +91,60 @@ def run_lab(tickers=None,period='5y',limit=120,train_ratio=.7):
                           'input_schema':feats,'output_schema':['relative_5d_excess_score'],'point_in_time':True,
                           'execution_compatible':False},
             'note':'Research-only cross-sectional OOS ranking. No production or order path is enabled.'}
+
+
+def purged_walk_forward_lab(tickers=None,period='5y',limit=120,train_days=252,test_days=63,purge_days=5,embargo_days=5):
+    """Rolling cross-sectional OOS validation with purge and embargo.
+    Purge removes train observations whose forward label window can overlap the test boundary.
+    Embargo skips dates immediately after each test block before the next training window.
+    """
+    ds=build_panel(tickers,period,limit)
+    if ds.get('status')!='OK':return {k:v for k,v in ds.items() if k!='frame'}
+    st=adapter_status()
+    if not st.get('lightgbm_installed'):
+        return {'status':'ADAPTER_UNAVAILABLE','symbols':ds['symbols'],'dates':ds['dates'],**st}
+    import lightgbm as lgb
+    df=ds['frame'].sort_values(['date','ticker']).copy()
+    dates=sorted(df.date.unique())
+    train_days=max(120,int(train_days));test_days=max(20,int(test_days));purge_days=max(5,int(purge_days));embargo_days=max(0,int(embargo_days))
+    if len(dates)<train_days+test_days+purge_days+20:
+        return {'status':'INSUFFICIENT_DATES','dates':len(dates),'required':train_days+test_days+purge_days+20}
+    feats=ds['features'];folds=[];all_ics=[];all_spreads=[];cursor=train_days
+    while cursor+purge_days+test_days<=len(dates):
+        train_end=cursor-purge_days
+        train_start=max(0,train_end-train_days)
+        test_start=cursor
+        test_end=min(len(dates),test_start+test_days)
+        tr_dates=set(dates[train_start:train_end]);te_dates=set(dates[test_start:test_end])
+        if len(tr_dates)<120 or len(te_dates)<20:break
+        train=df[df.date.isin(tr_dates)]
+        test=df[df.date.isin(te_dates)].copy()
+        if train.empty or test.empty:break
+        model=lgb.LGBMRegressor(n_estimators=120,max_depth=4,num_leaves=31,learning_rate=.03,
+                                subsample=.8,colsample_bytree=.8,random_state=51,verbosity=-1)
+        model.fit(train[feats],train['label_excess_5d'])
+        test['prediction']=model.predict(test[feats])
+        ics=[x for _,g in test.groupby('date') if (x:=_rank_ic(g)) is not None]
+        spreads=[]
+        for _,g in test.groupby('date'):
+            if len(g)<10:continue
+            z=g.sort_values('prediction');k=max(1,len(z)//10)
+            spreads.append(float(z.tail(k)['label_excess_5d'].mean()-z.head(k)['label_excess_5d'].mean()))
+        all_ics+=ics;all_spreads+=spreads
+        folds.append({'fold':len(folds)+1,'train_start':dates[train_start],'train_end':dates[train_end-1],
+                      'purged_dates':purge_days,'test_start':dates[test_start],'test_end':dates[test_end-1],
+                      'train_dates':len(tr_dates),'test_dates':len(te_dates),
+                      'mean_rank_ic':None if not ics else round(float(np.mean(ics)),4),
+                      'positive_rank_ic_pct':None if not ics else round(float(np.mean(np.array(ics)>0)*100),1),
+                      'mean_top_bottom_spread_5d':None if not spreads else round(float(np.mean(spreads)),5),
+                      'positive_spread_pct':None if not spreads else round(float(np.mean(np.array(spreads)>0)*100),1)})
+        cursor=test_end+embargo_days
+    if not folds:return {'status':'NO_FOLDS','dates':len(dates)}
+    return {'status':'LAB_RESULT','symbols':ds['symbols'],'dates':ds['dates'],'folds':folds,
+            'fold_count':len(folds),'purge_days':purge_days,'embargo_days':embargo_days,
+            'aggregate_mean_rank_ic':None if not all_ics else round(float(np.mean(all_ics)),4),
+            'aggregate_median_rank_ic':None if not all_ics else round(float(np.median(all_ics)),4),
+            'aggregate_positive_rank_ic_pct':None if not all_ics else round(float(np.mean(np.array(all_ics)>0)*100),1),
+            'aggregate_mean_top_bottom_spread_5d':None if not all_spreads else round(float(np.mean(all_spreads)),5),
+            'aggregate_positive_spread_pct':None if not all_spreads else round(float(np.mean(np.array(all_spreads)>0)*100),1),
+            'note':'Purged/embargoed rolling OOS research validation. No production or order path is enabled.'}
