@@ -260,5 +260,11 @@ def current_ranking(tickers=None,period='5y',limit=120):
     rows=[{'ticker':r.ticker,'score':round(float(r.score),6),'price':round(float(r.price),6),
            'value_turnover':round(float(r.value_turnover),2),'as_of':str(r.date)}
           for r in cur.itertuples()]
+    from .model_registry import register as register_model_artifact
+    artifact=register_model_artifact({'model_name':'BIST Cross-Sectional LightGBM','model_version':'57.0','seed':56,
+        'features':feats,'label':'label_excess_5d','train_rows':len(train),'train_dates':int(train.date.nunique()),
+        'train_cutoff':str(max(train.date)) if len(train) else None,'as_of':str(cur.iloc[0]['date']),'symbols':len(rows),
+        'params':{'n_estimators':120,'max_depth':4,'num_leaves':31,'learning_rate':.03,'subsample':.8,'colsample_bytree':.8}})
     return {'status':'OK','as_of':str(cur.iloc[0]['date']),'symbols':len(rows),'rows':rows,
-            'train_rows':len(train),'policy':'Latest features are causal; training excludes the most recent five labeled dates. Prospective paper use only.'}
+            'train_rows':len(train),'model_artifact':artifact,
+            'policy':'Latest features are causal; training excludes the most recent five labeled dates. Prospective paper use only.'}

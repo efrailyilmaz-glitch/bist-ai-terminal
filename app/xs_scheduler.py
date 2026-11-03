@@ -111,14 +111,15 @@ def run_once(tournament_id,today=None,force_rebalance=False):
             results.append({'variant_id':ch.get('id'),'status':'CONSTRUCT_WAIT','detail':built.get('status')});continue
         rb=xs_tournament.rebalance_variant(tournament_id,ch.get('id'),built.get('rows') or [],st['cost_bps'])
         results.append({'variant_id':ch.get('id'),'status':rb.get('status'),'rebalance':rb,
+                        'model_artifact':ranking.get('model_artifact'),
                         'portfolio_stats':{k:built.get(k) for k in ['annual_volatility_pct','avg_correlation','liquidity_flags']}})
     if any(x.get('status')=='OK' for x in results):
         with _LOCK:
             c=xs_tournament._conn();_ensure_columns(c)
             c.execute('UPDATE tournaments SET last_rebalance_day=? WHERE id=?',(day,int(tournament_id)));c.commit();c.close()
     return {'status':'REBALANCED' if any(x.get('status')=='OK' for x in results) else 'WAIT_PORTFOLIO',
-            'as_of':ranking.get('as_of'),'ranked_symbols':ranking.get('symbols'),'mark':marks,'results':results,
-            'scheduler':state(tournament_id)}
+            'as_of':ranking.get('as_of'),'ranked_symbols':ranking.get('symbols'),'model_artifact':ranking.get('model_artifact'),
+            'mark':marks,'results':results,'scheduler':state(tournament_id)}
 
 def run_all_once():
     with _LOCK:
