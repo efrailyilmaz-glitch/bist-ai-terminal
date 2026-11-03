@@ -103,12 +103,12 @@ def purged_walk_forward_lab(tickers=None,period='5y',limit=120,train_days=252,te
     st=adapter_status()
     if not st.get('lightgbm_installed'):
         return {'status':'ADAPTER_UNAVAILABLE','symbols':ds['symbols'],'dates':ds['dates'],**st}
-    import lightgbm as lgb
     df=ds['frame'].sort_values(['date','ticker']).copy()
     dates=sorted(df.date.unique())
     train_days=max(120,int(train_days));test_days=max(20,int(test_days));purge_days=max(5,int(purge_days));embargo_days=max(0,int(embargo_days))
     if len(dates)<train_days+test_days+purge_days+20:
         return {'status':'INSUFFICIENT_DATES','dates':len(dates),'required':train_days+test_days+purge_days+20}
+    import lightgbm as lgb
     feats=ds['features'];folds=[];all_ics=[];all_spreads=[];cursor=train_days
     while cursor+purge_days+test_days<=len(dates):
         train_end=cursor-purge_days
