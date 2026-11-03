@@ -7,6 +7,7 @@ import json, sqlite3, threading, time
 from pathlib import Path
 from . import xs_paper
 from .meta_governance import conservative_score, meta_decision
+from .promotion_governance import evaluate as promotion_gate
 
 _LOCK=threading.RLock()
 
@@ -106,7 +107,11 @@ def snapshot(tournament_id):
     rows=[]
     for vid,name,method,pid in ch:
         h=xs_paper.history(int(pid),500)
-        rows.append({'id':vid,'name':name,'method':method,'portfolio_id':pid,'metrics':_metrics(h,days),'paper':h})
+        promo=promotion_gate(h,days)
+        metrics=_metrics(h,days)
+        metrics['status']='ELIGIBLE' if promo.get('status')=='PROMOTION_REVIEW' else 'OBSERVE'
+        metrics['reasons']=promo.get('reasons') or []
+        rows.append({'id':vid,'name':name,'method':method,'portfolio_id':pid,'metrics':metrics,'promotion_gate':promo,'paper':h})
     ranking=[{'id':r['id'],'name':r['name'],'score':r['metrics']['score'],'status':r['metrics']['status'],'reasons':r['metrics']['reasons']} for r in rows]
     ranking.sort(key=lambda x:(x['status']!='ELIGIBLE',-x['score'],x['id']))
     decision=meta_decision(ranking,td.get('champion'))
