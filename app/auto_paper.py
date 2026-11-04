@@ -75,7 +75,7 @@ def fill(a,o,reference,at,quantity=None):
             a['positions'][code]={'quantity':signed,'avg':px,'fees':fee,'opened_at':at,'entry_bar':at,'stop':initial_stop,'target':target,
                                 'initial_stop':initial_stop,'initial_target':target,'trade_plan_locked':True,'risk_passport':passport,
                                 'trade_reality':o.get('trade_reality'),'microstructure':o.get('microstructure'),
-                                'execution_diagnostics':o.get('execution_diagnostics'),'trail_distance':trail,'reason':o['reason'],
+                                'market_rules':o.get('market_rules'),'execution_diagnostics':o.get('execution_diagnostics'),'trail_distance':trail,'reason':o['reason'],
                                 'execution_parent_id':o.get('id'),'execution_fills':[{'time':at,'quantity':qty,'price':round(px,6),'fee':round(fee,6)}]}
     else:
         p=a['positions'][code];qty=abs(p['quantity']);fee=qty*px*cfg['fee_bps']/10000
@@ -90,7 +90,7 @@ def fill(a,o,reference,at,quantity=None):
            'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),
            'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR',
            'effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics'),
-           'microstructure':o.get('microstructure'),'trade_reality':o.get('trade_reality'),
+           'microstructure':o.get('microstructure'),'market_rules':o.get('market_rules'),'trade_reality':o.get('trade_reality'),
            'risk_passport':a.get('positions',{}).get(code,{}).get('risk_passport') if side in {'BUY','SHORT'} else None,
            'partial_fill':is_partial,'remaining_quantity':remaining if side in {'BUY','SHORT'} else 0}
     stats=a.get('arena_stats')
@@ -117,6 +117,12 @@ def process_quote(a,code,q,now,reality_fn=None):
         if errors.get(code)!=q['at']:event(a,'DATA_HALT',code,'Fiyat ölçeğinde %25 üzeri değişim; kurumsal işlem/veri kontrolü gerekli. Dolum yapılmadı.')
         errors[code]=q['at'];return
     a.setdefault('quote_errors',{}).pop(code,None)
+    from .bist_execution_rules import previous_close, quote_guard, protective_fill
+    base_px=previous_close(code)
+    market_guard=quote_guard(q,base_px)
+    if market_guard.get('status')=='BLOCK':
+        event(a,'DATA_HALT',code,'BIST fiyat limiti/veri bütünlüğü kontrolü başarısız; paper dolum yapılmadı.',market_rules=market_guard)
+        return
     a['quotes'][code]=q;p=a['positions'].get(code)
     # Existing protective exits first. A new entry cannot hit a stop in its own fill bar.
     if p and q['at']>p['entry_bar']:
@@ -127,10 +133,22 @@ def process_quote(a,code,q,now,reality_fn=None):
         stop=q['low']<=active_stop if long else q['high']>=active_stop
         target=bool(target_level is not None and (q['high']>=target_level if long else q['low']<=target_level))
         if stop or target:
-            px=(min(q['open'],active_stop) if long else max(q['open'],active_stop)) if stop else target_level
+            side='SELL' if long else 'COVER'
+            if stop:
+                pf=protective_fill(active_stop,q,side,base_px)
+                if pf.get('status')=='NO_FILL_LIMIT_LOCK':
+                    a['pending'].pop(code,None)
+                    event(a,'PROTECTIVE_NO_FILL',code,'Fiyat adverse günlük limitte kilitli; stop için paper likidite varsayılmadı.',market_rules=pf.get('guard'))
+                    return
+                if pf.get('status')!='FILL':
+                    event(a,'DATA_HALT',code,'Koruyucu çıkış için güvenilir fiyat üretilemedi.',market_rules=pf.get('guard'));return
+                px=pf['price'];market_meta=pf.get('guard')
+            else:
+                px=target_level;market_meta=market_guard
             from .execution_intelligence import execution_diagnostics
-            side='SELL' if long else 'COVER';ed=execution_diagnostics(q,abs(p['quantity']),px,a['config']['slippage_bps'],side)
-            o={'id':secrets.token_hex(10),'ticker':code,'side':side,'reason':'STOP · aynı barda iki seviye de varsa stop önce varsayılır' if stop else 'KÂR HEDEFİ','effective_slippage_bps':ed['effective_slippage_bps'],'execution_diagnostics':ed}
+            ed=execution_diagnostics(q,abs(p['quantity']),px,a['config']['slippage_bps'],side)
+            o={'id':secrets.token_hex(10),'ticker':code,'side':side,'reason':'STOP · aynı barda iki seviye de varsa stop önce varsayılır' if stop else 'KÂR HEDEFİ',
+               'effective_slippage_bps':ed['effective_slippage_bps'],'execution_diagnostics':ed,'market_rules':market_meta}
             fill(a,o,px,q['at']);a['pending'].pop(code,None);return
         trail=p.get('trail_distance')
         if isinstance(trail,(int,float)) and trail>0:
@@ -148,6 +166,8 @@ def process_quote(a,code,q,now,reality_fn=None):
             fill(a,o,q['close'],q['at'])
         a['pending'].pop(code,None);return
     if not a['enabled'] or a['risk_halt']:a['pending'].pop(code,None);return
+    if any(x in (market_guard.get('flags') or []) for x in ['CIRCUIT_BREAKER_ZONE','LOWER_LIMIT_LOCK_RISK','UPPER_LIMIT_LOCK_RISK']):
+        a['pending'].pop(code,None);event(a,'REJECTED',code,'BIST devre kesici/fiyat limiti bölgesinde yeni paper giriş açılmadı.',market_rules=market_guard);return
     if (now-datetime.fromisoformat(o['created_at'])).total_seconds()>48*3600:
         a['pending'].pop(code,None);event(a,'CANCELLED',code,'Karar 48 saatten eski; yeni analiz gerekli.');return
     v=valuation(a);cfg=a['config'];px=q['close'];stop_mult=float(o.get('stop_atr',2.0));distance=max(o['atr']*stop_mult,px*.015)
@@ -204,7 +224,7 @@ def process_quote(a,code,q,now,reality_fn=None):
     if ed.get('status')=='BLOCK':qty=0
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
         a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı/Trade Reality sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro,trade_reality=reality);return
-    o['microstructure']=micro;o['trade_reality']=reality;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None
+    o['microstructure']=micro;o['market_rules']=market_guard;o['trade_reality']=reality;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None
     max_fill=max(1,int(ed.get('max_fill_qty_per_bar') or qty));first_qty=min(qty,max_fill)
     o['execution_plan']={'total_quantity':qty,'remaining_quantity':qty-first_qty,'filled_quantity':first_qty,'fill_count':1,
                          'max_fill_bars':min(2,max(1,int(ed.get('execution_horizon_bars') or 1))),'started_at':q['at']}
