@@ -5,6 +5,7 @@ Production/champion logic is never silently mutated.
 from __future__ import annotations
 import time, threading
 from .decision_attribution import attribution
+from .protected_feature_governance import apply as apply_protected_governance
 
 _LOCK=threading.Lock()
 _CACHE={'at':0.0,'report':None}
@@ -54,11 +55,12 @@ def governance_report(force=False):
                      'negative_horizons':neg,'consistent_horizons':cons,
                      'weighted_delta_mean_excess_pct':None if avg_delta is None else round(avg_delta,3),
                      'evidence':evidence,'reason':reason})
-    order={'CHALLENGER_DISABLE':0,'DOWNWEIGHT':1,'QUARANTINE':2,'CONFLICTED':3,'OBSERVE':4,'SUPPORTED':5}
+    rows=apply_protected_governance(rows)
+    order={'CHALLENGER_DISABLE':0,'DOWNWEIGHT':1,'QUARANTINE':2,'PROTECTED':3,'CONFLICTED':4,'OBSERVE':5,'SUPPORTED':6}
     rows.sort(key=lambda x:(order.get(x['state'],9),x['feature']))
     report={'status':'OK','rows':rows,
             'summary':{s:sum(1 for x in rows if x['state']==s) for s in order},
-            'policy':'Champion remains unchanged. Governance penalties apply only to challenger scoring until forward A/B evidence supports promotion.'}
+            'policy':'Champion remains unchanged. Protected safety/integrity features cannot be penalized. Other governance penalties apply only to challenger scoring and require persistent new forward evidence.'}
     with _LOCK:_CACHE.update({'at':now,'report':report})
     return report
 

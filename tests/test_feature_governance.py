@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 from app import feature_governance as fg
+import app.protected_feature_governance as pfg
 import app.experience_engine as ex
 import tempfile, json, time
 from pathlib import Path
@@ -8,6 +9,10 @@ from pathlib import Path
 class FeatureGovernanceTests(unittest.TestCase):
     def setUp(self):
         fg._CACHE={'at':0.0,'report':None}
+        self.govtmp=tempfile.TemporaryDirectory();self.govdb=Path(self.govtmp.name)/'feature_governance.db'
+        self.govpatch=patch.object(pfg,'_db',return_value=self.govdb);self.govpatch.start()
+    def tearDown(self):
+        self.govpatch.stop();self.govtmp.cleanup()
     def fake_attr(self,h,min_samples=12):
         rows=[]
         if h in (20,60):
@@ -16,13 +21,14 @@ class FeatureGovernanceTests(unittest.TestCase):
             rows.append({'feature':'confirm:Bad','with_n':40,'without_n':50,'label':'POSSIBLE','delta_mean_excess_pct':-0.5})
         rows.append({'feature':'confirm:Good','with_n':60,'without_n':70,'label':'CONSISTENT','delta_mean_excess_pct':1.4})
         return {'rows':rows}
-    def test_persistent_negative_disables_only_challenger(self):
+    def test_persistent_negative_requires_hysteresis_before_penalty(self):
         with patch('app.feature_governance.attribution',side_effect=self.fake_attr):
             r=fg.governance_report(force=True)
         bad=next(x for x in r['rows'] if x['feature']=='confirm:Bad')
-        self.assertEqual(bad['state'],'CHALLENGER_DISABLE')
-        self.assertEqual(bad['challenger_multiplier'],0.0)
-        self.assertIn('Champion remains unchanged',r['policy'])
+        self.assertEqual(bad['raw_state'],'CHALLENGER_DISABLE')
+        self.assertEqual(bad['state'],'OBSERVE')
+        self.assertEqual(bad['challenger_multiplier'],1.0)
+        self.assertIn('Protected safety/integrity features',r['policy'])
     def test_supported_feature_never_gets_risk_boost(self):
         with patch('app.feature_governance.attribution',side_effect=self.fake_attr):
             r=fg.governance_report(force=True)
