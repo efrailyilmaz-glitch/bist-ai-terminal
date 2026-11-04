@@ -38,7 +38,8 @@ def _save(c,tid,vid,s,event=None,evidence=0):
 
 def evaluate(tournament_id,rows,current_champion=None,challenger_margin=2.5,quarantine_streak=2,recovery_streak=3):
     rows=list(rows or [])
-    with _conn() as c:
+    c=_conn()
+    try:
         states={}
         for row in rows:
             vid=str(row.get('id'));m=row.get('metrics') or {};evidence=int(m.get('rebalance_count') or 0)
@@ -69,6 +70,8 @@ def evaluate(tournament_id,rows,current_champion=None,challenger_margin=2.5,quar
         c.commit()
         ev=[{'id':r[0],'variant_id':r[1],'event':r[2],'rebalance_count':r[3],'created_epoch':r[4]}
             for r in c.execute('SELECT id,variant_id,event,rebalance_count,created_epoch FROM events WHERE tournament_id=? ORDER BY id DESC LIMIT 50',(int(tournament_id),)).fetchall()]
+    finally:
+        c.close()
     by={str(r.get('id')):r for r in rows}
     ready=[r for r in rows if states.get(str(r.get('id')),{}).get('state')=='CHALLENGER_READY']
     ready.sort(key=lambda r:-(float((r.get('metrics') or {}).get('score') or -1e18)))
@@ -101,8 +104,11 @@ def evaluate(tournament_id,rows,current_champion=None,challenger_margin=2.5,quar
             'policy':'Paper-tournament champion label only. No live execution or production promotion is authorized.'}
 
 def status(tournament_id):
-    with _conn() as c:
+    c=_conn()
+    try:
         rows=c.execute('SELECT variant_id,state,last_rebalance,bad_streak,good_streak,updated_epoch FROM states WHERE tournament_id=?',(int(tournament_id),)).fetchall()
         ev=c.execute('SELECT id,variant_id,event,rebalance_count,created_epoch FROM events WHERE tournament_id=? ORDER BY id DESC LIMIT 50',(int(tournament_id),)).fetchall()
+    finally:
+        c.close()
     return {'status':'OK','states':[{'variant_id':r[0],'state':r[1],'last_rebalance':r[2],'bad_streak':r[3],'good_streak':r[4],'updated_epoch':r[5]} for r in rows],
             'events':[{'id':r[0],'variant_id':r[1],'event':r[2],'rebalance_count':r[3],'created_epoch':r[4]} for r in ev]}
