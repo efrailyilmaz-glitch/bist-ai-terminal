@@ -45,6 +45,9 @@ def build(history,days,test_count=3):
     return {'status':overall,'evidence_score_pct':round(passed/max(1,total)*100,1),
             'passed_components':passed,'total_components':total,'reasons':list(dict.fromkeys(reasons)),
             'components':rows,
+            'details':{'promotion_gate':hard,'statistical_gate':stats,'regime_gate':regime,
+                       'data_quality_gate':dataq,'factor_gate':factor,'portfolio_stress_gate':stress,
+                       'decay_v2':decay},
             'summary':{'forward_days':int(days),'hard_metrics':hard.get('metrics') or {},
                        'decay_status':decay.get('status')},
-            'policy':'This scorecard explains forward evidence only. It cannot promote to live execution and cannot override a failed gate.'}
+            'policy':'This scorecard is the canonical XS promotion-evidence path. It cannot promote to live execution and cannot override a failed gate.'}
