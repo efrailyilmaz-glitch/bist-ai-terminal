@@ -7,14 +7,7 @@ import json, sqlite3, threading, time
 from pathlib import Path
 from . import xs_paper
 from .meta_governance import conservative_score, meta_decision
-from .promotion_governance import evaluate as promotion_gate
-from .statistical_promotion import evaluate as statistical_gate
-from .regime_robustness import evaluate as regime_gate
-from .data_quality_guard import evaluate_history as data_quality_gate
-from .factor_neutralization import evaluate_history as factor_gate
-from .decay_v2 import detect_xs_decay
 from .champion_governance import evaluate as champion_governance_evaluate
-from .portfolio_stress_lab import evaluate as portfolio_stress_gate
 from .forward_scorecard import build as forward_scorecard
 
 _LOCK=threading.RLock()
