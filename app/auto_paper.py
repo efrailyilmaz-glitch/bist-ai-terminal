@@ -117,8 +117,8 @@ def process_quote(a,code,q,now,reality_fn=None):
         if errors.get(code)!=q['at']:event(a,'DATA_HALT',code,'Fiyat ölçeğinde %25 üzeri değişim; kurumsal işlem/veri kontrolü gerekli. Dolum yapılmadı.')
         errors[code]=q['at'];return
     a.setdefault('quote_errors',{}).pop(code,None)
-    from .bist_execution_rules import previous_close, quote_guard, protective_fill
-    base_px=previous_close(code)
+    from .bist_execution_rules import quote_guard, protective_fill
+    base_px=q.get('previous_close')
     market_guard=quote_guard(q,base_px)
     if market_guard.get('status')=='BLOCK':
         event(a,'DATA_HALT',code,'BIST fiyat limiti/veri bütünlüğü kontrolü başarısız; paper dolum yapılmadı.',market_rules=market_guard)
@@ -314,11 +314,21 @@ def closed_signals(codes,now,enrich=False):
 def latest_quote(code,now):
     from .market_data import yahoo_rows
     rows=yahoo_rows(code,period='1mo',interval='15m')['candles']
+    chosen=None;chosen_date=None
     for r in reversed(rows):
         start=datetime.fromtimestamp(r['time'],TR);end=datetime.fromtimestamp(r['time']+900,TR)
         if end<=now:
-            return {**r,'start':start.isoformat(),'at':end.isoformat()}
-    return None
+            chosen={**r,'start':start.isoformat(),'at':end.isoformat()};chosen_date=start.date();break
+    if chosen is None:return None
+    prev=None
+    for r in reversed(rows):
+        d=datetime.fromtimestamp(r['time'],TR).date()
+        if d<chosen_date:
+            try:prev=float(r['close'])
+            except Exception:prev=None
+            break
+    chosen['previous_close']=prev
+    return chosen
 
 def _directory():
     from .broker_bridge import _dir
