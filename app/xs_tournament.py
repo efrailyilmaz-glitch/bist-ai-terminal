@@ -115,19 +115,20 @@ def snapshot(tournament_id):
     rows=[]
     for vid,name,method,pid in ch:
         h=xs_paper.history(int(pid),500)
-        promo=promotion_gate(h,days)
-        stats=statistical_gate(h,test_count=max(1,len(ch))) if promo.get('status')=='PROMOTION_REVIEW' else {'status':'NOT_RUN','reasons':['HARD_GATE_NOT_PASSED']}
-        regime=regime_gate(h) if promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' else {'status':'NOT_RUN','reasons':['PRIOR_GATE_NOT_PASSED']}
-        quality=data_quality_gate(h) if promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' else {'status':'NOT_RUN','reasons':['PRIOR_GATE_NOT_PASSED']}
-        factor=factor_gate(h) if promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' and quality.get('status')=='PASS' else {'status':'NOT_RUN','reasons':['PRIOR_GATE_NOT_PASSED']}
-        stress=portfolio_stress_gate(h) if promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' and quality.get('status')=='PASS' and factor.get('status')=='PASS' else {'status':'NOT_RUN','reasons':['PRIOR_GATE_NOT_PASSED']}
-        decay=detect_xs_decay(h)
+        scorecard=forward_scorecard(h,days,max(1,len(ch)))
+        details=scorecard.get('details') or {}
+        promo=details.get('promotion_gate') or {'status':'NOT_RUN','reasons':['SCORECARD_DETAIL_MISSING']}
+        stats=details.get('statistical_gate') or {'status':'NOT_RUN','reasons':['SCORECARD_DETAIL_MISSING']}
+        regime=details.get('regime_gate') or {'status':'NOT_RUN','reasons':['SCORECARD_DETAIL_MISSING']}
+        quality=details.get('data_quality_gate') or {'status':'NOT_RUN','reasons':['SCORECARD_DETAIL_MISSING']}
+        factor=details.get('factor_gate') or {'status':'NOT_RUN','reasons':['SCORECARD_DETAIL_MISSING']}
+        stress=details.get('portfolio_stress_gate') or {'status':'NOT_RUN','reasons':['SCORECARD_DETAIL_MISSING']}
+        decay=details.get('decay_v2') or {'status':'UNKNOWN'}
         metrics=_metrics(h,days)
-        eligible=promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' and quality.get('status')=='PASS' and factor.get('status')=='PASS' and stress.get('status')=='PASS' and decay.get('status')!='DECAY'
+        eligible=scorecard.get('status')=='ELIGIBLE_FOR_REVIEW'
         metrics['status']='ELIGIBLE' if eligible else 'OBSERVE'
         decay_reasons=['MODEL_DECAY'] if decay.get('status')=='DECAY' else []
         metrics['reasons']=list(dict.fromkeys((promo.get('reasons') or [])+(stats.get('reasons') or [])+(regime.get('reasons') or [])+(quality.get('reasons') or [])+(factor.get('reasons') or [])+(stress.get('reasons') or [])+decay_reasons))
-        scorecard=forward_scorecard(h,days,max(1,len(ch)))
         rows.append({'id':vid,'name':name,'method':method,'portfolio_id':pid,'metrics':metrics,'promotion_gate':promo,'statistical_gate':stats,'regime_gate':regime,'data_quality_gate':quality,'factor_gate':factor,'portfolio_stress_gate':stress,'decay_v2':decay,'forward_scorecard':scorecard,'paper':h})
     ranking=[{'id':r['id'],'name':r['name'],'score':r['metrics']['score'],'status':r['metrics']['status'],'reasons':r['metrics']['reasons']} for r in rows]
     ranking.sort(key=lambda x:(x['status']!='ELIGIBLE',-x['score'],x['id']))
