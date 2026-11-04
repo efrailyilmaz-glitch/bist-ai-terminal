@@ -34,7 +34,9 @@ def governance_report(force=False):
             if not x:continue
             n=int(x.get('with_n') or 0);max_n=max(max_n,n)
             lab=x.get('label');d=x.get('delta_mean_excess_pct')
-            evidence.append({'horizon':h,'with_n':n,'label':lab,'delta_mean_excess_pct':d})
+            evidence.append({'horizon':h,'with_n':n,'label':lab,'delta_mean_excess_pct':d,
+                             'delta_ci_low':x.get('delta_ci_low'),'delta_ci_high':x.get('delta_ci_high'),
+                             'fdr_q_value':x.get('fdr_q_value'),'regime_conflict':x.get('regime_conflict')})
             if lab=='NEGATIVE':neg+=1
             if lab=='CONSISTENT':cons+=1
             if d is not None and n>=12:weighted_delta.append((float(d),n))
