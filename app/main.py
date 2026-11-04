@@ -43,7 +43,8 @@ from .model_registry import history as model_registry_history, get as model_regi
 from .promotion_governance import evaluate as promotion_governance_evaluate
 from .statistical_promotion import evaluate as statistical_promotion_evaluate
 from .regime_robustness import evaluate as regime_robustness_evaluate
-from .data_quality_guard import evaluate_history as data_quality_history_evaluate, survivorship_guard as xs_survivorship_guard
+from .data_quality_guard import evaluate_history as data_quality_history_evaluate
+from .pit_universe import dataset_status as pit_universe_status, intervals as pit_universe_intervals
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -62,7 +63,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='63.0.0')
+app=FastAPI(title='BIST AI Terminal',version='64.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -394,7 +395,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 63.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 64.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -428,6 +429,7 @@ def system_audit_api():
       {'name':'Statistical Promotion Confidence','status':'OK','detail':'Prospective bootstrap confidence, regime stability and Bonferroni multiple-testing correction can veto promotion review; never enables live execution'},
       {'name':'Regime Robustness Gate','status':'OK','detail':'Prospective BULL/BEAR/RANGE/HIGH_VOL robustness gate requires multi-regime evidence and can veto single-regime-dependent challengers'},
       {'name':'Data Quality & Survivorship Guard','status':'OK','detail':'Current ranking blocks low coverage/mixed-as-of/invalid-price data; historical current-universe proxy is explicitly flagged and can veto promotion until PIT universe integrity improves'},
+      {'name':'Point-in-Time Universe Integrity','status':'OK' if pit_universe_status().get('status')=='PIT_VERIFIED' else 'WARN','detail':'Verified COMPLETE historical membership datasets filter training dates; otherwise system remains CURRENT_UNIVERSE_PROXY and survivorship risk stays explicit'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -436,7 +438,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'63.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'64.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -678,7 +680,15 @@ def xs_data_integrity_api(portfolio_id:int):
 
 @app.get('/api/xs-survivorship')
 def xs_survivorship_api():
-    return xs_survivorship_guard(False,True)
+    return pit_universe_status()
+
+@app.get('/api/pit-universe/status')
+def pit_universe_status_api():
+    return pit_universe_status()
+
+@app.get('/api/pit-universe/{ticker}')
+def pit_universe_ticker_api(ticker:str):
+    return {'ticker':ticker.upper().replace('.IS',''),'intervals':pit_universe_intervals(ticker),'registry':pit_universe_status()}
 
 @app.get('/api/model-card')
 def modelcard():
@@ -719,7 +729,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'63.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'64.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():

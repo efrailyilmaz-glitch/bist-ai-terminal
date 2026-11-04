@@ -9,6 +9,7 @@ import pandas as pd
 from .qlib_bridge import feature_frame, FEATURES, adapter_status
 from .universe import get_universe
 from .data_quality_guard import audit_current_snapshot, audit_training_panel, survivorship_guard
+from .pit_universe import training_universe, filter_frame
 
 def _rank_ic(g):
     if len(g)<5:return None
@@ -18,12 +19,18 @@ def _rank_ic(g):
     return float(p.corr(y))
 
 def build_panel(tickers=None,period='5y',limit=120):
-    names=tickers or [x['ticker'] for x in get_universe()[:max(5,min(limit,500))]]
+    current=[x['ticker'] for x in get_universe()[:max(5,min(limit,500))]]
+    resolved=training_universe(tickers if tickers is not None else current,limit)
+    names=list(tickers)[:max(5,min(limit,500))] if tickers is not None else resolved['tickers']
+    universe_integrity=resolved['integrity'] if tickers is None else {'status':'CAUTION','flags':['EXPLICIT_TICKER_SET_NOT_HISTORICAL_UNIVERSE'],
+        'historical_universe_point_in_time':False,'current_universe_proxy':True,'survivorship_bias_risk':True}
     frames=[]
     failed=[]
     for t in names:
         try:
             f=feature_frame(t,period)
+            if f.empty:failed.append(t);continue
+            f=filter_frame(t,f,universe_integrity)
             if f.empty:failed.append(t);continue
             x=f.copy();x['ticker']=t;x['date']=x.index.astype(str)
             frames.append(x.reset_index(drop=True))
@@ -45,7 +52,7 @@ def build_panel(tickers=None,period='5y',limit=120):
     return {'status':'OK' if len(panel) else 'INSUFFICIENT_DATA','frame':panel,
             'requested':len(names),'symbols':int(panel.ticker.nunique()) if len(panel) else 0,
             'dates':int(panel.date.nunique()) if len(panel) else 0,'failed':failed[:50],
-            'features':xs_features,'label':'label_excess_5d'}
+            'features':xs_features,'label':'label_excess_5d','universe_integrity':universe_integrity}
 
 def run_lab(tickers=None,period='5y',limit=120,train_ratio=.7):
     ds=build_panel(tickers,period,limit)
@@ -230,12 +237,12 @@ def current_ranking(tickers=None,period='5y',limit=120):
     if not st.get('lightgbm_installed'):
         return {'status':'ADAPTER_UNAVAILABLE',**st}
     names=tickers or [x['ticker'] for x in get_universe()[:max(5,min(limit,500))]]
-    ds=build_panel(names,period,limit)
+    ds=build_panel(tickers,period,limit)
     if ds.get('status')!='OK':return {k:v for k,v in ds.items() if k!='frame'}
     train_quality=audit_training_panel(ds)
     if train_quality.get('status')=='BLOCK':
         return {'status':'DATA_QUALITY_BLOCK','training_quality':train_quality,
-                'universe_integrity':survivorship_guard(False,True)}
+                'universe_integrity':ds.get('universe_integrity') or survivorship_guard(False,True)}
     latest=[]
     for t in names:
         try:
@@ -250,7 +257,7 @@ def current_ranking(tickers=None,period='5y',limit=120):
     current_quality=audit_current_snapshot(latest,requested=len(names))
     if current_quality.get('status')=='BLOCK':
         return {'status':'DATA_QUALITY_BLOCK','symbols':len(latest),'current_quality':current_quality,
-                'training_quality':train_quality,'universe_integrity':survivorship_guard(False,True)}
+                'training_quality':train_quality,'universe_integrity':ds.get('universe_integrity') or survivorship_guard(False,True)}
     cur=pd.DataFrame(latest)
     for k in FEATURES:
         sd=float(cur[k].std())
@@ -273,9 +280,10 @@ def current_ranking(tickers=None,period='5y',limit=120):
     artifact=register_model_artifact({'model_name':'BIST Cross-Sectional LightGBM','model_version':'57.0','seed':56,
         'features':feats,'label':'label_excess_5d','train_rows':len(train),'train_dates':int(train.date.nunique()),
         'train_cutoff':str(max(train.date)) if len(train) else None,'as_of':str(cur.iloc[0]['date']),'symbols':len(rows),
+        'universe_integrity':ds.get('universe_integrity'),
         'params':{'n_estimators':120,'max_depth':4,'num_leaves':31,'learning_rate':.03,'subsample':.8,'colsample_bytree':.8}})
     return {'status':'OK','as_of':str(cur.iloc[0]['date']),'symbols':len(rows),'rows':rows,
             'train_rows':len(train),'model_artifact':artifact,
             'current_quality':current_quality,'training_quality':train_quality,
-            'universe_integrity':survivorship_guard(False,True),
+            'universe_integrity':ds.get('universe_integrity') or survivorship_guard(False,True),
             'policy':'Latest features are causal; training excludes the most recent five labeled dates. Prospective paper use only.'}
