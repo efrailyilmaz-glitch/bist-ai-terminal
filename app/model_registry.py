@@ -33,7 +33,8 @@ def register(meta:dict):
     feature_hash=_h(meta.get('features') or [])
     data_fp=_h({'train_rows':meta.get('train_rows'),'train_dates':meta.get('train_dates'),
                 'train_cutoff':meta.get('train_cutoff'),'symbols':meta.get('symbols'),
-                'label':meta.get('label'),'as_of':meta.get('as_of')})
+                'label':meta.get('label'),'as_of':meta.get('as_of'),
+                'universe_integrity':meta.get('universe_integrity')})
     dep_fp=_h(deps)
     model_fp=_h({'name':meta.get('model_name'),'version':meta.get('model_version'),'seed':meta.get('seed'),
                  'features':feature_hash,'data':data_fp,'deps':dep_fp,'params':meta.get('params')})
