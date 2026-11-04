@@ -42,6 +42,7 @@ from .xs_scheduler import configure as xs_scheduler_configure, state as xs_sched
 from .model_registry import history as model_registry_history, get as model_registry_get
 from .promotion_governance import evaluate as promotion_governance_evaluate
 from .statistical_promotion import evaluate as statistical_promotion_evaluate
+from .regime_robustness import evaluate as regime_robustness_evaluate
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -60,7 +61,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='61.0.0')
+app=FastAPI(title='BIST AI Terminal',version='62.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -392,7 +393,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 61.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 62.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -424,6 +425,7 @@ def system_audit_api():
       {'name':'XS Lineage Hash Chain','status':xs_verify_lineage_ledger().get('status','WARN'),'detail':f"Hash-chain rows {xs_verify_lineage_ledger().get('rows',0)} · bad {len(xs_verify_lineage_ledger().get('bad_ids') or [])}"},
       {'name':'XS Promotion Governance','status':'OK','detail':'Hard forward-only gate combines >=90d evidence, >=12 rebalances, benchmark excess, drawdown, turnover, cost burden, model reproducibility and lineage integrity; review-only'},
       {'name':'Statistical Promotion Confidence','status':'OK','detail':'Prospective bootstrap confidence, regime stability and Bonferroni multiple-testing correction can veto promotion review; never enables live execution'},
+      {'name':'Regime Robustness Gate','status':'OK','detail':'Prospective BULL/BEAR/RANGE/HIGH_VOL robustness gate requires multi-regime evidence and can veto single-regime-dependent challengers'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -432,7 +434,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'61.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'62.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -660,6 +662,12 @@ def xs_promotion_statistics_api(portfolio_id:int):
     if h.get('status')!='OK': return h
     return statistical_promotion_evaluate(h)
 
+@app.get('/api/xs-regime-robustness/{portfolio_id}')
+def xs_regime_robustness_api(portfolio_id:int):
+    h=xs_paper_history(portfolio_id,1000)
+    if h.get('status')!='OK': return h
+    return regime_robustness_evaluate(h)
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -699,7 +707,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'61.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'62.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
