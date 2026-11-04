@@ -31,7 +31,7 @@ class AutoPaperTests(unittest.TestCase):
             self.assertGreater(self.a['orders'][0]['fee'],0);self.assertNotEqual(self.a['orders'][0]['price'],q['close'])
     def test_multibar_entry_partial_then_complete(self):
         m.choose(self.a,[self.row()],1,self.now)
-        q1=self.quote(volume=30_000)
+        q1=self.quote(high=100.5,low=99.5,volume=30_000)
         with patch('app.microstructure_feed.latest_microstructure',return_value={'configured':False,'guard':{}}):
             m.process_quote(self.a,'TEST',q1,self.now+timedelta(minutes=16))
         self.assertIn('TEST',self.a['positions'])
@@ -40,7 +40,7 @@ class AutoPaperTests(unittest.TestCase):
         first_qty=self.a['orders'][0]['quantity']
         parent=self.a['orders'][0]['parent_order_id']
         stop=self.a['positions']['TEST']['initial_stop']
-        q2=self.quote(15,price=100.,high=101.,low=99.,volume=30_000)
+        q2=self.quote(15,price=100.,high=100.5,low=99.5,volume=30_000)
         with patch('app.microstructure_feed.latest_microstructure',return_value={'configured':False,'guard':{}}):
             m.process_quote(self.a,'TEST',q2,self.now+timedelta(minutes=31))
         self.assertNotIn('TEST',self.a['pending'])
