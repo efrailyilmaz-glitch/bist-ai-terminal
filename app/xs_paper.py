@@ -25,7 +25,7 @@ def _conn():
       model_registry_id INTEGER, model_fingerprint TEXT, ranking_as_of TEXT, ranking_snapshot_json TEXT
     )''')
     cols={r[1] for r in c.execute('PRAGMA table_info(rebalances)').fetchall()}
-    for name,typ in [('model_registry_id','INTEGER'),('model_fingerprint','TEXT'),('ranking_as_of','TEXT'),('ranking_snapshot_json','TEXT'),('payload_hash','TEXT'),('prev_hash','TEXT'),('ledger_hash','TEXT')]:
+    for name,typ in [('model_registry_id','INTEGER'),('model_fingerprint','TEXT'),('ranking_as_of','TEXT'),('ranking_snapshot_json','TEXT'),('integrity_json','TEXT'),('payload_hash','TEXT'),('prev_hash','TEXT'),('ledger_hash','TEXT')]:
         if name not in cols:c.execute(f'ALTER TABLE rebalances ADD COLUMN {name} {typ}')
     c.execute('''CREATE TABLE IF NOT EXISTS positions(
       portfolio_id INTEGER, ticker TEXT, weight REAL, units REAL, entry_price REAL,
@@ -77,15 +77,17 @@ def rebalance(portfolio_id,target_rows,one_way_cost_bps=20,lineage=None):
         immutable={'portfolio_id':int(portfolio_id),'epoch':round(float(now),6),'targets':applied,'turnover_pct':round(float(turn*100),8),
                    'cost':round(float(cost),8),'equity_before':round(float(equity),8),'equity_after':round(float(equity_after),8),
                    'model_registry_id':artifact.get('registry_id'),'model_fingerprint':artifact.get('model_fingerprint'),
-                   'ranking_as_of':lineage.get('ranking_as_of'),'ranking_snapshot':lineage.get('ranking_snapshot') or []}
+                   'ranking_as_of':lineage.get('ranking_as_of'),'ranking_snapshot':lineage.get('ranking_snapshot') or [],
+                   'integrity':{'current_quality':lineage.get('current_quality'),'training_quality':lineage.get('training_quality'),'universe_integrity':lineage.get('universe_integrity')}}
         payload_hash=hashlib.sha256(json.dumps(immutable,ensure_ascii=False,sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest()
         last=c.execute('SELECT ledger_hash FROM rebalances WHERE ledger_hash IS NOT NULL ORDER BY id DESC LIMIT 1').fetchone()
         prev_hash=(last[0] if last and last[0] else 'GENESIS')
         ledger_hash=hashlib.sha256((prev_hash+'|'+payload_hash).encode()).hexdigest()
+        integrity_json=json.dumps(immutable['integrity'],ensure_ascii=False,sort_keys=True,separators=(',',':'))
         c.execute('''INSERT INTO rebalances(portfolio_id,epoch,at,target_json,turnover_pct,cost,equity_before,equity_after,
-                  model_registry_id,model_fingerprint,ranking_as_of,ranking_snapshot_json,payload_hash,prev_hash,ledger_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                  model_registry_id,model_fingerprint,ranking_as_of,ranking_snapshot_json,integrity_json,payload_hash,prev_hash,ledger_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                   (int(portfolio_id),now,time.strftime('%d.%m.%Y %H:%M:%S'),json.dumps(applied,ensure_ascii=False),turn*100,cost,equity,equity_after,
-                   artifact.get('registry_id'),artifact.get('model_fingerprint'),lineage.get('ranking_as_of'),ranking_json,payload_hash,prev_hash,ledger_hash))
+                   artifact.get('registry_id'),artifact.get('model_fingerprint'),lineage.get('ranking_as_of'),ranking_json,integrity_json,payload_hash,prev_hash,ledger_hash))
         c.execute('UPDATE portfolios SET last_equity=? WHERE id=?',(equity_after,int(portfolio_id)));c.commit();c.close()
     return {'status':'OK','portfolio_id':portfolio_id,'turnover_pct':round(turn*100,2),'cost':round(cost,2),'equity_after_cost':round(equity_after,2),'positions':applied,
             'model_registry_id':(lineage or {}).get('model_artifact',{}).get('registry_id') if lineage else None}
@@ -154,11 +156,13 @@ def verify_lineage_ledger():
         try:
             targets=json.loads(r.get('target_json') or '[]')
             ranking=json.loads(r.get('ranking_snapshot_json') or '[]')
+            try:integrity=json.loads(r.get('integrity_json') or '{}')
+            except Exception:integrity={}
             immutable={'portfolio_id':int(r['portfolio_id']),'epoch':round(float(r['epoch']),6),'targets':targets,
                        'turnover_pct':round(float(r.get('turnover_pct') or 0),8),'cost':round(float(r.get('cost') or 0),8),
                        'equity_before':round(float(r.get('equity_before') or 0),8),'equity_after':round(float(r.get('equity_after') or 0),8),
                        'model_registry_id':r.get('model_registry_id'),'model_fingerprint':r.get('model_fingerprint'),
-                       'ranking_as_of':r.get('ranking_as_of'),'ranking_snapshot':ranking}
+                       'ranking_as_of':r.get('ranking_as_of'),'ranking_snapshot':ranking,'integrity':integrity}
             ph=hashlib.sha256(json.dumps(immutable,ensure_ascii=False,sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest()
             lh=hashlib.sha256((prev+'|'+ph).encode()).hexdigest()
             if ph!=r.get('payload_hash') or r.get('prev_hash')!=prev or lh!=r.get('ledger_hash'):bad.append(r['id'])
