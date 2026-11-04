@@ -82,6 +82,14 @@ class AutoPaperTests(unittest.TestCase):
         q=self.quote(15,90.,115.,89.)
         m.process_quote(self.a,'TEST',q,self.now+timedelta(minutes=31))
         self.assertFalse(self.a['positions']);self.assertLess(self.a['orders'][0]['price'],90.);self.assertLess(self.a['orders'][0]['pnl'],0)
+    def test_lower_limit_lock_keeps_protective_stop_open(self):
+        self.enter()
+        q=self.quote(15,price=90.,high=90.2,low=90.,volume=1_000_000)
+        q['previous_close']=100.
+        m.process_quote(self.a,'TEST',q,self.now+timedelta(minutes=31))
+        self.assertIn('TEST',self.a['positions'])
+        self.assertTrue(any(d.get('type')=='PROTECTIVE_NO_FILL' for d in self.a['decisions']))
+
     def test_entry_bar_cannot_trigger_prior_intrabar_stop(self):
         r=self.row();r['atr']=.5;m.choose(self.a,[r],1,self.now)
         q=self.quote(high=101,low=98);m.process_quote(self.a,'TEST',q,self.now+timedelta(minutes=16))
