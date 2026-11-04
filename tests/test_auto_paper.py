@@ -29,6 +29,46 @@ class AutoPaperTests(unittest.TestCase):
             m.process_quote(self.a,'TEST',q,self.now+timedelta(minutes=46))
             self.assertFalse(self.a['positions']);self.assertAlmostEqual(self.a['cash']-1_000_000,self.a['realized'],places=5)
             self.assertGreater(self.a['orders'][0]['fee'],0);self.assertNotEqual(self.a['orders'][0]['price'],q['close'])
+    def test_multibar_entry_partial_then_complete(self):
+        m.choose(self.a,[self.row()],1,self.now)
+        q1=self.quote(high=100.5,low=99.5,volume=30_000)
+        with patch('app.microstructure_feed.latest_microstructure',return_value={'configured':False,'guard':{}}):
+            m.process_quote(self.a,'TEST',q1,self.now+timedelta(minutes=16))
+        self.assertIn('TEST',self.a['positions'])
+        self.assertIn('TEST',self.a['pending'])
+        self.assertTrue(self.a['orders'][0]['partial_fill'])
+        first_qty=self.a['orders'][0]['quantity']
+        parent=self.a['orders'][0]['parent_order_id']
+        stop=self.a['positions']['TEST']['initial_stop']
+        q2=self.quote(15,price=100.,high=100.5,low=99.5,volume=30_000)
+        with patch('app.microstructure_feed.latest_microstructure',return_value={'configured':False,'guard':{}}):
+            m.process_quote(self.a,'TEST',q2,self.now+timedelta(minutes=31))
+        self.assertNotIn('TEST',self.a['pending'])
+        buys=[o for o in self.a['orders'] if o['side']=='BUY']
+        self.assertEqual(len(buys),2)
+        self.assertTrue(all(o['parent_order_id']==parent for o in buys))
+        self.assertEqual(self.a['positions']['TEST']['quantity'],sum(o['quantity'] for o in buys))
+        self.assertEqual(len(self.a['positions']['TEST']['execution_fills']),2)
+        self.assertEqual(self.a['positions']['TEST']['initial_stop'],stop)
+        self.assertEqual(self.a['positions']['TEST']['stop'],stop)
+        self.assertGreater(first_qty,0)
+
+    def test_protective_stop_cancels_remaining_multibar_entry(self):
+        m.choose(self.a,[self.row()],1,self.now)
+        q1=self.quote(high=100.5,low=99.5,volume=30_000)
+        with patch('app.microstructure_feed.latest_microstructure',return_value={'configured':False,'guard':{}}):
+            m.process_quote(self.a,'TEST',q1,self.now+timedelta(minutes=16))
+        self.assertIn('TEST',self.a['pending'])
+        stop=self.a['positions']['TEST']['stop']
+        q2=self.quote(15,price=stop-1,high=stop+1,low=stop-2,volume=30_000)
+        with patch('app.microstructure_feed.latest_microstructure',return_value={'configured':False,'guard':{}}):
+            m.process_quote(self.a,'TEST',q2,self.now+timedelta(minutes=31))
+        self.assertNotIn('TEST',self.a['positions'])
+        self.assertNotIn('TEST',self.a['pending'])
+        sides=[o['side'] for o in self.a['orders']]
+        self.assertIn('SELL',sides)
+        self.assertEqual(sides.count('BUY'),1)
+
     def test_no_same_or_pre_decision_bar_fill(self):
         m.choose(self.a,[self.row()],1,self.now+timedelta(minutes=1))
         q=self.quote();m.process_quote(self.a,'TEST',q,self.now+timedelta(minutes=16));self.assertFalse(self.a['orders'])

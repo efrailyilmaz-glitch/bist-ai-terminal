@@ -65,7 +65,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='66.0.0')
+app=FastAPI(title='BIST AI Terminal',version='67.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -397,7 +397,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 66.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 67.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -434,6 +434,7 @@ def system_audit_api():
       {'name':'Point-in-Time Universe Integrity','status':'OK' if pit_universe_status().get('status')=='PIT_VERIFIED' else 'WARN','detail':'Verified COMPLETE historical membership datasets filter training dates; otherwise system remains CURRENT_UNIVERSE_PROXY and survivorship risk stays explicit'},
       {'name':'Sector / Factor Neutralization','status':'OK','detail':'Current XS scores are residualized against momentum/volatility/trend factors; sector dummies are used only when metadata coverage is sufficient, and neutralization evidence is required for promotion'},
       {'name':'XS Capacity & Market Impact 2.0','status':'OK','detail':'Portfolio construction combines median ADV, target trade notional, volatility/range, spread and execution horizon; constraints only reduce exposure and residual risk stays cash'},
+      {'name':'Multi-Bar Paper Execution','status':'OK','detail':'Paper entries may split across at most two closed 15m bars using per-bar volume capacity; each fill has its own execution cost and protective exits always run first'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -442,7 +443,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'66.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'67.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -747,7 +748,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'66.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'67.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
