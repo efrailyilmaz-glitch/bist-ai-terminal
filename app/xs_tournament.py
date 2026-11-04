@@ -136,5 +136,5 @@ def snapshot(tournament_id):
         td['champion']=str(next_champion)
     return {'status':'OK','tournament_id':tournament_id,'started_at':td.get('started_at'),'days':days,
             'capital_each':td.get('capital_each'),'benchmark':td.get('benchmark'),'paper_champion':td.get('champion'),'challengers':rows,
-            'meta_governance':{'ranking':ranking,'legacy_decision':legacy_decision,'champion_governance':champion_gov},
+            'meta_governance':{'ranking':ranking,'decision':legacy_decision,'legacy_decision':legacy_decision,'champion_governance':champion_gov},
             'policy':'Prospective paper evidence only. Paper champion is a research label; it never authorizes production or live execution.'}
