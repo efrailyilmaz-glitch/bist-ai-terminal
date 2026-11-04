@@ -14,6 +14,7 @@ from .data_quality_guard import evaluate_history as data_quality_gate
 from .factor_neutralization import evaluate_history as factor_gate
 from .decay_v2 import detect_xs_decay
 from .champion_governance import evaluate as champion_governance_evaluate
+from .portfolio_stress_lab import evaluate as portfolio_stress_gate
 
 _LOCK=threading.RLock()
 
@@ -118,13 +119,14 @@ def snapshot(tournament_id):
         regime=regime_gate(h) if promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' else {'status':'NOT_RUN','reasons':['PRIOR_GATE_NOT_PASSED']}
         quality=data_quality_gate(h) if promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' else {'status':'NOT_RUN','reasons':['PRIOR_GATE_NOT_PASSED']}
         factor=factor_gate(h) if promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' and quality.get('status')=='PASS' else {'status':'NOT_RUN','reasons':['PRIOR_GATE_NOT_PASSED']}
+        stress=portfolio_stress_gate(h) if promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' and quality.get('status')=='PASS' and factor.get('status')=='PASS' else {'status':'NOT_RUN','reasons':['PRIOR_GATE_NOT_PASSED']}
         decay=detect_xs_decay(h)
         metrics=_metrics(h,days)
-        eligible=promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' and quality.get('status')=='PASS' and factor.get('status')=='PASS' and decay.get('status')!='DECAY'
+        eligible=promo.get('status')=='PROMOTION_REVIEW' and stats.get('status')=='PASS' and regime.get('status')=='PASS' and quality.get('status')=='PASS' and factor.get('status')=='PASS' and stress.get('status')=='PASS' and decay.get('status')!='DECAY'
         metrics['status']='ELIGIBLE' if eligible else 'OBSERVE'
         decay_reasons=['MODEL_DECAY'] if decay.get('status')=='DECAY' else []
-        metrics['reasons']=list(dict.fromkeys((promo.get('reasons') or [])+(stats.get('reasons') or [])+(regime.get('reasons') or [])+(quality.get('reasons') or [])+(factor.get('reasons') or [])+decay_reasons))
-        rows.append({'id':vid,'name':name,'method':method,'portfolio_id':pid,'metrics':metrics,'promotion_gate':promo,'statistical_gate':stats,'regime_gate':regime,'data_quality_gate':quality,'factor_gate':factor,'decay_v2':decay,'paper':h})
+        metrics['reasons']=list(dict.fromkeys((promo.get('reasons') or [])+(stats.get('reasons') or [])+(regime.get('reasons') or [])+(quality.get('reasons') or [])+(factor.get('reasons') or [])+(stress.get('reasons') or [])+decay_reasons))
+        rows.append({'id':vid,'name':name,'method':method,'portfolio_id':pid,'metrics':metrics,'promotion_gate':promo,'statistical_gate':stats,'regime_gate':regime,'data_quality_gate':quality,'factor_gate':factor,'portfolio_stress_gate':stress,'decay_v2':decay,'paper':h})
     ranking=[{'id':r['id'],'name':r['name'],'score':r['metrics']['score'],'status':r['metrics']['status'],'reasons':r['metrics']['reasons']} for r in rows]
     ranking.sort(key=lambda x:(x['status']!='ELIGIBLE',-x['score'],x['id']))
     legacy_decision=meta_decision(ranking,td.get('champion'))
