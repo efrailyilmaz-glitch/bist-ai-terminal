@@ -105,8 +105,9 @@ def run_once(tournament_id,today=None,force_rebalance=False):
         method=ch.get('method') or 'score_inverse_vol'
         paper=ch.get('paper') or {};port=paper.get('portfolio') or {}
         pv=float(port.get('last_equity') or snap.get('capital_each') or 1_000_000)
+        current_weights={str(x.get('ticker')):float(x.get('weight') or 0) for x in (paper.get('positions') or [])}
         built=construct(ranking.get('rows') or [],portfolio_value=pv,max_names=st['max_names'],
-                        max_weight=st['max_weight'],adv_limit_pct=st['adv_limit_pct'],method=method)
+                        max_weight=st['max_weight'],adv_limit_pct=st['adv_limit_pct'],method=method,current_weights=current_weights)
         if built.get('status')!='OK':
             results.append({'variant_id':ch.get('id'),'status':'CONSTRUCT_WAIT','detail':built.get('status')});continue
         lineage={'model_artifact':ranking.get('model_artifact'),'ranking_as_of':ranking.get('as_of'),
@@ -116,7 +117,7 @@ def run_once(tournament_id,today=None,force_rebalance=False):
         rb=xs_tournament.rebalance_variant(tournament_id,ch.get('id'),built.get('rows') or [],st['cost_bps'],lineage)
         results.append({'variant_id':ch.get('id'),'status':rb.get('status'),'rebalance':rb,
                         'model_artifact':ranking.get('model_artifact'),
-                        'portfolio_stats':{k:built.get(k) for k in ['annual_volatility_pct','avg_correlation','liquidity_flags']}})
+                        'portfolio_stats':{k:built.get(k) for k in ['annual_volatility_pct','avg_correlation','liquidity_flags','cash_weight_pct','capacity']}})
     if any(x.get('status')=='OK' for x in results):
         with _LOCK:
             c=xs_tournament._conn();_ensure_columns(c)
