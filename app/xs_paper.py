@@ -156,13 +156,14 @@ def verify_lineage_ledger():
         try:
             targets=json.loads(r.get('target_json') or '[]')
             ranking=json.loads(r.get('ranking_snapshot_json') or '[]')
-            try:integrity=json.loads(r.get('integrity_json') or '{}')
-            except Exception:integrity={}
             immutable={'portfolio_id':int(r['portfolio_id']),'epoch':round(float(r['epoch']),6),'targets':targets,
                        'turnover_pct':round(float(r.get('turnover_pct') or 0),8),'cost':round(float(r.get('cost') or 0),8),
                        'equity_before':round(float(r.get('equity_before') or 0),8),'equity_after':round(float(r.get('equity_after') or 0),8),
                        'model_registry_id':r.get('model_registry_id'),'model_fingerprint':r.get('model_fingerprint'),
-                       'ranking_as_of':r.get('ranking_as_of'),'ranking_snapshot':ranking,'integrity':integrity}
+                       'ranking_as_of':r.get('ranking_as_of'),'ranking_snapshot':ranking}
+            if r.get('integrity_json'):
+                try:immutable['integrity']=json.loads(r.get('integrity_json'))
+                except Exception:immutable['integrity']={}
             ph=hashlib.sha256(json.dumps(immutable,ensure_ascii=False,sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest()
             lh=hashlib.sha256((prev+'|'+ph).encode()).hexdigest()
             if ph!=r.get('payload_hash') or r.get('prev_hash')!=prev or lh!=r.get('ledger_hash'):bad.append(r['id'])
