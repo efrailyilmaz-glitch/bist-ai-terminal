@@ -151,17 +151,39 @@ def process_quote(a,code,q,now,reality_fn=None):
     if (now-datetime.fromisoformat(o['created_at'])).total_seconds()>48*3600:
         a['pending'].pop(code,None);event(a,'CANCELLED',code,'Karar 48 saatten eski; yeni analiz gerekli.');return
     v=valuation(a);cfg=a['config'];px=q['close'];stop_mult=float(o.get('stop_atr',2.0));distance=max(o['atr']*stop_mult,px*.015)
+    from .execution_intelligence import execution_diagnostics
+    plan=o.get('execution_plan')
+    if plan:
+        remaining=max(0,int(plan.get('remaining_quantity') or 0))
+        if remaining<1:
+            a['pending'].pop(code,None);return
+        if int(plan.get('fill_count') or 0)>=int(plan.get('max_fill_bars') or 2):
+            a['pending'].pop(code,None);event(a,'CANCELLED',code,'MULTI_BAR_EXECUTION_LIMIT · kalan giriş miktarı iptal edildi.');return
+        ed_full=execution_diagnostics(q,remaining,px,cfg['slippage_bps'],o['side'])
+        if ed_full.get('status')=='BLOCK' and int(ed_full.get('execution_horizon_bars') or 99)>2:
+            a['pending'].pop(code,None);event(a,'CANCELLED',code,'Likidite düştü; kalan parçalı giriş miktarı iptal edildi.',execution_diagnostics=ed_full);return
+        max_fill=max(1,int(ed_full.get('max_fill_qty_per_bar') or remaining))
+        cash_qty=math.floor(a['cash']/(px*(1+(cfg['fee_bps']+cfg['slippage_bps'])/10000)))
+        fill_qty=min(remaining,max_fill,max(0,cash_qty))
+        if fill_qty<1:
+            a['pending'].pop(code,None);event(a,'CANCELLED',code,'Kalan parçalı giriş için yeterli nakit/likidite yok.');return
+        ed=execution_diagnostics(q,fill_qty,px,cfg['slippage_bps'],o['side'])
+        plan['remaining_quantity']=remaining-fill_qty;plan['filled_quantity']=int(plan.get('filled_quantity') or 0)+fill_qty;plan['fill_count']=int(plan.get('fill_count') or 0)+1
+        o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed
+        fill(a,o,px,q['at'],fill_qty)
+        if plan['remaining_quantity']<=0:a['pending'].pop(code,None)
+        return
     existing=[x for x in a['positions'] if x not in a['quotes'] or not valid_quote(a['quotes'][x],now)]
     room=max(0,v['equity']*cfg['gross_pct']/100-v['gross'])
     rm=float(o.get('risk_multiplier',1.0));rm=max(.25,min(1.0,rm)) if math.isfinite(rm) else 1.0
     budget=min(max(0,v['equity'])*cfg['position_pct']/100*rm,room,a['cash']/(1+(cfg['fee_bps']+cfg['slippage_bps'])*.0001))
     planned_loss=distance+px*(2*cfg['fee_bps']+2*cfg['slippage_bps'])/10000
-    qty=math.floor(min(budget/(px*(1+cfg['slippage_bps']/10000)),max(0,v['equity'])*cfg['risk_pct']/100*rm/planned_loss,q['volume']*.01))
-    from .execution_intelligence import execution_diagnostics
+    qty=math.floor(min(budget/(px*(1+cfg['slippage_bps']/10000)),max(0,v['equity'])*cfg['risk_pct']/100*rm/planned_loss,q['volume']*.05))
     ed=execution_diagnostics(q,qty,px,cfg['slippage_bps'],o['side'])
-    if ed.get('status')=='CAUTION':qty=math.floor(qty*float(ed.get('risk_multiplier',.65)))
+    benign={'VOLUME_SHARE_LIMIT_EXCEEDED','MULTI_BAR_EXECUTION_REQUIRED','HIGH_PARTICIPATION'}
+    if ed.get('status')=='CAUTION' and any(x not in benign for x in (ed.get('flags') or [])):
+        qty=math.floor(qty*float(ed.get('risk_multiplier',.65)))
     if ed.get('status')=='BLOCK':qty=0
-    if qty>0:ed=execution_diagnostics(q,qty,px,cfg['slippage_bps'],o['side'])
     from .microstructure_feed import latest_microstructure
     micro=latest_microstructure(code);mg=micro.get('guard') or {};ms=mg.get('status')
     if micro.get('configured') and ms=='BAD':qty=0
@@ -178,9 +200,18 @@ def process_quote(a,code,q,now,reality_fn=None):
             elif reality.get('verdict')=='MARGINAL':qty=math.floor(qty*.70)
         elif reality.get('status') in {'INSUFFICIENT_DATA','ERROR'}:
             qty=math.floor(qty*.75)
+    ed=execution_diagnostics(q,qty,px,cfg['slippage_bps'],o['side']) if qty>0 else ed
+    if ed.get('status')=='BLOCK':qty=0
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
         a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı/Trade Reality sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro,trade_reality=reality);return
-    o['effective_slippage_bps']=ed['effective_slippage_bps'];o['execution_diagnostics']=ed;o['microstructure']=micro;o['trade_reality']=reality;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None;fill(a,o,px,q['at'],qty);a['pending'].pop(code,None)
+    o['microstructure']=micro;o['trade_reality']=reality;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None
+    max_fill=max(1,int(ed.get('max_fill_qty_per_bar') or qty));first_qty=min(qty,max_fill)
+    o['execution_plan']={'total_quantity':qty,'remaining_quantity':qty-first_qty,'filled_quantity':first_qty,'fill_count':1,
+                         'max_fill_bars':min(2,max(1,int(ed.get('execution_horizon_bars') or 1))),'started_at':q['at']}
+    first_ed=execution_diagnostics(q,first_qty,px,cfg['slippage_bps'],o['side'])
+    o['effective_slippage_bps']=first_ed['effective_slippage_bps'];o['execution_diagnostics']=first_ed
+    fill(a,o,px,q['at'],first_qty)
+    if o['execution_plan']['remaining_quantity']<=0:a['pending'].pop(code,None)
 
 def risk_check(a,now):
     v=valuation(a);day=str(now.date())
