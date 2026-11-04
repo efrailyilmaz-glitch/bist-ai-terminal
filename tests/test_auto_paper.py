@@ -55,7 +55,7 @@ class AutoPaperTests(unittest.TestCase):
 
     def test_protective_stop_cancels_remaining_multibar_entry(self):
         m.choose(self.a,[self.row()],1,self.now)
-        q1=self.quote(volume=30_000)
+        q1=self.quote(high=100.5,low=99.5,volume=30_000)
         with patch('app.microstructure_feed.latest_microstructure',return_value={'configured':False,'guard':{}}):
             m.process_quote(self.a,'TEST',q1,self.now+timedelta(minutes=16))
         self.assertIn('TEST',self.a['pending'])
