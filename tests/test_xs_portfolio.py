@@ -20,12 +20,23 @@ class XSPortfolioTests(unittest.TestCase):
         with patch('app.xs_portfolio._load',return_value=self.risk_data()),patch('app.xs_portfolio.daily_frames',return_value=self.frames()):
             r=xp.construct(self.ranked(),max_weight=.2)
         self.assertEqual(r['status'],'OK')
-        self.assertAlmostEqual(sum(x['weight_pct'] for x in r['rows']),100,places=1)
+        invested=sum(x['weight_pct'] for x in r['rows'])
+        self.assertLessEqual(invested,100.01)
+        self.assertAlmostEqual(invested+r['cash_weight_pct'],100,places=1)
         self.assertLessEqual(max(x['weight_pct'] for x in r['rows']),20.1)
     def test_liquidity_only_reduces(self):
         x=self.ranked();x[0]['value_turnover']=1
         with patch('app.xs_portfolio._load',return_value=self.risk_data()),patch('app.xs_portfolio.daily_frames',return_value=self.frames()):
             r=xp.construct(x,portfolio_value=1_000_000,adv_limit_pct=1)
         self.assertTrue(any(f['ticker']=='T0' for f in r['liquidity_flags']))
+        self.assertGreater(r['cash_weight_pct'],0)
+    def test_absolute_cap_does_not_redistribute_removed_risk(self):
+        x=self.ranked()[:3]
+        rd=self.risk_data()[0][['T0','T1','T2']],self.risk_data()[1]
+        fr={k:v for k,v in self.frames().items() if k in {'T0','T1','T2','XU100'}}
+        with patch('app.xs_portfolio._load',return_value=rd),patch('app.xs_portfolio.daily_frames',return_value=fr):
+            r=xp.construct(x,max_names=3,max_weight=.15)
+        self.assertTrue(all(z['weight_pct']<=15.01 for z in r['rows']))
+        self.assertGreaterEqual(r['cash_weight_pct'],54.9)
 
 if __name__=='__main__':unittest.main()
