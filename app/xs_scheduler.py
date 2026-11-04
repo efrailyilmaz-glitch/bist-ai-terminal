@@ -112,7 +112,7 @@ def run_once(tournament_id,today=None,force_rebalance=False):
         lineage={'model_artifact':ranking.get('model_artifact'),'ranking_as_of':ranking.get('as_of'),
                  'ranking_snapshot':(ranking.get('rows') or [])[:100],
                  'current_quality':ranking.get('current_quality'),'training_quality':ranking.get('training_quality'),
-                 'universe_integrity':ranking.get('universe_integrity')}
+                 'universe_integrity':ranking.get('universe_integrity'),'neutralization':ranking.get('neutralization')}
         rb=xs_tournament.rebalance_variant(tournament_id,ch.get('id'),built.get('rows') or [],st['cost_bps'],lineage)
         results.append({'variant_id':ch.get('id'),'status':rb.get('status'),'rebalance':rb,
                         'model_artifact':ranking.get('model_artifact'),
@@ -124,7 +124,7 @@ def run_once(tournament_id,today=None,force_rebalance=False):
     return {'status':'REBALANCED' if any(x.get('status')=='OK' for x in results) else 'WAIT_PORTFOLIO',
             'as_of':ranking.get('as_of'),'ranked_symbols':ranking.get('symbols'),'model_artifact':ranking.get('model_artifact'),
             'current_quality':ranking.get('current_quality'),'training_quality':ranking.get('training_quality'),
-            'universe_integrity':ranking.get('universe_integrity'),
+            'universe_integrity':ranking.get('universe_integrity'),'neutralization':ranking.get('neutralization'),
             'mark':marks,'results':results,'scheduler':state(tournament_id)}
 
 def run_all_once():

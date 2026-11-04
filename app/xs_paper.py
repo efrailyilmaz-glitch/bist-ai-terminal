@@ -78,7 +78,8 @@ def rebalance(portfolio_id,target_rows,one_way_cost_bps=20,lineage=None):
                    'cost':round(float(cost),8),'equity_before':round(float(equity),8),'equity_after':round(float(equity_after),8),
                    'model_registry_id':artifact.get('registry_id'),'model_fingerprint':artifact.get('model_fingerprint'),
                    'ranking_as_of':lineage.get('ranking_as_of'),'ranking_snapshot':lineage.get('ranking_snapshot') or [],
-                   'integrity':{'current_quality':lineage.get('current_quality'),'training_quality':lineage.get('training_quality'),'universe_integrity':lineage.get('universe_integrity')}}
+                   'integrity':{'current_quality':lineage.get('current_quality'),'training_quality':lineage.get('training_quality'),
+                                'universe_integrity':lineage.get('universe_integrity'),'neutralization':lineage.get('neutralization')}}
         payload_hash=hashlib.sha256(json.dumps(immutable,ensure_ascii=False,sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest()
         last=c.execute('SELECT ledger_hash FROM rebalances WHERE ledger_hash IS NOT NULL ORDER BY id DESC LIMIT 1').fetchone()
         prev_hash=(last[0] if last and last[0] else 'GENESIS')
