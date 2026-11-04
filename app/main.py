@@ -51,6 +51,7 @@ from .bist_execution_rules import official_policy as bist_execution_policy
 from .decay_v2 import detect_xs_decay as xs_detect_decay_v2
 from .champion_governance import status as champion_governance_status
 from .protected_feature_governance import status as protected_feature_governance_status
+from .external_challenger import adapter_catalog as external_challenger_catalog, run_candidate as external_challenger_run
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -69,7 +70,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='72.0.0')
+app=FastAPI(title='BIST AI Terminal',version='73.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -401,7 +402,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 72.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 73.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -420,6 +421,7 @@ def system_audit_api():
       {'name':'Decision Attribution 2.0','status':'OK','detail':'Forward-only feature attribution with bootstrap confidence intervals, Benjamini-Hochberg FDR control and regime-conflict diagnostics; no causal claim or automatic champion mutation'},
       {'name':'Adaptive Feature Governance','status':'OK','detail':'Champion unchanged; challenger-only quarantine/downweight/disable policy with prospective shadow A/B promotion review'},
       {'name':'Model Zoo Challenger Lab','status':'OK','detail':'External Qlib/Hugging Face/FinRL-style candidates require license, model-card, PIT, causality, cost, robustness, execution and forward-paper gates before challenger eligibility'},
+      {'name':'External Challenger Execution','status':'OK','detail':'License-aware research adapters are isolated from paper/live paths; Qlib GBDT family has an internal causal BIST concept adapter while sequence/uncleared candidates remain blocked'},
       {'name':'Qlib Feature Bridge','status':qlib_adapter_status().get('status','ADAPTER_UNAVAILABLE'),'detail':'Causal BIST feature bridge is always available; optional LightGBM/Qlib packages remain lab-only and are never auto-installed'},
       {'name':'Cross-Sectional ML Challenger','status':'OK','detail':'Same-date BIST relative-ranking lab using cross-sectional z-scored causal features, rank IC and top-bottom forward excess spread; lab-only'},
       {'name':'Purged Walk-Forward XS Validation','status':'OK','detail':'Rolling cross-sectional OOS folds with 5d label purge and configurable embargo to reduce boundary leakage; lab-only'},
@@ -451,7 +453,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'72.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'73.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -735,6 +737,17 @@ def xs_champion_governance_api(tournament_id:int):
 def protected_feature_governance_api(limit:int=200):
     return protected_feature_governance_status(max(1,min(limit,1000)))
 
+@app.get('/api/external-challengers')
+def external_challenger_catalog_api():
+    return external_challenger_catalog()
+
+@app.post('/api/external-challengers/{candidate_id}/run')
+def external_challenger_run_api(candidate_id:str,payload:dict=Body(default={})):
+    codes=payload.get('codes')
+    tickers=[str(x).strip().upper() for x in codes if str(x).strip()] if isinstance(codes,list) else None
+    return external_challenger_run(candidate_id,tickers,str(payload.get('period') or '5y'),
+                                   max(5,min(int(payload.get('limit') or 120),500)))
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -774,7 +787,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'72.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'73.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
