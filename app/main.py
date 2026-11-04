@@ -56,6 +56,7 @@ from .ensemble_challenger import build as ensemble_challenger_build
 from .portfolio_stress_lab import evaluate as portfolio_stress_evaluate
 from .forward_scorecard import build as forward_scorecard_build
 from .research_integrity_dashboard import dashboard as research_integrity_dashboard
+from .autonomous_research_loop import run_once as autonomous_research_run, status as autonomous_research_status
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -75,7 +76,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='78.0.0')
+app=FastAPI(title='BIST AI Terminal',version='79.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -407,7 +408,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 78.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 79.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -454,6 +455,7 @@ def system_audit_api():
       {'name':'Portfolio Stress Lab','status':'OK','detail':'Deterministic correlation, gap-down, liquidity dry-up, top-cluster and sector-cluster shocks can veto XS promotion; never increase exposure'},
       {'name':'Forward Evidence Scorecard','status':'OK','detail':'Consolidates hard governance, statistics, regimes, data quality, factor neutrality, portfolio stress and decay into one review-only evidence view'},
       {'name':'Research Integrity Dashboard','status':'OK','detail':'Single integrity view aggregates evidence ledger, lineage, PIT universe, model registry, protected features and optional portfolio scorecard/stress/decay'},
+      {'name':'Autonomous Research Loop','status':'OK','detail':'Idempotent research→cost/capacity→paper tournament→forward review orchestration; failed stages cannot be bypassed and no live authority exists'},
       {'name':'Portfolio Concentration Guard','status':'OK','detail':'Signed 180d + recent60 + downside correlation, joint tail loss, XU100 beta and volatility guard'},
       {'name':'Execution Intelligence','status':'OK','detail':'V44 dynamic delayed-bar slippage + quadratic volume-share impact + observed spread + fillability horizon; can only worsen/reject paper fills'},
       {'name':'Paper Portfolio','status':'OK','detail':'Local hypothetical ledger · entry date/P&L/stop/target/trap snapshot supported'},
@@ -462,7 +464,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'78.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'79.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -792,6 +794,29 @@ def xs_forward_scorecard_api(portfolio_id:int,days:int=0,test_count:int=3):
 def research_integrity_api(portfolio_id:int|None=None,days:int=0,test_count:int=3):
     return research_integrity_dashboard(portfolio_id,max(0,days),max(1,min(test_count,50)))
 
+@app.post('/api/autonomous-research/run')
+def autonomous_research_run_api(payload:dict=Body(default={})):
+    codes=payload.get('codes')
+    tickers=[str(x).strip().upper() for x in codes if str(x).strip()] if isinstance(codes,list) else None
+    return autonomous_research_run(
+        tickers=tickers,
+        period=str(payload.get('period') or '5y'),
+        limit=max(20,min(int(payload.get('limit') or 120),500)),
+        train_days=max(120,min(int(payload.get('train_days') or 252),756)),
+        test_days=max(20,min(int(payload.get('test_days') or 63),126)),
+        purge_days=max(5,min(int(payload.get('purge_days') or 5),20)),
+        embargo_days=max(0,min(int(payload.get('embargo_days') or 5),20)),
+        one_way_cost_bps=max(0,min(int(payload.get('one_way_cost_bps') or 20),200)),
+        rebalance_every=max(1,min(int(payload.get('rebalance_every') or 5),20)),
+        portfolio_value=max(10000,min(float(payload.get('portfolio_value') or 1000000),1000000000)),
+        adv_limit_pct=max(.1,min(float(payload.get('adv_limit_pct') or 1.0),10)),
+        auto_create_paper=bool(payload.get('auto_create_paper',True)),
+        force_rebalance=bool(payload.get('force_rebalance',False)))
+
+@app.get('/api/autonomous-research/status')
+def autonomous_research_status_api(limit:int=50):
+    return autonomous_research_status(max(1,min(limit,200)))
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -831,7 +856,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'78.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'79.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
