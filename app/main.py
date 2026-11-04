@@ -57,6 +57,7 @@ from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
 from .adversarial_lab import stress as adversarial_stress
+from .adversarial_v2 import stress as adversarial_stress_v2, cross_sectional_stress as adversarial_cross_v2
 from .forecast_lab import forecast
 from .edge_lab import edge_research
 from .robustness_lab import robustness_audit
@@ -71,7 +72,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='74.0.0')
+app=FastAPI(title='BIST AI Terminal',version='75.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -403,13 +404,13 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 74.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 75.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
       {'name':'Weekly Coverage','status':'OK' if weekly_cov>=80 else 'WARMING','detail':f'%{weekly_cov} · {bg.get("weekly_analyzed",0)}/{cycle_total}'},
       {'name':'Trap Defense','status':'OK','detail':'V3 · single-bar breakout, distribution cluster, OBV confirmation and late-stage chase filters active'},
-      {'name':'Adversarial Lab','status':'OK','detail':'V1 · fake breakout, gap trap, stop sweep, volume climax and pump-fade synthetic stress tests'},
+      {'name':'Adversarial Market Stress 2.0','status':'OK','detail':'Deterministic multi-day false-breakout/distribution, repeated stop-sweep, liquidity-vacuum and staircase pump-fade tests plus synchronized cross-sectional stress; no intent attribution'},
       {'name':'Robustness Gate','status':'OK','detail':'PBO/CSCV + DSR + IS→OOS surface + plateau + same-candidate 2x/3x cost stress + causality invariant + capacity/turnover'},
       {'name':'Microstructure Guard','status':'OK','detail':'Licensed Level-2/order-event adapter + V45 footprint intelligence (absorption, sweep, replenishment, liquidity vacuum, spoof-like churn risk) + freshness/auth/failure guard; only entry derisk/veto, never blocks exits'},
       {'name':'Meta Governance','status':'OK','detail':'Forward-only champion/challenger ranking; historical backtests cannot self-promote'},
@@ -455,7 +456,7 @@ def system_audit_api():
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'74.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
+    return {'version':'75.0.0','overall':overall,'checks':checks,'background':bg,'broker':br}
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -755,6 +756,20 @@ def ensemble_challenger_lab_api(payload:dict=Body(...)):
     return ensemble_challenger_build(payload.get('candidates') or [],
                                      max(.34,min(float(payload.get('max_model_weight') or .40),.50)))
 
+@app.get('/api/adversarial-v2/{ticker}')
+def adversarial_v2_api(ticker:str):
+    from .market_data import daily_frames
+    import pandas as pd
+    code=ticker.upper().replace('.IS','')
+    df=daily_frames([code]).get(code,pd.DataFrame())
+    return {'ticker':code,**adversarial_stress_v2(df)}
+
+@app.get('/api/adversarial-v2-cross')
+def adversarial_v2_cross_api(codes:str):
+    from .market_data import daily_frames
+    selected=[x.strip().upper().replace('.IS','') for x in codes.split(',') if x.strip()][:20]
+    return adversarial_cross_v2(daily_frames(selected))
+
 @app.get('/api/model-card')
 def modelcard():
     return model_card()
@@ -794,7 +809,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'74.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'75.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
