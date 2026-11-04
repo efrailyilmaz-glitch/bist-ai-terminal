@@ -13,6 +13,7 @@ from .regime_robustness import evaluate as regime_gate
 from .data_quality_guard import evaluate_history as data_quality_gate
 from .factor_neutralization import evaluate_history as factor_gate
 from .decay_v2 import detect_xs_decay
+from .champion_governance import evaluate as champion_governance_evaluate
 
 _LOCK=threading.RLock()
 
@@ -126,8 +127,14 @@ def snapshot(tournament_id):
         rows.append({'id':vid,'name':name,'method':method,'portfolio_id':pid,'metrics':metrics,'promotion_gate':promo,'statistical_gate':stats,'regime_gate':regime,'data_quality_gate':quality,'factor_gate':factor,'decay_v2':decay,'paper':h})
     ranking=[{'id':r['id'],'name':r['name'],'score':r['metrics']['score'],'status':r['metrics']['status'],'reasons':r['metrics']['reasons']} for r in rows]
     ranking.sort(key=lambda x:(x['status']!='ELIGIBLE',-x['score'],x['id']))
-    decision=meta_decision(ranking,td.get('champion'))
+    legacy_decision=meta_decision(ranking,td.get('champion'))
+    champion_gov=champion_governance_evaluate(tournament_id,rows,td.get('champion'))
+    next_champion=(champion_gov.get('decision') or {}).get('paper_champion')
+    if next_champion and next_champion!=td.get('champion') and (champion_gov.get('decision') or {}).get('action') in {'NOMINATE_PAPER_CHAMPION','ROTATE_PAPER_CHAMPION'}:
+        with _LOCK:
+            c=_conn();c.execute('UPDATE tournaments SET champion=? WHERE id=?',(str(next_champion),int(tournament_id)));c.commit();c.close()
+        td['champion']=str(next_champion)
     return {'status':'OK','tournament_id':tournament_id,'started_at':td.get('started_at'),'days':days,
-            'capital_each':td.get('capital_each'),'benchmark':td.get('benchmark'),'challengers':rows,
-            'meta_governance':{'ranking':ranking,'decision':decision},
-            'policy':'Prospective paper evidence only. No challenger can auto-promote from backtest or lab results.'}
+            'capital_each':td.get('capital_each'),'benchmark':td.get('benchmark'),'paper_champion':td.get('champion'),'challengers':rows,
+            'meta_governance':{'ranking':ranking,'decision':legacy_decision,'legacy_decision':legacy_decision,'champion_governance':champion_gov},
+            'policy':'Prospective paper evidence only. Paper champion is a research label; it never authorizes production or live execution.'}
