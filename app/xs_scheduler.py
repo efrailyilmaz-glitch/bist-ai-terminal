@@ -109,7 +109,10 @@ def run_once(tournament_id,today=None,force_rebalance=False):
                         max_weight=st['max_weight'],adv_limit_pct=st['adv_limit_pct'],method=method)
         if built.get('status')!='OK':
             results.append({'variant_id':ch.get('id'),'status':'CONSTRUCT_WAIT','detail':built.get('status')});continue
-        lineage={'model_artifact':ranking.get('model_artifact'),'ranking_as_of':ranking.get('as_of'),'ranking_snapshot':(ranking.get('rows') or [])[:100]}
+        lineage={'model_artifact':ranking.get('model_artifact'),'ranking_as_of':ranking.get('as_of'),
+                 'ranking_snapshot':(ranking.get('rows') or [])[:100],
+                 'current_quality':ranking.get('current_quality'),'training_quality':ranking.get('training_quality'),
+                 'universe_integrity':ranking.get('universe_integrity')}
         rb=xs_tournament.rebalance_variant(tournament_id,ch.get('id'),built.get('rows') or [],st['cost_bps'],lineage)
         results.append({'variant_id':ch.get('id'),'status':rb.get('status'),'rebalance':rb,
                         'model_artifact':ranking.get('model_artifact'),
@@ -120,6 +123,8 @@ def run_once(tournament_id,today=None,force_rebalance=False):
             c.execute('UPDATE tournaments SET last_rebalance_day=? WHERE id=?',(day,int(tournament_id)));c.commit();c.close()
     return {'status':'REBALANCED' if any(x.get('status')=='OK' for x in results) else 'WAIT_PORTFOLIO',
             'as_of':ranking.get('as_of'),'ranked_symbols':ranking.get('symbols'),'model_artifact':ranking.get('model_artifact'),
+            'current_quality':ranking.get('current_quality'),'training_quality':ranking.get('training_quality'),
+            'universe_integrity':ranking.get('universe_integrity'),
             'mark':marks,'results':results,'scheduler':state(tournament_id)}
 
 def run_all_once():

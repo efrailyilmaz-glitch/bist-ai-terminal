@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from .qlib_bridge import feature_frame, FEATURES, adapter_status
 from .universe import get_universe
+from .data_quality_guard import audit_current_snapshot, audit_training_panel, survivorship_guard
 
 def _rank_ic(g):
     if len(g)<5:return None
@@ -231,6 +232,10 @@ def current_ranking(tickers=None,period='5y',limit=120):
     names=tickers or [x['ticker'] for x in get_universe()[:max(5,min(limit,500))]]
     ds=build_panel(names,period,limit)
     if ds.get('status')!='OK':return {k:v for k,v in ds.items() if k!='frame'}
+    train_quality=audit_training_panel(ds)
+    if train_quality.get('status')=='BLOCK':
+        return {'status':'DATA_QUALITY_BLOCK','training_quality':train_quality,
+                'universe_integrity':survivorship_guard(False,True)}
     latest=[]
     for t in names:
         try:
@@ -242,6 +247,10 @@ def current_ranking(tickers=None,period='5y',limit=120):
                            'price':float(r.get('price') or 0),'value_turnover':float(r.get('value_turnover') or 0)})
         except Exception:continue
     if len(latest)<10:return {'status':'INSUFFICIENT_CURRENT_UNIVERSE','symbols':len(latest)}
+    current_quality=audit_current_snapshot(latest,requested=len(names))
+    if current_quality.get('status')=='BLOCK':
+        return {'status':'DATA_QUALITY_BLOCK','symbols':len(latest),'current_quality':current_quality,
+                'training_quality':train_quality,'universe_integrity':survivorship_guard(False,True)}
     cur=pd.DataFrame(latest)
     for k in FEATURES:
         sd=float(cur[k].std())
@@ -267,4 +276,6 @@ def current_ranking(tickers=None,period='5y',limit=120):
         'params':{'n_estimators':120,'max_depth':4,'num_leaves':31,'learning_rate':.03,'subsample':.8,'colsample_bytree':.8}})
     return {'status':'OK','as_of':str(cur.iloc[0]['date']),'symbols':len(rows),'rows':rows,
             'train_rows':len(train),'model_artifact':artifact,
+            'current_quality':current_quality,'training_quality':train_quality,
+            'universe_integrity':survivorship_guard(False,True),
             'policy':'Latest features are causal; training excludes the most recent five labeled dates. Prospective paper use only.'}
