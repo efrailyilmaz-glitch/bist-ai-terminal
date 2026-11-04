@@ -77,3 +77,26 @@ def promotion_gate(history,ranking_integrity=None,universe_integrity=None):
     return {'status':'PASS' if not reasons else 'OBSERVE','reasons':reasons,
             'ranking_integrity':ranking_integrity,'universe_integrity':universe_integrity,
             'policy':'Data-quality/survivorship findings can only veto promotion.'}
+
+
+def evaluate_history(history):
+    rebs=(history or {}).get('rebalances') or []
+    if not rebs:
+        return {'status':'OBSERVE','reasons':['NO_REBALANCE_INTEGRITY_EVIDENCE']}
+    latest=next((r for r in rebs if r.get('integrity_json')),None)
+    if not latest:
+        return {'status':'OBSERVE','reasons':['INTEGRITY_METADATA_MISSING']}
+    import json
+    try:meta=json.loads(latest.get('integrity_json') or '{}')
+    except Exception:
+        return {'status':'OBSERVE','reasons':['INTEGRITY_METADATA_INVALID']}
+    current=meta.get('current_quality') or {}
+    training=meta.get('training_quality') or {}
+    universe=meta.get('universe_integrity') or {}
+    reasons=[]
+    if current.get('status')=='BLOCK':reasons.append('CURRENT_DATA_QUALITY_BLOCK')
+    if training.get('status')=='BLOCK':reasons.append('TRAINING_DATA_QUALITY_BLOCK')
+    if universe.get('status') not in {'PASS',None}:reasons.append('SURVIVORSHIP_RISK_UNRESOLVED')
+    return {'status':'PASS' if not reasons else 'OBSERVE','reasons':reasons,
+            'current_quality':current,'training_quality':training,'universe_integrity':universe,
+            'policy':'Promotion requires inspectable data-quality metadata. Unresolved survivorship risk remains a veto until a point-in-time universe is available.'}
