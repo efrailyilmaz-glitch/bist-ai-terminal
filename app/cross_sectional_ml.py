@@ -10,6 +10,7 @@ from .qlib_bridge import feature_frame, FEATURES, adapter_status
 from .universe import get_universe
 from .data_quality_guard import audit_current_snapshot, audit_training_panel, survivorship_guard
 from .pit_universe import training_universe, filter_frame
+from .factor_neutralization import neutralize as neutralize_scores
 
 def _rank_ic(g):
     if len(g)<5:return None
@@ -271,19 +272,27 @@ def current_ranking(tickers=None,period='5y',limit=120):
     model=lgb.LGBMRegressor(n_estimators=120,max_depth=4,num_leaves=31,learning_rate=.03,
                             subsample=.8,colsample_bytree=.8,random_state=56,verbosity=-1)
     model.fit(train[feats],train['label_excess_5d'])
-    cur['score']=model.predict(cur[feats])
-    cur=cur.sort_values('score',ascending=False)
-    rows=[{'ticker':r.ticker,'score':round(float(r.score),6),'price':round(float(r.price),6),
-           'value_turnover':round(float(r.value_turnover),2),'as_of':str(r.date)}
+    cur['raw_score']=model.predict(cur[feats])
+    meta={x['ticker']:{'sector':x.get('sector') or ((x.get('sectors') or [None])[0] if isinstance(x.get('sectors'),list) else None)} for x in get_universe()}
+    cur['sector']=[(meta.get(t) or {}).get('sector') for t in cur['ticker']]
+    neutral=neutralize_scores(cur,'raw_score','sector')
+    if neutral.get('status') not in {'PASS','CAUTION'}:
+        return {'status':'NEUTRALIZATION_BLOCK','neutralization':{k:v for k,v in neutral.items() if k!='frame'},
+                'universe_integrity':ds.get('universe_integrity')}
+    cur=neutral['frame'].sort_values('score',ascending=False)
+    rows=[{'ticker':r.ticker,'score':round(float(r.score),6),'raw_score':round(float(r.raw_score),6),
+           'price':round(float(r.price),6),'value_turnover':round(float(r.value_turnover),2),'as_of':str(r.date)}
           for r in cur.itertuples()]
     from .model_registry import register as register_model_artifact
     artifact=register_model_artifact({'model_name':'BIST Cross-Sectional LightGBM','model_version':'57.0','seed':56,
         'features':feats,'label':'label_excess_5d','train_rows':len(train),'train_dates':int(train.date.nunique()),
         'train_cutoff':str(max(train.date)) if len(train) else None,'as_of':str(cur.iloc[0]['date']),'symbols':len(rows),
         'universe_integrity':ds.get('universe_integrity'),
-        'params':{'n_estimators':120,'max_depth':4,'num_leaves':31,'learning_rate':.03,'subsample':.8,'colsample_bytree':.8}})
+        'params':{'n_estimators':120,'max_depth':4,'num_leaves':31,'learning_rate':.03,'subsample':.8,'colsample_bytree':.8,
+                  'neutralization':'V65_FACTORS_SECTOR_IF_AVAILABLE'}})
     return {'status':'OK','as_of':str(cur.iloc[0]['date']),'symbols':len(rows),'rows':rows,
             'train_rows':len(train),'model_artifact':artifact,
             'current_quality':current_quality,'training_quality':train_quality,
             'universe_integrity':ds.get('universe_integrity') or survivorship_guard(False,True),
+            'neutralization':{k:v for k,v in neutral.items() if k!='frame'},
             'policy':'Latest features are causal; training excludes the most recent five labeled dates. Prospective paper use only.'}
