@@ -4,6 +4,7 @@ V47/V71 governance. New features are research candidates only until registered w
 point-in-time metadata and sufficient forward evidence. No alpha feature is auto-promoted.
 """
 from __future__ import annotations
+from contextlib import closing
 import json,sqlite3,time,math
 from pathlib import Path
 from collections import defaultdict
@@ -36,7 +37,7 @@ def register(meta):
     owner=str(m.get('owner') or 'RESEARCH')
     schema=m.get('schema') or {}
     now=time.time()
-    with _conn() as c:
+    with closing(_conn()) as c:
         prev=c.execute('SELECT created_epoch FROM feature_registry WHERE feature=?',(feature,)).fetchone()
         created=float(prev[0]) if prev else now
         c.execute('''INSERT OR REPLACE INTO feature_registry(feature,source,version,owner,point_in_time,future_derived,causality_status,schema_json,created_epoch,updated_epoch)
@@ -46,7 +47,7 @@ def register(meta):
             'note':'Registration records provenance only. It never promotes a feature to production/champion scoring.'}
 
 def registry():
-    with _conn() as c:
+    with closing(_conn()) as c:
         c.row_factory=sqlite3.Row
         rows=[dict(x) for x in c.execute('SELECT * FROM feature_registry ORDER BY feature').fetchall()]
     for r in rows:
