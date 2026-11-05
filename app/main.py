@@ -85,6 +85,7 @@ from .research_integrity_dashboard import dashboard as research_integrity_dashbo
 from .research_integrity_master import dashboard as research_integrity_master
 from .full_system_audit import audit as full_system_audit
 from .desktop_readiness import status as desktop_readiness_status
+from .runtime_storage_health import snapshot as runtime_storage_health
 from .autonomous_research_loop import run_once as autonomous_research_run, status as autonomous_research_status
 from .research_factory_v2 import run_once as research_factory_run, status as research_factory_status
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
@@ -195,6 +196,10 @@ def performance_api():
 @app.get('/api/desktop-readiness')
 def desktop_readiness_api():
     return desktop_readiness_status()
+
+@app.get('/api/runtime-storage-health')
+def runtime_storage_health_api():
+    return runtime_storage_health()
 
 @app.get('/api/scan')
 def scan(offset:int=0,limit:int=60,codes:str|None=None):
