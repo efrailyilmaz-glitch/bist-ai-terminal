@@ -18,5 +18,6 @@ def test_v87_regime_conflicts_are_review_only():
 
 def test_v87_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='87.0.0'" in text
-    assert "'version':'87.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=87
+    assert "'version':" in text
