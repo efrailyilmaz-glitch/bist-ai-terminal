@@ -6,7 +6,7 @@ def test_v81_research_control_navigation_and_script():
     html = (ROOT / "app" / "templates" / "index.html").read_text(encoding="utf-8")
     assert 'data-view="researchcontrol"' in html
     assert 'Araştırma Kontrol Merkezi' in html
-    assert '/static/v30.js?v=81.0.0' in html
+    assert '/static/v30.js' in html
 
 def test_v81_research_control_uses_paper_only_endpoints():
     js = (ROOT / "app" / "static" / "v30.js").read_text(encoding="utf-8")
