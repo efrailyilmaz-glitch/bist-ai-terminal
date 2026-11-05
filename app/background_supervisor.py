@@ -17,10 +17,8 @@ _THREAD=None
 _STATE={'running':False,'last_fast_check':None,'last_heavy_refresh':None,'last_committee_run':None,'last_settlement':None,'cycles':0,'error':None,'market_phase':'UNKNOWN','committee_reviews':[],'alerts':[],'last_cycle_scan':None,'cycle_analyzed':0,'last_weekly_scan':None,'weekly_analyzed':0}
 _LAST_RADAR_SCAN=None;_LAST_COMMITTEE={};_LAST_SM_ALERT={}
 def _state_dir():
-    if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
-    elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
-    else:b=Path.home()/'.bist-ai-terminal'
-    b.mkdir(parents=True,exist_ok=True);return b
+    from .runtime_paths import data_root
+    return data_root()
 def _cooldown_file():return _state_dir()/'background_cooldowns.json'
 def _load_cooldowns():
     try:
