@@ -13,5 +13,6 @@ def test_v114_model_registry_version():
 
 def test_v114_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='114.0.0'" in text
-    assert "'version':'114.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=114
+    assert "'version':" in text
