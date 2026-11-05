@@ -52,7 +52,7 @@ function startBackend(port) {
       cwd: path.resolve(__dirname, '..'),
       windowsHide: true,
       stdio: 'inherit',
-      env: { ...process.env, BIST_AI_PORT: String(port), BIST_AI_DESKTOP: '1', PYTHONUNBUFFERED: '1' }
+      env: { ...process.env, BIST_AI_PORT: String(port), BIST_AI_DESKTOP: '1', BIST_AI_DATA_DIR: dataDir, PYTHONUNBUFFERED: '1' }
     });
   }
 
