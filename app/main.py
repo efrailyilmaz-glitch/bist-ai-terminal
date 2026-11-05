@@ -36,6 +36,7 @@ from .decision_policy_challenger import report as decision_policy_challenger_rep
 from .decision_policy_tournament import tournament as decision_policy_tournament
 from .policy_promotion_governance import evaluate as policy_promotion_evaluate, report as policy_promotion_report
 from .gate_threshold_challenger import report as gate_threshold_report
+from .gate_interaction_analysis import analyze as gate_interaction_analyze
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
@@ -583,6 +584,11 @@ def policy_promotion_report_api():
 def gate_threshold_challengers_api(horizon:int=20,min_settled:int=12):
     h=horizon if horizon in (5,20,60) else 20
     return gate_threshold_report(h,max(5,min(int(min_settled),200)))
+
+@app.get('/api/gate-interactions')
+def gate_interactions_api(horizon:int=20,min_samples:int=6):
+    h=horizon if horizon in (5,20,60) else 20
+    return gate_interaction_analyze(h,max(3,min(int(min_samples),100)))
 
 @app.get('/api/feature-governance')
 def feature_governance_api(force:bool=False):
