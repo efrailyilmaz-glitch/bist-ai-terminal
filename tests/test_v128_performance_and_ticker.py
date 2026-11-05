@@ -8,6 +8,8 @@ def test_v128_frontend_scan_and_request_reuse():
     assert "API_CACHE=new Map()" in js
     assert "API_FLIGHTS=new Map()" in js
     assert "apiTTL(url)" in js
+    assert "autoScanViews=new Set(['overview','all','short','long','setups','anomaly','portfolio','screener','community'])" in js
+    assert "restored?8000:500" in js
 
 def test_v128_backend_provider_concurrency_is_faster_but_bounded():
     md=(ROOT/'app'/'market_data.py').read_text(encoding='utf-8')
