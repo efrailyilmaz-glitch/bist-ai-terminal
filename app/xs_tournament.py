@@ -5,6 +5,7 @@ No live broker path and no backtest-only promotion.
 from __future__ import annotations
 import json, sqlite3, threading, time
 from pathlib import Path
+from .runtime_db import connect as db_connect
 from . import xs_paper
 from .meta_governance import conservative_score, meta_decision
 from .champion_governance import evaluate as champion_governance_evaluate
@@ -24,7 +25,7 @@ def _db():
     return p
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS tournaments(
       id INTEGER PRIMARY KEY AUTOINCREMENT, created_epoch REAL, created_at TEXT,
       started_epoch REAL, started_at TEXT, capital_each REAL, benchmark TEXT, champion TEXT
