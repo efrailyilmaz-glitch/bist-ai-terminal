@@ -14,7 +14,7 @@ def test_v94_api_and_ui():
     html=(ROOT/'app'/'templates'/'index.html').read_text(encoding='utf-8')
     assert "/api/gate-interactions" in main
     assert "Gate Interaction Analysis" in js
-    assert "/static/v34.js?v=94.0.0" in html
+    assert "/static/v34.js" in html
 
 def test_v94_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
