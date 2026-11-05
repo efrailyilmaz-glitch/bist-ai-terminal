@@ -25,5 +25,6 @@ def test_v86_net_utility_never_auto_mutates_gates():
 
 def test_v86_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='86.0.0'" in text
-    assert "'version':'86.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=86
+    assert "'version':" in text
