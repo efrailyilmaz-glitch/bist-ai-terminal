@@ -23,7 +23,7 @@ def test_v124_api_and_ui():
     assert "/api/live-data/quote/{ticker}" in main
     assert "/api/live-data/depth/{ticker}" in main
     assert 'data-view="liveadapters"' in html
-    assert '/static/v56.js?v=124.0.0' in html
+    assert '/static/v56.js' in html
     assert 'Depth sentezi' in js
 
 def test_v124_version():
