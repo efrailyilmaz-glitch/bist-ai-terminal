@@ -5,7 +5,16 @@ from .runtime_paths import data_root
 from .runtime_db import integrity
 
 KNOWN_DBS=[
- 'experience.db','xs_paper.db','model_registry.db','champion_governance.db'
+ 'experience.db',
+ 'xs_paper.db',
+ 'xs_tournament.db',
+ 'model_registry.db',
+ 'champion_governance.db',
+ 'research_loop.db',
+ 'research_factory_v2.db',
+ 'pit_universe.db',
+ 'feature_registry_v3.db',
+ 'feature_governance.db',
 ]
 
 def snapshot():
