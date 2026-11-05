@@ -109,13 +109,29 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
+_BACKGROUND_BOOT=None
+
+def _start_background_deferred():
+    global _BACKGROUND_BOOT
+    import threading,time
+    if _BACKGROUND_BOOT and _BACKGROUND_BOOT.is_alive():return
+    def boot():
+        # User-facing UI and first scan get priority over autonomous research workers.
+        time.sleep(20)
+        start_radar()
+        time.sleep(10)
+        start_background_supervisor()
+        time.sleep(20)
+        auto_paper.start_worker(); robot_arena.start_worker(); xs_scheduler_start_worker()
+    _BACKGROUND_BOOT=threading.Thread(target=boot,name='BISTDeferredBackgroundBoot',daemon=True)
+    _BACKGROUND_BOOT.start()
 
 @asynccontextmanager
 async def lifespan(app):
     import os
     if os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0':
-        start_radar(); start_alert_engine(); start_background_supervisor()
-        auto_paper.start_worker(); robot_arena.start_worker(); xs_scheduler_start_worker()
+        start_alert_engine()
+        _start_background_deferred()
     yield
 
 app=FastAPI(title='BIST AI Terminal',version='127.0.0',lifespan=lifespan)
