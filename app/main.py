@@ -78,6 +78,7 @@ from .ensemble_challenger import build as ensemble_challenger_build
 from .portfolio_stress_lab import evaluate as portfolio_stress_evaluate
 from .forward_scorecard import build as forward_scorecard_build
 from .research_integrity_dashboard import dashboard as research_integrity_dashboard
+from .research_integrity_master import dashboard as research_integrity_master
 from .autonomous_research_loop import run_once as autonomous_research_run, status as autonomous_research_status
 from .research_factory_v2 import run_once as research_factory_run, status as research_factory_status
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
@@ -969,6 +970,10 @@ def xs_forward_scorecard_api(portfolio_id:int,days:int=0,test_count:int=3):
     h=xs_paper_history(portfolio_id,1000)
     if h.get('status')!='OK': return h
     return forward_scorecard_build(h,max(0,days),max(1,min(test_count,50)))
+
+@app.get('/api/research-integrity-master')
+def research_integrity_master_api():
+    return research_integrity_master()
 
 @app.get('/api/research-integrity')
 def research_integrity_api(portfolio_id:int|None=None,days:int=0,test_count:int=3):
