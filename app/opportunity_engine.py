@@ -80,12 +80,8 @@ def score_opportunity(t,fundamentals=None,analyst=None,macro=None,kap=None,news=
             'confidence':int(round(_cap(len(conf)*12+min(35,(a.get('coverage_count') or 0)*10)+min(25,_v(f.get('coverage_pct'),0)*.25)))),
             'confirmations':conf[:8],'warnings':warn[:6],'targets':_targets(t,a,f),'components':components,'governance_challenger_score':challenger,'governance_score_delta':gov['score_delta'],'governance_details':gov['details'],'avg_value_turnover_20':liq,'updated':time.strftime('%d.%m.%Y %H:%M:%S')}
 def _file():
-    if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
-    elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
-    else:b=Path.home()/'.bist-ai-terminal'
-    try:b.mkdir(parents=True,exist_ok=True)
-    except Exception:pass
-    return b/'opportunity_state.json'
+    from .runtime_paths import data_path
+    return data_path('opportunity_state.json')
 def _save():
     try:
         with _LOCK:d={'ranking_version':RANKING_VERSION,'last_scan':_STATE['last_scan'],'opportunities':_STATE['opportunities'][:60],'alerts':_STATE['alerts'][:250]}
