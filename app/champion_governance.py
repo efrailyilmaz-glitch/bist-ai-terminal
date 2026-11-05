@@ -3,6 +3,7 @@ State advances only when a challenger has a NEW rebalance evidence count.
 This governs paper-tournament labels only; it never authorizes production/live execution.
 """
 from __future__ import annotations
+from .runtime_db import connect as db_connect
 import sqlite3,time
 from pathlib import Path
 
@@ -11,7 +12,7 @@ def _db():
     return data_path('champion_governance.db')
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS states(
       tournament_id INTEGER, variant_id TEXT, state TEXT, last_rebalance INTEGER,
       bad_streak INTEGER, good_streak INTEGER, updated_epoch REAL,
