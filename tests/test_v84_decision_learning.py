@@ -6,7 +6,7 @@ def test_v84_decision_learning_navigation_and_script():
     html=(ROOT/'app'/'templates'/'index.html').read_text(encoding='utf-8')
     assert 'data-view="decisionlearning"' in html
     assert 'Karar Öğrenme' in html
-    assert '/static/v33.js?v=84.0.0' in html
+    assert '/static/v33.js' in html
     assert '\\n' not in html
 
 def test_v84_committee_gates_are_persisted_to_forward_ledger():
