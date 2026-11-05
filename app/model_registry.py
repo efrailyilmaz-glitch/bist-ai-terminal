@@ -1,5 +1,6 @@
 """V57 immutable model/reproducibility registry for XS decisions."""
 from __future__ import annotations
+from .runtime_db import connect as db_connect
 import hashlib,json,platform,sqlite3,sys,time
 from pathlib import Path
 
@@ -8,7 +9,7 @@ def _db():
     return data_path('model_registry.db')
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS artifacts(
       id INTEGER PRIMARY KEY AUTOINCREMENT, created_epoch REAL, created_at TEXT,
       model_name TEXT, model_version TEXT, train_cutoff TEXT, as_of TEXT, seed INTEGER,
