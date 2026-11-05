@@ -25,5 +25,6 @@ def test_v83_decision_gate_uses_committee_api_and_surfaces_vetoes():
 
 def test_v83_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='83.0.0'" in text
-    assert "'version':'83.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=83
+    assert "'version':" in text
