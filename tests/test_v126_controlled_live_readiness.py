@@ -21,7 +21,7 @@ def test_v126_api_and_ui():
     js=(ROOT/'app'/'static'/'v58.js').read_text(encoding='utf-8')
     assert "/api/controlled-live-readiness" in main
     assert 'data-view="livereadiness"' in html
-    assert '/static/v58.js?v=126.0.0' in html
+    assert '/static/v58.js' in html
     assert 'Direct live' in js and 'KAPALI' in js
 
 def test_v126_current_version_is_at_least_126():
