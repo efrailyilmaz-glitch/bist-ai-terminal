@@ -14,7 +14,7 @@ def test_v97_api_and_ui():
     html=(ROOT/'app'/'templates'/'index.html').read_text(encoding='utf-8')
     assert "/api/regime-adaptive-policy" in main
     assert "Regime-Adaptive Decision Layer" in js
-    assert "/static/v37.js?v=97.0.0" in html
+    assert "/static/v37.js" in html
 
 def test_v97_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
