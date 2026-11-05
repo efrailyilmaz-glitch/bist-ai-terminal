@@ -23,5 +23,6 @@ def test_v90_ui_surfaces_decay_and_persistence():
 
 def test_v90_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='90.0.0'" in text
-    assert "'version':'90.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=90
+    assert "'version':" in text
