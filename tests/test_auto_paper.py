@@ -140,7 +140,7 @@ class AutoPaperTests(unittest.TestCase):
         self.assertTrue(all(o['source']=='SYNTHETIC' for o in r['orders']));self.assertFalse(list(m._directory().glob('*.json')))
     def test_worker_cycle_selects_then_fills_next_bar_and_persists(self):
         token=m.create_account()['token'];key=m._key(token);a=m._read(key);a['enabled']=True;m._write(key,a)
-        with patch('app.universe.get_universe',return_value=[{'ticker':'TEST','source':'KAP'}]),patch.object(m,'closed_signals',return_value=[self.row()]),patch.object(m,'latest_quote',return_value=self.quote()):
+        with patch('app.universe.get_universe',return_value=[{'ticker':'TEST','source':'KAP'}]),patch.object(m,'closed_signals',return_value=[self.row()]),patch.object(m,'latest_quote',return_value=self.quote()),patch('app.portfolio_guard.portfolio_entry_guard',return_value={'status':'CLEAR','risk_multiplier':1.0,'flags':[]}),patch('app.auto_paper_v2.confirm_candidate',return_value={'allow':True,'reason':'TEST_CONFIRMED','risk_multiplier':1.0}):
             m.cycle(key,self.now);self.assertEqual(len(m._read(key)['orders']),0);self.assertIn('TEST',m._read(key)['pending'])
             m.cycle(key,self.now+timedelta(minutes=16));a=m._read(key);self.assertEqual(len(a['orders']),1);self.assertIn('TEST',a['positions'])
             m.cycle(key,self.now+timedelta(minutes=17));self.assertEqual(len(m._read(key)['orders']),1)
