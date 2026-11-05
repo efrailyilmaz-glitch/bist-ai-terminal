@@ -37,6 +37,7 @@ from .decision_policy_tournament import tournament as decision_policy_tournament
 from .policy_promotion_governance import evaluate as policy_promotion_evaluate, report as policy_promotion_report
 from .gate_threshold_challenger import report as gate_threshold_report
 from .gate_interaction_analysis import analyze as gate_interaction_analyze
+from .decision_error_cost import analyze as decision_error_cost_analyze
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
@@ -589,6 +590,11 @@ def gate_threshold_challengers_api(horizon:int=20,min_settled:int=12):
 def gate_interactions_api(horizon:int=20,min_samples:int=6):
     h=horizon if horizon in (5,20,60) else 20
     return gate_interaction_analyze(h,max(3,min(int(min_samples),100)))
+
+@app.get('/api/decision-error-cost')
+def decision_error_cost_api(horizon:int=20,good_excess_pct:float=3.0,bad_excess_pct:float=-3.0,false_positive_weight:float=1.0,false_negative_weight:float=1.0):
+    h=horizon if horizon in (5,20,60) else 20
+    return decision_error_cost_analyze(h,max(.1,min(float(good_excess_pct),50.0)),min(-.1,max(float(bad_excess_pct),-50.0)),max(0,min(float(false_positive_weight),10)),max(0,min(float(false_negative_weight),10)))
 
 @app.get('/api/feature-governance')
 def feature_governance_api(force:bool=False):
