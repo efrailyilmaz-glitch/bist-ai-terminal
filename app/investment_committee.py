@@ -58,13 +58,14 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
         gates.append({'name':name,'pass':bool(passed),'detail':detail,'hard':hard})
         if hard and not passed:veto.append(name)
 
-    liq=_v(tech.get('avg_value_turnover_20'),0);risk=_v(tech.get('risk'),100);anom=_v(tech.get('anomaly_score'),100);trap=tech.get('trap_defense') or {};trap_score=_v(trap.get('score'),100)
+    liq=_v(tech.get('avg_value_turnover_20'),0);risk=_v(tech.get('risk'),100);anom=_v(tech.get('anomaly_score'),100);trap=tech.get('trap_defense') or {};trap_score=_v(trap.get('score'),100);guard=tech.get('signal_guard') or {};guard_score=_v(guard.get('score'),100)
     health=_v(premium.get('health_score'));fv_up=_v(premium.get('fair_value_upside_pct'));piot=(premium.get('piotroski') or {}).get('score');alt=(premium.get('altman') or {}).get('status')
     gate('Point-in-Time bütünlüğü',pit.get('status')!='BLOCK',f"{pit.get('status')} · {', '.join(pit.get('flags') or []) or 'timestamp uyumlu'}",True)
     gate('KAP tarih bütünlüğü',kap_pit.get('status')!='BLOCK',f"{kap_pit.get('status')} · {', '.join(kap_pit.get('flags') or []) or 'gelecek tarih yok'}",True)
     gate('Likidite',liq>=5_000_000,f'20G ort. işlem değeri ≈ ₺{liq:,.0f}',True)
     gate('Aşırı risk yok',risk<82,f'Risk skoru {risk:.0f}/100',True)
     gate('Anomali proxy aşırı değil',anom<90,f'Anomali {anom:.0f}/100',True)
+    gate('Sinyal Kontrolü',guard.get('status')=='CLEAR' and guard_score<65,f"{guard.get('status','UNKNOWN')} · {guard_score:.0f}/100",True)
     gate('Tuzak Savunması',trap.get('status')!='BLOCK' and trap_score<60,f"{trap.get('status','UNKNOWN')} · {trap_score:.0f}/100",True)
     gate('Uzun trend bozuk değil',not (tech.get('supertrend')=='BEARISH' and tech.get('ichimoku')=='BEARISH'),f"{tech.get('supertrend')} / {tech.get('ichimoku')}",True)
     gate('Tarihsel edge örneklemi',emp.get('sample',0)>=15,f"N={emp.get('sample',0)} · {emp.get('source')}",False)
@@ -134,4 +135,4 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
                 'liquidity_cap_5pct_adv':round(liquidity_cap,2),'research_position_value':round(research_position,2),'research_position_pct':round(position_pct,2),
                 'note':'Research sizing proxy only; combines stop-distance risk budget, 5% ADV liquidity cap, max-position cap and quarter-Kelly cap.'
             },'invalidation':invalidation,'opportunity':opp,'alpha_validation':alpha,'ensemble':ensemble,'premium':premium,'pro_technical':protech,'forensics':forensic,
-            'trap_defense':trap,'point_in_time':pit,'kap_point_in_time':kap_pit,'note':'Committee can veto strong signals, including deception-risk or point-in-time violations. This is a research decision framework, not an instruction to transact.'}
+            'signal_guard':guard,'trap_defense':trap,'point_in_time':pit,'kap_point_in_time':kap_pit,'note':'Committee can veto strong signals, including signal-integrity, deception-risk or point-in-time violations. This is a research decision framework, not an instruction to transact.'}
