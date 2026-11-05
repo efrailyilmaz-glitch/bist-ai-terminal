@@ -18,12 +18,12 @@ async function check(fail){
 (async()=>{await check(false);await check(true);await checkParallel();const ctx={state:{scan:new Map()},RankingEngine:rank,getJSON:async()=>({rows:[a]}),encodeURIComponent};vm.createContext(ctx);vm.runInContext(src.slice(src.indexOf('async function ensureTickerScan('),src.indexOf('function refreshDetailMetrics(')),ctx);await ctx.ensureTickerScan('AHGAZ');assert(ctx.state.scan.has('AHGAZ'));console.log('ranking ties, insertion independence, stale rows, zero scores and failed refresh eviction passed');})();
 
 async function checkParallel(){
- const universe=Array.from({length:40},(_,i)=>({ticker:'T'+i}));const pending=[];let active=0,peak=0;
- const state={universe,scan:new Map(),total:40,scanned:0,view:'detail',scanning:false};
+ const universe=Array.from({length:80},(_,i)=>({ticker:'T'+i}));const pending=[];let active=0,peak=0;
+ const state={universe,scan:new Map(),total:80,scanned:0,view:'detail',scanning:false};
  const ctx={state,els:{scanBtn:{},scanStatus:{}},getJSON:url=>new Promise(resolve=>{active++;peak=Math.max(peak,active);pending.push({url,done:r=>{active--;resolve(r);}});}),Date,localStorage:{removeItem(){}},renderTickerbar(){},render(){},updateRegime(){},persistScanCache(){}};
  vm.createContext(ctx);vm.runInContext(scan,ctx);const running=ctx.scanAll(false);
  assert.equal(pending.length,2);assert.equal(peak,2);
- pending[1].done({requested:20,rows:universe.slice(20),missing:[]});await new Promise(setImmediate);
- pending[0].done({requested:20,rows:universe.slice(0,20),missing:[]});await running;
- assert.equal(state.scan.size,40);assert.equal(state.scanned,40);assert(!state.scanning);assert.equal(peak,2);
+ pending[1].done({requested:40,rows:universe.slice(40),missing:[]});await new Promise(setImmediate);
+ pending[0].done({requested:40,rows:universe.slice(0,40),missing:[]});await running;
+ assert.equal(state.scan.size,80);assert.equal(state.scanned,80);assert(!state.scanning);assert.equal(peak,2);
 }
