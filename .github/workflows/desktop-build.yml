@@ -69,6 +69,13 @@ jobs:
       - name: Install Electron dependencies
         run: npm install
 
+      - name: Vendor chart library for offline desktop
+        shell: bash
+        run: |
+          mkdir -p app/static/vendor
+          cp node_modules/lightweight-charts/dist/lightweight-charts.standalone.production.js app/static/vendor/lightweight-charts.standalone.production.js
+          test -s app/static/vendor/lightweight-charts.standalone.production.js
+
       - name: Build local Python engine (Windows)
         if: matrix.platform == 'win'
         shell: pwsh
