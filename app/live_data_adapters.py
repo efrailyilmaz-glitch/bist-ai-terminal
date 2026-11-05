@@ -20,7 +20,7 @@ class AdapterInfo:
 
 CATALOG=[
     AdapterInfo('yahoo_delayed','Yahoo Finance Delayed',False,False,False,None),
-    AdapterInfo('matriks','Matriks',True,True,True,'MATRİKS_API_TOKEN'),
+    AdapterInfo('matriks','Matriks',True,True,True,'MATRIKS_API_TOKEN'),
     AdapterInfo('is_yatirim','İş Yatırım',True,False,True,'IS_YATIRIM_API_TOKEN'),
     AdapterInfo('info_yatirim','Info Yatırım',True,False,True,'INFO_YATIRIM_API_TOKEN'),
 ]
