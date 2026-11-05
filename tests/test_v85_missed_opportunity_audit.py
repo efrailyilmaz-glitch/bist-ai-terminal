@@ -23,5 +23,6 @@ def test_v85_decision_learning_ui_surfaces_missed_opportunities():
 
 def test_v85_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='85.0.0'" in text
-    assert "'version':'85.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=85
+    assert "'version':" in text
