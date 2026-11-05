@@ -71,6 +71,7 @@ from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
 from .adversarial_lab import stress as adversarial_stress
 from .adversarial_v2 import stress as adversarial_stress_v2, cross_sectional_stress as adversarial_cross_v2
+from .adversarial_v3 import stress as adversarial_stress_v3
 from .forecast_lab import forecast
 from .edge_lab import edge_research
 from .robustness_lab import robustness_audit
@@ -488,6 +489,15 @@ def trap_defense_api(ticker:str):
     code=ticker.upper().replace('.IS','')
     df=daily_frames([code]).get(code,pd.DataFrame())
     return {'ticker':code,**assess_traps(df)}
+
+@app.get('/api/adversarial-v3/{ticker}')
+def adversarial_v3_api(ticker:str):
+    from .market_data import daily_frames
+    import pandas as pd
+    code=ticker.upper().replace('.IS','')
+    df=daily_frames([code]).get(code,pd.DataFrame())
+    try:return {'ticker':code,**adversarial_stress_v3(df)}
+    except Exception as e:return {'ticker':code,'status':'ERROR','error':str(e)[:240]}
 
 @app.get('/api/trap-defense-radar')
 def trap_defense_radar_api(limit:int=80):
