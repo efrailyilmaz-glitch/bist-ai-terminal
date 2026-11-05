@@ -43,17 +43,20 @@ def evaluate_snapshot(committee,policy):
                                        'guard_status':guard.get('status'),'guard_score':guard_score,
                                        'trap_status':trap.get('status'),'trap_score':trap_score}}
 
-def record(signal_id,committee):
-    if not signal_id or not committee:return {'recorded':0}
+def record(signal_id,committee,max_signal_age_sec=120):
+    if not signal_id or not committee:return {'recorded':0,'status':'SKIP'}
     with ex._LOCK:
         c=ex._conn();_ensure(c);n=0
+        row=c.execute('SELECT created_epoch FROM signals WHERE id=?',(int(signal_id),)).fetchone()
+        if not row or time.time()-float(row[0])>float(max_signal_age_sec):
+            c.close();return {'recorded':0,'status':'STALE_SIGNAL_ID'}
         for p in POLICIES:
             r=evaluate_snapshot(committee,p)
             cur=c.execute('INSERT OR IGNORE INTO policy_shadow(signal_id,policy_id,policy_name,decision,reasons_json,created_epoch) VALUES(?,?,?,?,?,?)',
                           (int(signal_id),p['id'],p['name'],r['decision'],json.dumps(r,ensure_ascii=False,sort_keys=True),time.time()))
             n+=cur.rowcount
         c.commit();c.close()
-    return {'recorded':n}
+    return {'recorded':n,'status':'OK'}
 
 def report(horizon=20,min_settled=12):
     if horizon not in (5,20,60):raise ValueError('horizon must be 5, 20 or 60')
