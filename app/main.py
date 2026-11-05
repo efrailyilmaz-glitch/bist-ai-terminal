@@ -8,6 +8,7 @@ from .universe import get_universe
 from .market_data import scan_codes, yahoo_chart, market_overview, multi_timeframe
 from .backtest import run_backtest, compare_strategies, walk_forward, monte_carlo
 from .fundamentals import get_fundamentals, factor_screen
+from .fundamental_price_fusion import analyze as fundamental_price_fusion
 from .kap_engine import company_profile, disclosures
 from .kap_intelligence_v2 import analyze as kap_intelligence_v2
 from .news_engine import headlines
@@ -239,6 +240,10 @@ def eventstudy(ticker:str,limit:int=25):
 @app.get('/api/committee/{ticker}')
 def committee(ticker:str,portfolio_value:float=1000000,risk_budget_pct:float=.75,max_position_pct:float=12.0):
     return investment_committee(ticker,portfolio_value=max(0,portfolio_value),risk_budget_pct=max(.05,min(risk_budget_pct,5)),max_position_pct=max(1,min(max_position_pct,50)))
+
+@app.get('/api/fundamental-price-fusion/{ticker}')
+def fundamental_price_fusion_api(ticker:str):
+    return fundamental_price_fusion(ticker)
 
 @app.get('/api/unified-decision/{ticker}')
 def unified_decision_api(ticker:str,portfolio_value:float=1000000):
