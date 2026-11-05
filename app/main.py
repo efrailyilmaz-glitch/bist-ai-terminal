@@ -134,7 +134,7 @@ async def lifespan(app):
         _start_background_deferred()
     yield
 
-app=FastAPI(title='BIST AI Terminal',version='127.0.0',lifespan=lifespan)
+app=FastAPI(title='BIST AI Terminal',version='128.0.0',lifespan=lifespan)
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -550,7 +550,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 127.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 128.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -611,14 +611,14 @@ def system_audit_api():
       {'name':'Broker Safety','status':'OK','detail':'Direct live locked · paper risk gates active' if not br.get('direct_live_execution_enabled') else 'Live enabled'},
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
-    fs=full_system_audit('127.0.0')
+    fs=full_system_audit('128.0.0')
     checks.append({'name':'V120 Full Source/Wiring Audit','status':'OK' if fs.get('status')=='PASS' else 'WARN' if fs.get('status')=='WARN' else 'ERROR','detail':f"{fs.get('status')} · blockers {len(fs.get('blockers') or [])} · warnings {len(fs.get('warnings') or [])}"})
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'127.0.0','overall':overall,'checks':checks,'background':bg,'broker':br,'full_audit':fs}
+    return {'version':'128.0.0','overall':overall,'checks':checks,'background':bg,'broker':br,'full_audit':fs}
 
 @app.get('/api/full-system-audit')
 def full_system_audit_api():
-    return full_system_audit('127.0.0')
+    return full_system_audit('128.0.0')
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -1127,7 +1127,7 @@ def kap():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'127.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'128.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
