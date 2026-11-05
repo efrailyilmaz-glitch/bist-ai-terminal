@@ -8,7 +8,8 @@ function decisionLearningShell33(){
  '<section class="panel"><div class="panelHead"><div><h2>Gate Net Fayda</h2><p>Engellenen kötü sonuçlar ile kaçırılan iyi sonuçların aynı forward örneklemde dengesi</p></div></div><div class="warningBox">Aynı sinyalde birden fazla gate başarısız olabilir. Bu nedenle net fayda ortak-atıflı tanısal bir ölçümdür; nedensel PnL değildir.</div><div id="gateUtilityBox33"><div class="loading">Net fayda hesaplanıyor…</div></div></section>'+ 
  '<section class="panel"><div class="panelHead"><div><h2>Rejim Bazlı Gate Davranışı</h2><p>Aynı gate farklı piyasa rejimlerinde koruyucu mu, fırsat maliyetli mi?</p></div></div><div id="gateRegimeBox33"><div class="loading">Rejim analizi yükleniyor…</div></div></section>'+ 
  '<section class="panel"><div class="panelHead"><div><h2>Decision Policy Challengers</h2><p>Incumbent, Strict Defense ve Adaptive politikalarının aynı snapshot üzerindeki forward shadow yarışı</p></div></div><div class="warningBox">Challenger yalnız inceleme durumuna ulaşabilir. Ana politika ve canlı işlem yolu otomatik olarak değişmez.</div><div id="policyChallengerBox33"><div class="loading">Shadow challenger sonuçları yükleniyor…</div></div></section>'+ 
- '<section class="panel"><div class="panelHead"><div><h2>Policy Tournament</h2><p>5 / 20 / 60 günlük forward kanıtın birlikte değerlendirildiği çok ufuklu yarış</p></div></div><div id="policyTournamentBox33"><div class="loading">Turnuva sonuçları yükleniyor…</div></div></section>';
+ '<section class="panel"><div class="panelHead"><div><h2>Policy Tournament</h2><p>5 / 20 / 60 günlük forward kanıtın birlikte değerlendirildiği çok ufuklu yarış</p></div></div><div id="policyTournamentBox33"><div class="loading">Turnuva sonuçları yükleniyor…</div></div></section>'+ 
+ '<section class="panel"><div class="panelHead"><div><h2>Policy Promotion Governance</h2><p>Forward süre, paired CI, rejim kapsamı, persistence, drawdown ve kaçırılan fırsat oranı</p></div></div><div class="warningBox">PROMOTION_REVIEW yalnız araştırma inceleme seviyesidir; policy otomatik aktive edilmez ve canlı işlem yetkisi vermez.</div><div id="policyPromotionBox33"><div class="loading">Promotion gate sonuçları yükleniyor…</div></div></section>';
 }
 function metric33(x){if(!x||!x.n)return '<span>n=0</span>';return '<span>n='+v33Esc(x.n)+' · hit %'+v33Esc(x.hit_rate_pct)+' · ort '+v33Esc(x.mean_excess_pct)+'% · med '+v33Esc(x.median_excess_pct)+'%</span>'}
 async function loadDecisionCalibration33(){
@@ -83,11 +84,19 @@ async function loadPolicyTournament33(){
   box.innerHTML='<div class="stats"><div class="stat"><span>Turnuva kararı</span><b class="'+(dec.action==='TOURNAMENT_REVIEW'?'amber':'up')+'">'+v33Esc(dec.action||'HOLD')+'</b><small>'+v33Esc(dec.reason||'—')+'</small></div><div class="stat"><span>Ufuk ağırlıkları</span><b>20 / 50 / 30</b><small>5g / 20g / 60g</small></div></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Policy</th><th>Durum</th><th>Mature ufuk</th><th>Supported ufuk</th><th>Composite</th><th>Dispersion</th><th>Ceza</th><th>Ufuk skorları</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="muted">'+v33Esc(d.policy||'')+'</p>';
  }catch(e){box.innerHTML='<div class="empty">'+v33Esc(e.message)+'</div>'}
 }
+async function loadPolicyPromotion33(){
+ const box=$('#policyPromotionBox33');if(!box)return;
+ try{
+  const d=await getJSON('/api/policy-promotion');
+  const rows=(d.rows||[]).map(x=>'<tr><td><b>'+v33Esc(x.policy_id)+'</b></td><td class="'+(x.status==='PROMOTION_REVIEW'?'amber':'up')+'"><b>'+v33Esc(x.status)+'</b></td><td>'+v33Esc(x.metrics?.forward_span_days??'—')+'</td><td>'+v33Esc(x.metrics?.settled_signals??'—')+'</td><td>'+v33Esc(x.metrics?.covered_regimes??'—')+'</td><td>'+v33Esc(x.metrics?.utility_max_drawdown_pct_points??'—')+'</td><td>'+v33Esc(x.metrics?.miss_rate_pct??'—')+'%</td><td>'+v33Esc((x.reasons||[]).join(' · ')||'—')+'</td></tr>').join('');
+  box.innerHTML='<div class="stats"><div class="stat"><span>Review adayı</span><b>'+v33Esc((d.review_candidates||[]).length)+'</b><small>forward-only</small></div><div class="stat"><span>Canlı işlem</span><b class="down">KAPALI</b><small>governance only</small></div></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Policy</th><th>Durum</th><th>Forward gün</th><th>Settle</th><th>Rejim</th><th>Utility DD</th><th>Miss %</th><th>Eksik gate</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="muted">'+v33Esc(d.policy||'')+'</p>';
+ }catch(e){box.innerHTML='<div class="empty">'+v33Esc(e.message)+'</div>'}
+}
 async function settleDecisions33(){
  const b=$('#settleDecisions33');if(!b)return;b.disabled=true;b.textContent='Güncelleniyor…';
  try{
   const r=await fetch('/api/experience/settle',{method:'POST'});if(!r.ok)throw new Error(r.status+' settle');
-  const d=await r.json();b.textContent=(d.updated||0)+' sonuç güncellendi';await loadDecisionCalibration33();await loadGateCalibration33();await loadMissedOpportunity33();await loadGateUtility33();await loadGateRegime33();await loadPolicyChallengers33();await loadPolicyTournament33();
+  const d=await r.json();b.textContent=(d.updated||0)+' sonuç güncellendi';await loadDecisionCalibration33();await loadGateCalibration33();await loadMissedOpportunity33();await loadGateUtility33();await loadGateRegime33();await loadPolicyChallengers33();await loadPolicyTournament33();await loadPolicyPromotion33();
  }catch(e){b.textContent='Hata: '+e.message}
  finally{setTimeout(()=>{b.disabled=false;b.textContent='Vadesi Dolanları Güncelle'},1800)}
 }
@@ -100,6 +109,6 @@ render=function(...args){
   els.content.innerHTML=decisionLearningShell33();
   $('#settleDecisions33').onclick=settleDecisions33;
   $('#gateHorizon33').onchange=()=>{loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();loadPolicyChallengers33();};
-  loadDecisionCalibration33();loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();loadPolicyChallengers33();loadPolicyTournament33();
+  loadDecisionCalibration33();loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();loadPolicyChallengers33();loadPolicyTournament33();loadPolicyPromotion33();
  }
 };
