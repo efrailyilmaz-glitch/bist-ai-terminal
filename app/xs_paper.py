@@ -10,8 +10,8 @@ from .market_data import yahoo_rows
 _LOCK=threading.RLock()
 
 def _db():
-    p=Path.home()/'.bist-ai-terminal'/'xs_paper.db'
-    p.parent.mkdir(parents=True,exist_ok=True);return p
+    from .runtime_paths import data_path
+    return data_path('xs_paper.db')
 
 def _conn():
     c=sqlite3.connect(_db())
