@@ -46,7 +46,7 @@ def run_once(config=None):
         out={'status':'PREFLIGHT_BLOCK','version':'116.0','run_hash':run_hash,'blockers':blockers,
              'preflight':{'data_trust':trust,'pit_universe':pit,'feature_governance':{'summary':feat.get('summary')},'research_integrity':integ},
              'live_execution':False,'policy':'Research factory preflight blocks before validation/paper creation. No stage can bypass integrity blockers.'}
-        with closing(_conn()) as c:c.execute('INSERT INTO factory_runs(run_hash,created_epoch,stage,status,config_json,result_json) VALUES(?,?,?,?,?,?)',
+        with closing(_conn()) as c, c:c.execute('INSERT INTO factory_runs(run_hash,created_epoch,stage,status,config_json,result_json) VALUES(?,?,?,?,?,?)',
             (run_hash,time.time(),'PREFLIGHT',out['status'],json.dumps(cfg,sort_keys=True),json.dumps(out,ensure_ascii=False,default=str)))
         return out
     args={
@@ -66,12 +66,12 @@ def run_once(config=None):
                       'research_integrity':{'status':integ.get('status')}},
          'research_loop':result,'live_execution':False,
          'policy':'Continuous research factory may validate and incubate paper challengers only. Production champion and broker/live execution remain outside its authority.'}
-    with closing(_conn()) as c:c.execute('INSERT INTO factory_runs(run_hash,created_epoch,stage,status,config_json,result_json) VALUES(?,?,?,?,?,?)',
+    with closing(_conn()) as c, c:c.execute('INSERT INTO factory_runs(run_hash,created_epoch,stage,status,config_json,result_json) VALUES(?,?,?,?,?,?)',
         (run_hash,time.time(),stage,str(out['status']),json.dumps(cfg,sort_keys=True),json.dumps(out,ensure_ascii=False,default=str)))
     return out
 
 def status(limit=50):
-    with closing(_conn()) as c:
+    with closing(_conn()) as c, c:
         c.row_factory=sqlite3.Row
         rows=[dict(x) for x in c.execute('SELECT id,run_hash,created_epoch,stage,status,config_json FROM factory_runs ORDER BY id DESC LIMIT ?',(max(1,min(int(limit),200)),)).fetchall()]
     return {'status':'OK','version':'116.0','runs':rows,'live_execution':False,
