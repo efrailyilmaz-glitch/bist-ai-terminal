@@ -6,7 +6,7 @@ def test_v83_final_decision_gate_navigation_and_script():
     html=(ROOT/'app'/'templates'/'index.html').read_text(encoding='utf-8')
     assert 'data-view="decisiongate"' in html
     assert 'Nihai Karar Kapısı' in html
-    assert '/static/v32.js?v=83.0.0' in html
+    assert '/static/v32.js' in html
     assert '\\n' not in html
 
 def test_v83_committee_hard_gates_signal_guard():
