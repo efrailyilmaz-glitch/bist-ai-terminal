@@ -83,6 +83,7 @@ from .robustness_lab import robustness_audit
 from .microstructure import microstructure_guard
 from .microstructure_feed import latest_microstructure
 from .trade_reality import trade_reality
+from .execution_reality_v2 import snapshot as execution_reality_v2_snapshot
 from .edge_catalog import CATALOG
 from fastapi import HTTPException
 from .opportunity_engine import smart_money_candidates
@@ -112,6 +113,10 @@ def index(): return (BASE/'templates/index.html').read_text(encoding='utf-8')
 @app.get('/api/trade-reality/{ticker}')
 def trade_reality_api(ticker:str,entry:float,stop:float,target:float,side:str='BUY',simulations:int=10000,seed:int=41,block_bars:int=3):
     return trade_reality(ticker,entry,stop,target,side=side,simulations=simulations,seed=seed,block_bars=block_bars)
+
+@app.get('/api/execution-reality-v2/{ticker}')
+def execution_reality_v2_api(ticker:str,notional:float=100000,side:str='BUY',base_slippage_bps:float=10):
+    return execution_reality_v2_snapshot(ticker,max(0,notional),side,max(0,min(base_slippage_bps,100)))
 
 @app.get('/api/microstructure/{ticker}')
 def microstructure_live_api(ticker:str):
