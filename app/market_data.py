@@ -19,7 +19,7 @@ _MTF_CACHE={}
 _DAILY_CACHE={}
 _DAILY_FLIGHTS={}
 _DAILY_LOCK=threading.Lock()
-_DAILY_DOWNLOADS=threading.BoundedSemaphore(2)
+_DAILY_DOWNLOADS=threading.BoundedSemaphore(3)
 _SCAN_METRICS={'requests':0,'requested_symbols':0,'score_cache_hits':0,'provider_symbols':0,'provider_batches':0,'total_ms':0.0,'last_ms':0.0}
 _HTTP=requests.Session()
 _HTTP.headers.update({'User-Agent':'Mozilla/5.0 BIST-AI-Terminal/5.1'})
@@ -179,7 +179,7 @@ def scan_codes(codes):
         with _LOCK:
             _SCAN_METRICS['provider_symbols']+=len(missing)
             _SCAN_METRICS['provider_batches']+=len(chunks)
-        with ThreadPoolExecutor(max_workers=min(2,len(chunks))) as ex:
+        with ThreadPoolExecutor(max_workers=min(3,len(chunks))) as ex:
             futures=[ex.submit(_scan_chunk,ch,br20,br60) for ch in chunks]
             for fut in as_completed(futures):
                 for row in fut.result():
@@ -206,8 +206,8 @@ def performance_snapshot():
         m['raw_cache_entries']=len(_RAW_CACHE)
         m['chart_cache_entries']=len(_CHART_CACHE)
     with _DAILY_LOCK:m['daily_cache_entries']=len(_DAILY_CACHE)
-    m['provider_chunk_size']=50;m['provider_download_concurrency']=2
-    return {'status':'OK','version':'121.0','metrics':m,
+    m['provider_chunk_size']=50;m['provider_download_concurrency']=3
+    return {'status':'OK','version':'128.0','metrics':m,
             'policy':'Performance telemetry only. Provider concurrency remains bounded; optimization cannot bypass data-quality or freshness guards.'}
 
 def _series(rows, values, digits=4):
