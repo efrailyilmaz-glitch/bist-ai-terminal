@@ -55,14 +55,22 @@ def submit(payload,idempotency_key):
             if old.get('payload_hash')!=digest:
                 return {'status':'BLOCKED','reason':'IDEMPOTENCY_KEY_PAYLOAD_CONFLICT',
                         'direct_live_execution_enabled':False}
+            if old.get('state')=='RESERVED':
+                return {'status':'DUPLICATE_PENDING','idempotency_key':key,
+                        'reason':'PRIOR_SANDBOX_SUBMISSION_RESERVED_REVIEW_REQUIRED',
+                        'direct_live_execution_enabled':False}
             return {'status':'DUPLICATE_REPLAY','idempotency_key':key,'result':old.get('result'),
                     'direct_live_execution_enabled':False}
         pre=order_preview(body)
+        ledger[key]={'payload_hash':digest,'created_epoch':time.time(),'state':'RESERVED','result':None}
+        _save(ledger)
         if pre.get('blocked'):
             result={'status':'BLOCKED','preview':pre}
         else:
             result=paper_order(body)
-        ledger[key]={'payload_hash':digest,'created_epoch':time.time(),'result':result}
+        ledger=_load()
+        ledger[key]={'payload_hash':digest,'created_epoch':ledger.get(key,{}).get('created_epoch',time.time()),
+                     'state':'FINAL','result':result}
         if len(ledger)>2000:
             keep=sorted(ledger.items(),key=lambda kv:float(kv[1].get('created_epoch') or 0),reverse=True)[:1500]
             ledger=dict(keep)
