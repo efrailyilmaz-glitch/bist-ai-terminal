@@ -3,15 +3,15 @@ Only explicitly VERIFIED+COMPLETE historical membership datasets may clear survi
 No heuristic/current-universe data is silently promoted to PIT truth.
 """
 from __future__ import annotations
+from contextlib import closing
 import hashlib,json,sqlite3,time
-from pathlib import Path
+from .runtime_db import connect as db_connect
+from .runtime_paths import data_path
 
-def _db():
-    p=Path.home()/'.bist-ai-terminal'/'pit_universe.db'
-    p.parent.mkdir(parents=True,exist_ok=True);return p
+def _db():return data_path('pit_universe.db')
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS datasets(
       id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, status TEXT, coverage_start TEXT, coverage_end TEXT,
       source_hash TEXT, created_epoch REAL, created_at TEXT
@@ -39,7 +39,7 @@ def register_dataset(rows,source,status='INCOMPLETE',coverage_start=None,coverag
     st='COMPLETE' if str(status).upper()=='COMPLETE' else 'INCOMPLETE'
     sh=source_hash or _hash(clean)
     now=time.time()
-    with _conn() as c:
+    with closing(_conn()) as c, c:
         cur=c.execute('INSERT INTO datasets(source,status,coverage_start,coverage_end,source_hash,created_epoch,created_at) VALUES(?,?,?,?,?,?,?)',
           (str(source or 'UNKNOWN'),st,coverage_start,coverage_end,sh,now,time.strftime('%d.%m.%Y %H:%M:%S')))
         did=cur.lastrowid
@@ -48,13 +48,13 @@ def register_dataset(rows,source,status='INCOMPLETE',coverage_start=None,coverag
     return {'status':'OK','dataset_id':did,'rows':len(clean),'dataset_status':st,'source_hash':sh}
 
 def active_dataset():
-    with _conn() as c:
+    with closing(_conn()) as c, c:
         c.row_factory=sqlite3.Row
         r=c.execute("SELECT * FROM datasets WHERE status='COMPLETE' ORDER BY id DESC LIMIT 1").fetchone()
     return dict(r) if r else None
 
 def dataset_status():
-    with _conn() as c:
+    with closing(_conn()) as c, c:
         c.row_factory=sqlite3.Row
         rows=[dict(x) for x in c.execute('SELECT * FROM datasets ORDER BY id DESC LIMIT 20').fetchall()]
     active=next((x for x in rows if x.get('status')=='COMPLETE'),None)
@@ -69,7 +69,7 @@ def training_universe(current_tickers,limit=120):
         return {'tickers':names,'integrity':{'status':'CAUTION','flags':['HISTORICAL_UNIVERSE_NOT_POINT_IN_TIME','CURRENT_UNIVERSE_PROXY'],
                 'historical_universe_point_in_time':False,'current_universe_proxy':True,'survivorship_bias_risk':True,
                 'dataset_id':None,'source':None}}
-    with _conn() as c:
+    with closing(_conn()) as c, c:
         names=[r[0] for r in c.execute('SELECT DISTINCT ticker FROM memberships WHERE dataset_id=? ORDER BY ticker',(int(active['id']),)).fetchall()]
     names=names[:max(5,min(int(limit),500))]
     return {'tickers':names,'integrity':{'status':'PASS','flags':[],'historical_universe_point_in_time':True,
@@ -82,7 +82,7 @@ def intervals(ticker,dataset_id=None):
     did=dataset_id or (active or {}).get('id')
     if not did:return []
     code=str(ticker).upper().replace('.IS','')
-    with _conn() as c:
+    with closing(_conn()) as c, c:
         rows=c.execute('SELECT start_date,end_date FROM memberships WHERE dataset_id=? AND ticker=? ORDER BY start_date',(int(did),code)).fetchall()
     return [{'start_date':a,'end_date':b} for a,b in rows]
 
