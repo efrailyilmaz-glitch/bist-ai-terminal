@@ -74,3 +74,49 @@ def gate_calibration(horizon=20,min_samples=8,simulations=3000):
 
 def decision_calibration():
     return {'5d':gate_calibration(5),'20d':gate_calibration(20),'60d':gate_calibration(60)}
+
+
+def missed_opportunity_audit(horizon=20,min_excess_pct=3.0,min_samples=3):
+    """Audit prospective NO_TRADE records that later materially outperformed the benchmark.
+    This is a false-negative diagnostic, not a claim that a trade should have been executed.
+    """
+    if horizon not in (5,20,60):raise ValueError('horizon must be 5, 20 or 60')
+    with ex._LOCK:
+        c=ex._conn();c.row_factory=__import__('sqlite3').Row
+        rows=[dict(x) for x in c.execute(f'''SELECT id,ticker,created_at,committee_score,regime,setup_json,ret_{horizon} AS ret,excess_{horizon} AS excess
+                                             FROM signals
+                                             WHERE committee_decision='NO_TRADE'
+                                               AND settled_{horizon}=1 AND excess_{horizon} IS NOT NULL
+                                             ORDER BY id DESC''').fetchall()]
+        c.close()
+    misses=[];by_gate={}
+    threshold=float(min_excess_pct)
+    for r in rows:
+        exv=float(r.get('excess') or 0)
+        if exv<threshold:continue
+        try:setup=json.loads(r.get('setup_json') or '{}')
+        except Exception:setup={}
+        failed=[g for g in (setup.get('committee_gates') or []) if g.get('hard') and not g.get('pass')]
+        vetoes=list(setup.get('vetoes') or [])
+        names=list(dict.fromkeys([str(g.get('name')) for g in failed if g.get('name')]+[str(x) for x in vetoes if x]))
+        item={'id':r['id'],'ticker':r['ticker'],'created_at':r.get('created_at'),'committee_score':r.get('committee_score'),
+              'regime':r.get('regime'),'return_pct':round(float(r.get('ret') or 0),3),'excess_pct':round(exv,3),
+              'failed_hard_gates':names}
+        misses.append(item)
+        for name in names:
+            z=by_gate.setdefault(name,{'gate':name,'misses':0,'excess_values':[],'tickers':[]})
+            z['misses']+=1;z['excess_values'].append(exv);z['tickers'].append(r['ticker'])
+    gates=[]
+    for z in by_gate.values():
+        vals=z.pop('excess_values')
+        z['mean_missed_excess_pct']=round(float(np.mean(vals)),3) if vals else None
+        z['max_missed_excess_pct']=round(float(np.max(vals)),3) if vals else None
+        z['unique_tickers']=len(set(z.pop('tickers')))
+        z['review']=z['misses']>=int(min_samples)
+        gates.append(z)
+    gates.sort(key=lambda x:(not x['review'],-x['misses'],-(x['mean_missed_excess_pct'] or 0),x['gate']))
+    return {'status':'OK','version':'85.0','horizon':horizon,'threshold_excess_pct':threshold,
+            'settled_no_trade':len(rows),'missed_opportunities':len(misses),
+            'miss_rate_pct':round(len(misses)/max(1,len(rows))*100,2),
+            'gate_summary':gates,'recent_misses':misses[:100],
+            'policy':'Forward false-negative audit only. A missed opportunity does not prove the veto was wrong; risk avoided by vetoes is analyzed separately and no gate is auto-disabled.'}
