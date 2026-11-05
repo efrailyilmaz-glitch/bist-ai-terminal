@@ -20,6 +20,7 @@ _DAILY_CACHE={}
 _DAILY_FLIGHTS={}
 _DAILY_LOCK=threading.Lock()
 _DAILY_DOWNLOADS=threading.BoundedSemaphore(2)
+_SCAN_METRICS={'requests':0,'requested_symbols':0,'score_cache_hits':0,'provider_symbols':0,'provider_batches':0,'total_ms':0.0,'last_ms':0.0}
 _HTTP=requests.Session()
 _HTTP.headers.update({'User-Agent':'Mozilla/5.0 BIST-AI-Terminal/5.1'})
 _HTTP.mount('https://',HTTPAdapter(pool_connections=24,pool_maxsize=24,max_retries=1))
@@ -151,8 +152,12 @@ def _scan_chunk(chunk,br20,br60):
     return rows
 
 def scan_codes(codes):
+    started=time.perf_counter()
     codes=list(dict.fromkeys([c.upper().replace('.IS','') for c in codes if c]))
     now=time.time()
+    with _LOCK:
+        _SCAN_METRICS['requests']+=1
+        _SCAN_METRICS['requested_symbols']+=len(codes)
     key=','.join(codes)
     with _LOCK:
         hit=_SCAN_CACHE.get(key)
@@ -163,13 +168,18 @@ def scan_codes(codes):
     with _LOCK:
         for code in codes:
             hit=_SCORE_CACHE.get(code)
-            if hit and now-hit[0]<600:result_map[code]=hit[1]
+            if hit and now-hit[0]<600:
+                result_map[code]=hit[1]
+                _SCAN_METRICS['score_cache_hits']+=1
             else:missing.append(code)
 
     if missing:
         br20,br60=_benchmark_returns()
-        chunks=[missing[i:i+25] for i in range(0,len(missing),25)]
-        with ThreadPoolExecutor(max_workers=min(3,len(chunks))) as ex:
+        chunks=[missing[i:i+50] for i in range(0,len(missing),50)]
+        with _LOCK:
+            _SCAN_METRICS['provider_symbols']+=len(missing)
+            _SCAN_METRICS['provider_batches']+=len(chunks)
+        with ThreadPoolExecutor(max_workers=min(2,len(chunks))) as ex:
             futures=[ex.submit(_scan_chunk,ch,br20,br60) for ch in chunks]
             for fut in as_completed(futures):
                 for row in fut.result():
@@ -177,8 +187,28 @@ def scan_codes(codes):
                     with _LOCK:_SCORE_CACHE[row['ticker']]=(time.time(),row)
 
     results=[result_map[c] for c in codes if c in result_map]
-    with _LOCK:_SCAN_CACHE[key]=(time.time(),results)
+    elapsed=(time.perf_counter()-started)*1000
+    with _LOCK:
+        _SCAN_CACHE[key]=(time.time(),results)
+        _SCAN_METRICS['last_ms']=round(elapsed,2)
+        _SCAN_METRICS['total_ms']+=elapsed
     return results
+
+def performance_snapshot():
+    with _LOCK:
+        m=dict(_SCAN_METRICS)
+        req=max(1,int(m['requests']))
+        requested=max(1,int(m['requested_symbols']))
+        m['avg_request_ms']=round(float(m['total_ms'])/req,2)
+        m['score_cache_hit_pct']=round(float(m['score_cache_hits'])/requested*100,2)
+        m['scan_cache_entries']=len(_SCAN_CACHE)
+        m['score_cache_entries']=len(_SCORE_CACHE)
+        m['raw_cache_entries']=len(_RAW_CACHE)
+        m['chart_cache_entries']=len(_CHART_CACHE)
+    with _DAILY_LOCK:m['daily_cache_entries']=len(_DAILY_CACHE)
+    m['provider_chunk_size']=50;m['provider_download_concurrency']=2
+    return {'status':'OK','version':'121.0','metrics':m,
+            'policy':'Performance telemetry only. Provider concurrency remains bounded; optimization cannot bypass data-quality or freshness guards.'}
 
 def _series(rows, values, digits=4):
     out=[]
