@@ -34,11 +34,20 @@ async function loadGateCalibration33(){
     '<p class="muted">'+v33Esc(d.policy||'')+'</p>';
  }catch(e){box.innerHTML='<div class="empty">'+v33Esc(e.message)+'</div>'}
 }
+async function loadMissedOpportunity33(){
+ const box=$('#missedOpportunityBox33'),sel=$('#gateHorizon33');if(!box||!sel)return;
+ try{
+  const d=await getJSON('/api/decision-calibration/missed-opportunities?horizon='+encodeURIComponent(sel.value)+'&min_excess_pct=3&min_samples=3');
+  const gates=(d.gate_summary||[]).map(x=>'<tr><td><b>'+v33Esc(x.gate)+'</b></td><td>'+v33Esc(x.misses)+'</td><td>'+v33Esc(x.unique_tickers)+'</td><td>'+v33Esc(x.mean_missed_excess_pct??'—')+'%</td><td>'+v33Esc(x.max_missed_excess_pct??'—')+'%</td><td class="'+(x.review?'down':'amber')+'">'+(x.review?'İNCELE':'İZLE')+'</td></tr>').join('');
+  const recent=(d.recent_misses||[]).slice(0,15).map(x=>'<tr><td><b>'+v33Esc(x.ticker)+'</b></td><td>'+v33Esc(x.created_at||'—')+'</td><td>'+v33Esc(x.excess_pct)+'%</td><td>'+v33Esc((x.failed_hard_gates||[]).join(' · ')||'—')+'</td></tr>').join('');
+  box.innerHTML='<div class="stats"><div class="stat"><span>NO_TRADE settle</span><b>'+v33Esc(d.settled_no_trade??0)+'</b><small>'+v33Esc(d.horizon)+' günlük</small></div><div class="stat"><span>Kaçırılan fırsat</span><b>'+v33Esc(d.missed_opportunities??0)+'</b><small>≥ '+v33Esc(d.threshold_excess_pct)+'% excess</small></div><div class="stat"><span>Kaçırma oranı</span><b>'+v33Esc(d.miss_rate_pct??0)+'%</b><small>tanısal ölçüm</small></div></div><h3>Gate kümeleri</h3><div class="tableWrap"><table class="stockTable"><thead><tr><th>Gate</th><th>Miss</th><th>Hisse</th><th>Ort. excess</th><th>Max excess</th><th>Durum</th></tr></thead><tbody>'+gates+'</tbody></table></div><h3>Son örnekler</h3><div class="tableWrap"><table class="stockTable"><thead><tr><th>Hisse</th><th>Karar zamanı</th><th>Excess</th><th>Başarısız hard gate</th></tr></thead><tbody>'+recent+'</tbody></table></div><p class="muted">'+v33Esc(d.policy||'')+'</p>';
+ }catch(e){box.innerHTML='<div class="empty">'+v33Esc(e.message)+'</div>'}
+}
 async function settleDecisions33(){
  const b=$('#settleDecisions33');if(!b)return;b.disabled=true;b.textContent='Güncelleniyor…';
  try{
   const r=await fetch('/api/experience/settle',{method:'POST'});if(!r.ok)throw new Error(r.status+' settle');
-  const d=await r.json();b.textContent=(d.updated||0)+' sonuç güncellendi';await loadDecisionCalibration33();await loadGateCalibration33();
+  const d=await r.json();b.textContent=(d.updated||0)+' sonuç güncellendi';await loadDecisionCalibration33();await loadGateCalibration33();await loadMissedOpportunity33();
  }catch(e){b.textContent='Hata: '+e.message}
  finally{setTimeout(()=>{b.disabled=false;b.textContent='Vadesi Dolanları Güncelle'},1800)}
 }
@@ -50,7 +59,7 @@ render=function(...args){
   els.subtitle.textContent='Prospektif kararların gerçek forward sonuçlarıyla doğrulanması';
   els.content.innerHTML=decisionLearningShell33();
   $('#settleDecisions33').onclick=settleDecisions33;
-  $('#gateHorizon33').onchange=loadGateCalibration33;
-  loadDecisionCalibration33();loadGateCalibration33();
+  $('#gateHorizon33').onchange=()=>{loadGateCalibration33();loadMissedOpportunity33();};
+  loadDecisionCalibration33();loadGateCalibration33();loadMissedOpportunity33();
  }
 };
