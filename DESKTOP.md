@@ -1,12 +1,12 @@
-# BIST AI Terminal Desktop 125.0
+# BIST AI Terminal Desktop 126.0
 
 Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electron içinde açılır; FastAPI/Python motoru uygulamanın kendi içinde paketlidir ve yalnızca `127.0.0.1` üzerinde çalışır. Render kullanılmaz.
 
 ## Üretilen kurulum dosyaları
 
-- Windows 64-bit: `BIST-AI-Terminal-Setup-125.0.0-x64.exe`
-- macOS Intel: `BIST-AI-Terminal-125.0.0-x64.dmg`
-- macOS Apple Silicon: `BIST-AI-Terminal-125.0.0-arm64.dmg`
+- Windows 64-bit: `BIST-AI-Terminal-Setup-126.0.0-x64.exe`
+- macOS Intel: `BIST-AI-Terminal-126.0.0-x64.dmg`
+- macOS Apple Silicon: `BIST-AI-Terminal-126.0.0-arm64.dmg`
 
 ## Kurulum davranışı
 
@@ -95,3 +95,8 @@ Masaüstü yerel adresi yeniden başlatmalarda korunur; çizimler ve grafik sim�
 ## V123 paketleme doğrulaması
 
 Installer üretiminden önce sürüm eşleşmesi, Electron sandbox ayarları, loopback backend, icon kaynakları ve paketlenmiş Python backend yolu doğrulanır. Her platform build'i `BUILD-<platform>-<arch>.json` manifesti üretir; manifest installer SHA-256 değerini, dosya boyutunu, Git commit'ini, platform ve mimariyi kaydeder. Release ayrıca `SHA256SUMS.txt` yayınlar.
+
+
+## Controlled Live Readiness
+
+V126 canlı emir yetkisi açmaz. Forward evidence, research integrity, desktop/runtime, broker sandbox, lisanslı gerçek zamanlı veri ve doğrulanmış resmi broker sözleşmesi ayrı hard gate olarak raporlanır. Tüm gate'ler geçse bile sonuç yalnız manuel entegrasyon/güvenlik incelemesine hazır olunduğunu belirtir.
