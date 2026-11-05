@@ -41,7 +41,7 @@ def register(meta:dict):
     model_fp=_h({'name':meta.get('model_name'),'version':meta.get('model_version'),'seed':meta.get('seed'),
                  'features':feature_hash,'data':data_fp,'deps':dep_fp,'params':meta.get('params')})
     now=time.time()
-    with closing(_conn()) as c:
+    with closing(_conn()) as c, c:
         cur=c.execute('''INSERT INTO artifacts(created_epoch,created_at,model_name,model_version,train_cutoff,as_of,seed,
           feature_schema_hash,data_fingerprint,dependency_fingerprint,model_fingerprint,metadata_json)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
@@ -53,13 +53,13 @@ def register(meta:dict):
             'data_fingerprint':data_fp,'dependency_fingerprint':dep_fp}
 
 def history(limit=100):
-    with closing(_conn()) as c:
+    with closing(_conn()) as c, c:
         c.row_factory=sqlite3.Row
         rows=[dict(x) for x in c.execute('SELECT * FROM artifacts ORDER BY id DESC LIMIT ?',(max(1,min(int(limit),1000)),)).fetchall()]
     return {'status':'OK','rows':rows}
 
 def get(registry_id:int):
-    with closing(_conn()) as c:
+    with closing(_conn()) as c, c:
         c.row_factory=sqlite3.Row
         r=c.execute('SELECT * FROM artifacts WHERE id=?',(int(registry_id),)).fetchone()
     return {'status':'OK','row':dict(r)} if r else {'status':'NOT_FOUND'}
