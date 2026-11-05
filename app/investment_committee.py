@@ -135,4 +135,6 @@ def investment_committee(ticker:str,portfolio_value=1_000_000,risk_budget_pct=.7
                 'liquidity_cap_5pct_adv':round(liquidity_cap,2),'research_position_value':round(research_position,2),'research_position_pct':round(position_pct,2),
                 'note':'Research sizing proxy only; combines stop-distance risk budget, 5% ADV liquidity cap, max-position cap and quarter-Kelly cap.'
             },'invalidation':invalidation,'opportunity':opp,'alpha_validation':alpha,'ensemble':ensemble,'premium':premium,'pro_technical':protech,'forensics':forensic,
-            'signal_guard':guard,'trap_defense':trap,'point_in_time':pit,'kap_point_in_time':kap_pit,'note':'Committee can veto strong signals, including signal-integrity, deception-risk or point-in-time violations. This is a research decision framework, not an instruction to transact.'}
+            'signal_guard':guard,'trap_defense':trap,'point_in_time':pit,'kap_point_in_time':kap_pit,
+            'decision_inputs':{'liquidity':liq,'risk':risk,'anomaly':anom,'guard_score':guard_score,'guard_status':guard.get('status'),'trap_score':trap_score,'trap_status':trap.get('status')},
+            'note':'Committee can veto strong signals, including signal-integrity, deception-risk or point-in-time violations. This is a research decision framework, not an instruction to transact.'}
