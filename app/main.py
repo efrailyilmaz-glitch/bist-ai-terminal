@@ -64,6 +64,7 @@ from .regime_robustness import evaluate as regime_robustness_evaluate
 from .data_quality_guard import evaluate_history as data_quality_history_evaluate
 from .pit_universe import dataset_status as pit_universe_status, intervals as pit_universe_intervals
 from .factor_neutralization import evaluate_history as factor_neutralization_history
+from .sector_factor_neutral_v2 import analyze as sector_factor_neutral_v2
 from .xs_capacity import assess as xs_capacity_assess
 from .capacity_scale_analysis import analyze as capacity_scale_analyze, portfolio as capacity_scale_portfolio
 from .bist_execution_rules import official_policy as bist_execution_policy
@@ -144,6 +145,10 @@ def universe(force: bool=False):
 @app.get('/api/cross-sectional-ranking-v2')
 def cross_sectional_ranking_v2_api(limit:int=600,min_coverage_pct:float=80.0):
     return cross_sectional_rank_v2(max(20,min(int(limit),700)),max(50,min(float(min_coverage_pct),100)))
+
+@app.get('/api/sector-factor-neutral-v2')
+def sector_factor_neutral_v2_api(limit:int=150):
+    return sector_factor_neutral_v2(max(30,min(int(limit),300)))
 
 @app.get('/api/scan')
 def scan(offset:int=0,limit:int=60,codes:str|None=None):
