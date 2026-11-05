@@ -49,6 +49,7 @@ from .decision_error_cost import analyze as decision_error_cost_analyze
 from .confidence_calibration import analyze as confidence_calibration_analyze
 from .regime_adaptive_policy import analyze as regime_adaptive_policy_analyze
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
+from .feature_governance_v3 import report as feature_governance_v3_report, register as feature_governance_v3_register, registry as feature_governance_v3_registry
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .model_zoo_v2 import catalog as model_zoo_v2_catalog, adapter_plan as model_zoo_v2_plan
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
@@ -686,6 +687,19 @@ def regime_adaptive_policy_api(horizon:int=20,min_regime_samples:int=10,min_sele
 @app.get('/api/feature-governance')
 def feature_governance_api(force:bool=False):
     return feature_governance_report(force=force)
+
+@app.get('/api/feature-governance-v3')
+def feature_governance_v3_api(horizon:int=20,min_forward_n:int=30):
+    h=horizon if horizon in (5,20,60) else 20
+    return feature_governance_v3_report(h,max(10,min(int(min_forward_n),500)))
+
+@app.get('/api/feature-governance-v3/registry')
+def feature_governance_v3_registry_api():
+    return feature_governance_v3_registry()
+
+@app.post('/api/feature-governance-v3/register')
+def feature_governance_v3_register_api(payload:dict=Body(...)):
+    return feature_governance_v3_register(payload)
 
 @app.get('/api/feature-governance/ab')
 def feature_governance_ab_api(horizon:int=20,threshold:int=78,min_samples:int=20):
