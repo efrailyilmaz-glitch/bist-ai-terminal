@@ -34,6 +34,7 @@ from .decision_attribution import attribution as decision_attribution, feature_r
 from .decision_calibration import gate_calibration as decision_gate_calibration, decision_calibration as decision_gate_report, missed_opportunity_audit, gate_net_utility, gate_regime_utility
 from .decision_policy_challenger import report as decision_policy_challenger_report
 from .decision_policy_tournament import tournament as decision_policy_tournament
+from .policy_promotion_governance import evaluate as policy_promotion_evaluate, report as policy_promotion_report
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
@@ -567,6 +568,15 @@ def decision_policy_challengers_api(horizon:int=20,min_settled:int=12):
 @app.get('/api/decision-policy-tournament')
 def decision_policy_tournament_api(min_settled:int=12):
     return decision_policy_tournament(max(5,min(int(min_settled),200)))
+
+@app.get('/api/policy-promotion/{policy_id}')
+def policy_promotion_api(policy_id:str,horizon:int=20):
+    h=horizon if horizon in (5,20,60) else 20
+    return policy_promotion_evaluate(policy_id,horizon=h)
+
+@app.get('/api/policy-promotion')
+def policy_promotion_report_api():
+    return policy_promotion_report()
 
 @app.get('/api/feature-governance')
 def feature_governance_api(force:bool=False):
