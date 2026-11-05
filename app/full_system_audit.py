@@ -17,7 +17,7 @@ CRITICAL_MODULES=[
  'dynamic_position_sizing.py','portfolio_crash_scenarios.py','execution_reality_v2.py',
  'capacity_scale_analysis.py','data_provider_trust_v2.py','kap_intelligence_v2.py',
  'fundamental_price_fusion.py','cross_sectional_ranking_v2.py','sector_factor_neutral_v2.py',
- 'model_zoo_v2.py','feature_governance_v3.py','research_factory_v2.py','research_integrity_master.py'
+ 'model_zoo_v2.py','feature_governance_v3.py','research_factory_v2.py','research_integrity_master.py','live_data_adapters.py','broker_sandbox.py','controlled_live_readiness.py'
 ]
 
 def _python_syntax():
