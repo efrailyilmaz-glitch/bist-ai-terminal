@@ -22,6 +22,7 @@ from .premium_engine import fair_value_health, volume_profile
 from .alpha_engine import validate_alpha, ensemble_signal, sector_rotation, event_study
 from .institutional_connectors import institutional_provider_status
 from .investment_committee import investment_committee
+from .unified_decision_engine import decide as unified_decision
 from .pro_tools import technical_pro, forensic_models, peer_comparison, compare_symbols
 from .pro_alert_engine import start_alert_engine, add_rule, delete_rule, list_rules, events as pro_alert_events, evaluate_once as evaluate_pro_alerts
 from .market_intelligence import seasonality, rolling_risk, relative_rotation, watchlist_heatmap, market_regime_dashboard
@@ -222,6 +223,10 @@ def eventstudy(ticker:str,limit:int=25):
 @app.get('/api/committee/{ticker}')
 def committee(ticker:str,portfolio_value:float=1000000,risk_budget_pct:float=.75,max_position_pct:float=12.0):
     return investment_committee(ticker,portfolio_value=max(0,portfolio_value),risk_budget_pct=max(.05,min(risk_budget_pct,5)),max_position_pct=max(1,min(max_position_pct,50)))
+
+@app.get('/api/unified-decision/{ticker}')
+def unified_decision_api(ticker:str,portfolio_value:float=1000000):
+    return unified_decision(ticker,portfolio_value=max(0,portfolio_value))
 
 @app.get('/api/pro-technical/{ticker}')
 def pro_technical(ticker:str):
