@@ -90,7 +90,7 @@ def fill(a,o,reference,at,quantity=None):
            'reference_price':reference,'fee':round(fee,6),'pnl':None if pnl is None else round(pnl,6),
            'reason':o['reason'],'mode':'PAPER','source':'DELAYED_15M_CLOSED_BAR',
            'effective_slippage_bps':round(eff_slip,2),'execution_diagnostics':o.get('execution_diagnostics'),
-           'microstructure':o.get('microstructure'),'market_rules':o.get('market_rules'),'trade_reality':o.get('trade_reality'),
+           'microstructure':o.get('microstructure'),'market_rules':o.get('market_rules'),'trade_reality':o.get('trade_reality'),'execution_reality_v2':o.get('execution_reality_v2'),
            'risk_passport':a.get('positions',{}).get(code,{}).get('risk_passport') if side in {'BUY','SHORT'} else None,
            'partial_fill':is_partial,'remaining_quantity':remaining if side in {'BUY','SHORT'} else 0}
     stats=a.get('arena_stats')
@@ -222,6 +222,10 @@ def process_quote(a,code,q,now,reality_fn=None):
             qty=math.floor(qty*.75)
     ed=execution_diagnostics(q,qty,px,cfg['slippage_bps'],o['side']) if qty>0 else ed
     if ed.get('status')=='BLOCK':qty=0
+    from .execution_reality_v2 import evaluate_quote as execution_reality_v2
+    er2=execution_reality_v2(q,qty,px,o['side'],cfg['slippage_bps'],base_price=q.get('previous_close'),microstructure_result=mg,trade_reality_result=reality)
+    o['execution_reality_v2']=er2
+    if er2.get('status')=='BLOCK':qty=0
     if existing or a.get('quote_errors') or distance>=px*.45 or len(a['positions'])>=cfg['max_positions'] or qty<1 or (o['side']=='SHORT' and not cfg['allow_short']):
         a['pending'].pop(code,None);event(a,'REJECTED',code,'Pozisyon/nakit/likidite/execution/mikro-yapı/Trade Reality sınırı veya eksik güncel fiyat.',execution_diagnostics=ed,microstructure=micro,trade_reality=reality);return
     o['microstructure']=micro;o['market_rules']=market_guard;o['trade_reality']=reality;o['stop_distance']=distance;o['trail_distance']=o['atr']*float(o['trail_atr']) if isinstance(o.get('trail_atr'),(int,float)) and o.get('trail_atr')>0 else None
