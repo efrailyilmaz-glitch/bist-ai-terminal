@@ -29,6 +29,7 @@ from .broker_bridge import broker_status, order_preview, paper_order, orders as 
 from .background_supervisor import start_background_supervisor, status as background_status, alerts as background_alerts
 from .experience_engine import history as experience_history, calibration as experience_calibration, settle_due as experience_settle, verify_ledger
 from .smart_money_engine import smart_money_snapshot, smart_money_radar
+from .smart_money_trap_fusion import snapshot as smart_money_trap_snapshot, radar as smart_money_trap_radar
 from .decision_levels import decision_levels
 from .decision_attribution import attribution as decision_attribution, feature_report as decision_feature_report
 from .decision_calibration import gate_calibration as decision_gate_calibration, decision_calibration as decision_gate_report, missed_opportunity_audit, gate_net_utility, gate_regime_utility
@@ -347,6 +348,14 @@ def smart_money(ticker:str,calibrate:bool=True):
 @app.get('/api/smart-money-radar')
 def smart_money_radar_api(limit:int=25,universe_limit:int=160):
     return smart_money_radar(limit=limit,universe_limit=universe_limit)
+
+@app.get('/api/smart-money-trap/{ticker}')
+def smart_money_trap_api(ticker:str):
+    return smart_money_trap_snapshot(ticker)
+
+@app.get('/api/smart-money-trap-radar')
+def smart_money_trap_radar_api(limit:int=20):
+    return smart_money_trap_radar(max(5,min(int(limit),50)))
 
 @app.get('/api/smart-money-candidates')
 def smart_money_candidates_api(limit:int=40):
