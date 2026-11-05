@@ -34,7 +34,7 @@ function stockSwitchChart(ticker){
  // Invalidate old responses and cancel pending simulation work before changing symbols.
  if(typeof chartRequestId!=='undefined')chartRequestId++;
  if(typeof disposeChartWorkspace==='function')disposeChartWorkspace();
- state.current=ticker;render();return true;
+ if(typeof setActiveTicker==='function')setActiveTicker(ticker,false);else state.current=ticker;render();return true;
 }
 function stockChartReady(chart,candles,ticker){
  stockChartContext={chart,ticker,count:candles.length};
