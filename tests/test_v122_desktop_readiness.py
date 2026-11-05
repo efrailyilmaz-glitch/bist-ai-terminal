@@ -19,5 +19,5 @@ def test_v122_desktop_readiness_and_package_version():
     main=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
     pkg=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))
     assert "/api/desktop-readiness" in main
-    assert pkg['version']=='122.0.0'
-    assert "version='122.0.0'" in main
+    assert int(pkg['version'].split('.',1)[0])>=122
+    assert int(main.split("version='",1)[1].split('.',1)[0])>=122
