@@ -5,6 +5,7 @@ Prospective only. No broker calls and no live order path.
 from __future__ import annotations
 import hashlib,json,math,sqlite3,threading,time
 from pathlib import Path
+from .runtime_db import connect as db_connect
 from .market_data import yahoo_rows
 
 _LOCK=threading.RLock()
@@ -14,7 +15,7 @@ def _db():
     return data_path('xs_paper.db')
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS portfolios(
       id INTEGER PRIMARY KEY AUTOINCREMENT, created_epoch REAL, created_at TEXT, name TEXT,
       capital REAL, benchmark TEXT, status TEXT, last_equity REAL, peak_equity REAL,
