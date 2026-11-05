@@ -16,6 +16,7 @@ from .market_internals import market_internals
 from .catalysts import catalyst_calendar
 from .model_governance import model_card
 from .portfolio_analytics import analyze_portfolio, compare_allocations, optimize_alpha_portfolio
+from .portfolio_decision_intelligence import analyze as portfolio_decision_intelligence
 from .analyst_engine import trusted_research
 from .opportunity_engine import start_radar, trigger_refresh, radar_snapshot, alerts_snapshot
 from .premium_engine import fair_value_health, volume_profile
@@ -551,6 +552,11 @@ def portfolio_optimize(codes:str,risk_aversion:float=5.0,turnover_penalty:float=
 def portfolio_allocations(codes:str):
     selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
     return compare_allocations(selected)
+
+@app.get('/api/portfolio-decision-intelligence')
+def portfolio_decision_intelligence_api(codes:str,candidate:str|None=None,method:str='equal',portfolio_value:float=1000000):
+    selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
+    return portfolio_decision_intelligence(selected,candidate=candidate,method=method,portfolio_value=max(0,portfolio_value))
 
 @app.get('/api/evidence-ledger/verify')
 def evidence_ledger_verify_api():
