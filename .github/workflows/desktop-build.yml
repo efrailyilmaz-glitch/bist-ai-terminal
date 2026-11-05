@@ -63,6 +63,9 @@ jobs:
       - name: Generate application icons
         run: python scripts/generate_icons.py
 
+      - name: Verify desktop packaging inputs
+        run: python scripts/verify_desktop_packaging.py
+
       - name: Install Electron dependencies
         run: npm install
 
@@ -212,12 +215,16 @@ jobs:
         if: matrix.platform == 'mac' && matrix.arch == 'arm64'
         run: npm run dist:mac:arm64
 
+      - name: Write build manifest
+        run: python scripts/write_build_manifest.py --platform "${{ matrix.platform }}" --arch "${{ matrix.arch }}" --output "desktop-dist/BUILD-${{ matrix.platform }}-${{ matrix.arch }}.json"
+
       - uses: actions/upload-artifact@v4
         with:
           name: bist-ai-${{ matrix.artifact }}
           path: |
             desktop-dist/*.exe
             desktop-dist/*.dmg
+            desktop-dist/BUILD-*.json
           if-no-files-found: error
 
   release:
@@ -238,7 +245,7 @@ jobs:
             test "$CURRENT" = "$GITHUB_SHA" || { echo "Obsolete build; refusing to publish."; exit 1; }
           fi
           cd release-artifacts
-          sha256sum *.exe *.dmg > SHA256SUMS.txt
+          sha256sum *.exe *.dmg BUILD-*.json > SHA256SUMS.txt
           printf '%s\n' "${GITHUB_SHA}" > BUILD_COMMIT.txt
 
       - name: Publish desktop installers
