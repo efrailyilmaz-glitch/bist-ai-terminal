@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
+const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),activeTicker:$('#activeTickerSearch'),activeTickerOptions:$('#activeTickerOptions'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
 const CURRENT_TICKER_KEY='bist-ai-current-ticker';
 const savedTicker=(()=>{try{const v=String(localStorage.getItem(CURRENT_TICKER_KEY)||'ASELS').toUpperCase().replace(/\.IS$/,'');return /^[A-Z0-9]{2,12}$/.test(v)?v:'ASELS'}catch(e){return 'ASELS'}})();
 const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:savedTicker,chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true,wavetrend:false,squeeze:false,chandelier:false,utbot:false,chop:false}};
@@ -19,6 +19,29 @@ function persistScanCache(){
     localStorage.setItem(SCAN_CACHE_KEY,JSON.stringify({ts:Date.now(),scanned:state.scanned,rows:rows}));
   }catch(e){}
 }
+function resolveActiveTicker(value){
+  const q=String(value||'').trim().toUpperCase().replace(/\.IS$/,'');
+  if(!q)return null;
+  return state.universe.find(x=>x.ticker===q)||state.universe.find(x=>x.ticker.startsWith(q))||state.universe.find(x=>(x.name||'').toUpperCase().includes(q))||null;
+}
+function refreshActiveTickerUI(){
+  if(els.activeTicker)els.activeTicker.value=state.current||'';
+  if(els.activeTickerOptions&&!els.activeTickerOptions.dataset.ready){
+    els.activeTickerOptions.innerHTML=state.universe.map(x=>`<option value="${x.ticker}">${String(x.name||'').replace(/[&<>"]/g,'')}</option>`).join('');
+    els.activeTickerOptions.dataset.ready='1';
+  }
+}
+function setActiveTicker(ticker,rerender=true){
+  const code=String(ticker||'').trim().toUpperCase().replace(/\.IS$/,'');
+  if(!/^[A-Z0-9]{2,12}$/.test(code))return false;
+  if(state.universe.length&&!state.universe.some(x=>x.ticker===code))return false;
+  state.current=code;
+  try{localStorage.setItem(CURRENT_TICKER_KEY,code)}catch(e){}
+  refreshActiveTickerUI();
+  if(rerender)render();
+  return true;
+}
+window.setActiveTicker=setActiveTicker;
 
 const fmt=(n,d=2)=>Number(n||0).toLocaleString('tr-TR',{maximumFractionDigits:d,minimumFractionDigits:0});
 const pct=n=>`${n>=0?'+':''}${fmt(n,2)}%`; const cls=n=>Number(n)>=0?'up':'down';
@@ -51,6 +74,7 @@ async function init(){
     state.universe=u.rows||[]; state.total=u.count||state.universe.length; state.market=m||{};
     state.universe.forEach(x=>state.meta.set(x.ticker,x));
     if(!state.universe.some(x=>x.ticker===state.current)&&state.universe.length){state.current=state.universe[0].ticker;try{localStorage.setItem(CURRENT_TICKER_KEY,state.current)}catch(e){}}
+    refreshActiveTickerUI();
     const restored=restoreScanCache();
     els.systemMode.textContent=`V${h.version||'17.1'} · ${u.source||'UNIVERSE'}`;
     els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
@@ -170,7 +194,7 @@ function portfolioView(){
   const sum=raw.reduce((a,b)=>a+b,0)||1;
   return `<div class="panel"><div class="panelHead"><div><h2>Model Portföy</h2><p>Alpha skoru + risk azaltımı ile oluşturulan örnek nicel araştırma sepeti; kişiye özel yatırım tavsiyesi değildir.</p></div><span class="pill">QUANT BASKET</span></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Kod</th><th>Şirket</th><th>Model ağırlık</th><th>Alpha</th><th>Kısa</th><th>Uzun</th><th>Risk</th><th>Smart Money</th></tr></thead><tbody>${rows.map((r,i)=>{const m=state.meta.get(r.ticker)||{};const w=raw[i]/sum*100;return `<tr onclick="openStock('${r.ticker}')"><td><strong>${r.ticker}</strong></td><td>${m.name||''}</td><td>%${fmt(w,1)}</td><td>${r.alpha_score||0}</td><td>${r.short_score}</td><td>${r.long_score}</td><td>${r.risk}</td><td>${r.smart_money_score||0}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
-async function openStock(t){state.current=t;try{localStorage.setItem(CURRENT_TICKER_KEY,state.current)}catch(e){}state.view='detail';$$('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view==='detail'));render();}
+async function openStock(t){setActiveTicker(t,false);state.view='detail';$$('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view==='detail'));render();}
 function indicatorTone(label,value){
   if(value==null)return '';
   if(label==='RSI') return value>=70?'amber':value<=30?'down':'up';
@@ -405,6 +429,12 @@ function render(){
 function bindTable(){const s=$('#tableSearch'),sort=$('#tableSort'); if(s)s.oninput=e=>{els.search.value=e.target.value;render()};if(sort)sort.onchange=e=>{const q=(els.search.value||'').trim().toUpperCase();const rows=state.universe.filter(x=>!q||x.ticker.includes(q)||(x.name||'').toUpperCase().includes(q));$('#allBody').innerHTML=stockRows(rows,e.target.value)}}
 $$('.nav').forEach(b=>b.onclick=()=>{$$('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.view=b.dataset.view;render()});
 els.scanBtn.onclick=()=>scanAll(true);
+if(els.activeTicker){
+  const applyActive=()=>{const m=resolveActiveTicker(els.activeTicker.value);if(m){setActiveTicker(m.ticker,true)}else{els.activeTicker.value=state.current||''}};
+  els.activeTicker.onchange=applyActive;
+  els.activeTicker.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();applyActive()}};
+  els.activeTicker.onfocus=()=>els.activeTicker.select();
+}
 els.search.oninput=e=>{if(state.view==='all'){render();return;}const q=e.target.value.trim().toUpperCase();if(q.length>=2){const m=state.universe.find(x=>x.ticker===q)||state.universe.find(x=>x.ticker.startsWith(q));if(m)openStock(m.ticker)}};
 setInterval(()=>{if(!state.scanning&&['overview','short','long','portfolio'].includes(state.view))render(false);},60000);
 window.openStock=openStock; init();
