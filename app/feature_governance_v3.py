@@ -7,6 +7,7 @@ from __future__ import annotations
 import json,sqlite3,time,math
 from pathlib import Path
 from collections import defaultdict
+from .runtime_db import connect as db_connect
 from . import experience_engine as ex
 from .decision_attribution import _feature_map, attribution
 from .feature_governance import governance_report as legacy_governance
@@ -17,7 +18,7 @@ def _db():
     p.parent.mkdir(parents=True,exist_ok=True);return p
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS feature_registry(
       feature TEXT PRIMARY KEY, source TEXT, version TEXT, owner TEXT,
       point_in_time INTEGER, future_derived INTEGER, causality_status TEXT,
