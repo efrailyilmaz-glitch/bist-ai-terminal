@@ -13,7 +13,7 @@ _LOCK=threading.RLock();_BUSY=set();_THREAD=None;_RISK_THREAD=None
 def now_tr():return datetime.now(TR)
 def stamp():return now_tr().isoformat()
 def fresh(capital=1_000_000.):
-    return {'version':1,'strategy':'CLOSED_DAILY_TREND_V1','capital':capital,'cash':capital,'realized':0.,'borrow_cost':0.,'enabled':False,'config':dict(DEFAULTS),'positions':{},'pending':{},'quotes':{},'orders':[],'decisions':[],'curve':[],'scan':{'cursor':0,'rows':{},'codes':[],'coverage_pct':0.},'last_cycle':None,'error':None,'risk_halt':None,'day':None,'day_equity':capital,'peak':capital,'last_equity':capital,'created_at':stamp()}
+    return {'version':2,'strategy':'UNIFIED_PAPER_V2','capital':capital,'cash':capital,'realized':0.,'borrow_cost':0.,'enabled':False,'config':dict(DEFAULTS),'positions':{},'pending':{},'quotes':{},'orders':[],'decisions':[],'curve':[],'benchmark':{'ticker':'XU100','start_price':None,'last_price':None,'return_pct':None,'excess_pct':None,'as_of':None},'scan':{'cursor':0,'rows':{},'codes':[],'coverage_pct':0.},'last_cycle':None,'error':None,'risk_halt':None,'day':None,'day_equity':capital,'peak':capital,'last_equity':capital,'created_at':stamp()}
 
 def event(a,kind,ticker,reason,**extra):
     a['decisions'].insert(0,{'id':secrets.token_hex(8),'time':stamp(),'type':kind,'ticker':ticker,'reason':reason,**extra});del a['decisions'][1000:]
@@ -252,7 +252,7 @@ def risk_check(a,now):
         for code,p in a['positions'].items():queue(a,code,'SELL' if p['quantity']>0 else 'COVER',halt,now)
     a['last_equity']=v['equity'];return v
 
-def choose(a,rows,requested,now,signal_fn=None,exit_fn=None,portfolio_guard_fn=None):
+def choose(a,rows,requested,now,signal_fn=None,exit_fn=None,portfolio_guard_fn=None,confirm_fn=None):
     from datetime import timedelta
     expected=now.date() if (now.hour,now.minute)>=(18,20) else now.date()-timedelta(days=1)
     while expected.weekday()>=5:expected-=timedelta(days=1)
@@ -282,6 +282,12 @@ def choose(a,rows,requested,now,signal_fn=None,exit_fn=None,portfolio_guard_fn=N
             event(a,'REJECTED',code,'Portföy yoğunlaşma koruması: yeni pozisyon mevcut risk faktörlerine aşırı benzer.',portfolio_guard=pg);continue
         extra['risk_multiplier']=min(float(extra.get('risk_multiplier',1.0)),float(pg.get('risk_multiplier',1.0)))
         extra['portfolio_guard']=pg
+        if confirm_fn:
+            confirm=confirm_fn(code,s[0],r,a)
+            if not confirm.get('allow'):
+                event(a,'REJECTED',code,confirm.get('reason') or 'V2_CONFIRM_BLOCK',v2_confirmation=confirm);continue
+            extra['risk_multiplier']=min(float(extra.get('risk_multiplier',1.0)),float(confirm.get('risk_multiplier',1.0)))
+            extra['v2_confirmation']=confirm
         queue(a,code,s[0],s[1],now,atr=r['atr'],signal_as_of=r['as_of'],**extra)
     event(a,'SCAN_COMPLETE','','Kapalı bar stratejisi değerlendirildi.',coverage_pct=round(coverage,1),candidates=len(candidates))
 
@@ -387,7 +393,7 @@ def cycle(key,now=None,lane='combined'):
         # Quote control and full-universe downloads use independent workers.
         quotes={}
         if lane!='scan':
-            codes=list(set(a['positions'])|set(a['pending']))
+            codes=list(set(a['positions'])|set(a['pending'])|{'XU100'})
             def fetch(c):
                 try:return c,latest_quote(c,now)
                 except Exception:return c,None
@@ -412,10 +418,21 @@ def cycle(key,now=None,lane='combined'):
             if lane!='scan':
                 risk_check(a,now)
                 for c,q in quotes.items():
-                    if q:
-                        from .trade_reality import trade_reality
-                        process_quote(a,c,q,now,reality_fn=trade_reality);risk_check(a,now)
-                v=risk_check(a,now);a['curve'].append({'time':now.isoformat(),'equity':v['equity']});a['curve']=a['curve'][-2000:]
+                    if not q:continue
+                    if c=='XU100':
+                        b=a.setdefault('benchmark',{'ticker':'XU100','start_price':None,'last_price':None,'return_pct':None,'excess_pct':None,'as_of':None})
+                        px=float(q.get('close') or 0)
+                        if px>0:
+                            if not b.get('start_price'):b['start_price']=px
+                            b['last_price']=px;b['as_of']=q.get('at');b['return_pct']=round((px/float(b['start_price'])-1)*100,4) if b.get('start_price') else None
+                        continue
+                    from .trade_reality import trade_reality
+                    process_quote(a,c,q,now,reality_fn=trade_reality);risk_check(a,now)
+                v=risk_check(a,now)
+                b=a.setdefault('benchmark',{'ticker':'XU100','start_price':None,'last_price':None,'return_pct':None,'excess_pct':None,'as_of':None})
+                account_ret=(v['equity']/max(1,float(a['capital']))-1)*100
+                b['excess_pct']=None if b.get('return_pct') is None else round(account_ret-float(b['return_pct']),4)
+                a['curve'].append({'time':now.isoformat(),'equity':v['equity'],'account_return_pct':round(account_ret,4),'benchmark_return_pct':b.get('return_pct'),'excess_pct':b.get('excess_pct')});a['curve']=a['curve'][-2000:]
                 a['last_risk_check']=now.isoformat()
             if lane!='risk':
                 scan=a['scan']
@@ -430,7 +447,8 @@ def cycle(key,now=None,lane='combined'):
                         if scan['cursor']>=len(universe):
                             values=list(scan['rows'].values());latest=max((r['as_of'] for r in values),default='')
                             from .portfolio_guard import portfolio_entry_guard
-                            choose(a,[r for r in values if r['as_of']==latest],len(universe),now,portfolio_guard_fn=portfolio_entry_guard)
+                            from .auto_paper_v2 import confirm_candidate
+                            choose(a,[r for r in values if r['as_of']==latest],len(universe),now,portfolio_guard_fn=portfolio_entry_guard,confirm_fn=confirm_candidate)
                             scan.update({'cursor':0,'rows':{},'completed_at':now.isoformat(),'completed_count':len(universe),'next_due':now.timestamp()+600})
                             scan['duration_sec']=round((now-datetime.fromisoformat(scan['started_at'])).total_seconds(),1)
                 elif data_error:scan['retry_at']=now.timestamp()+30
