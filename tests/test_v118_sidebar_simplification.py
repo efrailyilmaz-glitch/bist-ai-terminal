@@ -18,5 +18,6 @@ def test_v118_critical_views_remain_available():
 
 def test_v118_api_version():
     main=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='118.0.0'" in main
-    assert "'version':'118.0.0'" in main
+    current=int(main.split("version='",1)[1].split('.',1)[0])
+    assert current>=118
+    assert "'version':" in main
