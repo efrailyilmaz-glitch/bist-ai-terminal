@@ -80,6 +80,7 @@ from .forward_scorecard import build as forward_scorecard_build
 from .research_integrity_dashboard import dashboard as research_integrity_dashboard
 from .research_integrity_master import dashboard as research_integrity_master
 from .full_system_audit import audit as full_system_audit
+from .desktop_readiness import status as desktop_readiness_status
 from .autonomous_research_loop import run_once as autonomous_research_run, status as autonomous_research_status
 from .research_factory_v2 import run_once as research_factory_run, status as research_factory_status
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
@@ -103,7 +104,7 @@ from .document_lab import ReviewRequest, review as document_review, configuratio
 from . import auto_paper, robot_arena
 
 BASE=Path(__file__).resolve().parent
-app=FastAPI(title='BIST AI Terminal',version='121.0.0')
+app=FastAPI(title='BIST AI Terminal',version='122.0.0')
 app.add_middleware(GZipMiddleware,minimum_size=800)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -158,6 +159,10 @@ def sector_factor_neutral_v2_api(limit:int=150):
 @app.get('/api/performance')
 def performance_api():
     return performance_snapshot()
+
+@app.get('/api/desktop-readiness')
+def desktop_readiness_api():
+    return desktop_readiness_status()
 
 @app.get('/api/scan')
 def scan(offset:int=0,limit:int=60,codes:str|None=None):
@@ -476,7 +481,7 @@ def system_audit_api():
     weekly_cov=round(float(bg.get('weekly_analyzed') or 0)/cycle_total*100,1)
     desktop=os.getenv('BIST_AI_DESKTOP')=='1' or os.getenv('BIST_AI_BACKGROUND','1')!='0'
     checks=[
-      {'name':'Backend','status':'OK','detail':'BIST AI backend 121.0'},
+      {'name':'Backend','status':'OK','detail':'BIST AI backend 122.0'},
       {'name':'Background Supervisor','status':'OK' if bg.get('running') else ('ERROR' if desktop else 'WARN'),'detail':'RUNNING' if bg.get('running') else ('web mode / intentionally off' if not desktop else 'STOPPED')},
       {'name':'Opportunity Radar','status':'OK' if bg.get('radar_status') not in {'ERROR'} else 'WARN','detail':str(bg.get('radar_status') or 'unknown')},
       {'name':'Cycle Coverage','status':'OK' if cycle_cov>=80 else 'WARMING','detail':f'%{cycle_cov} · {bg.get("cycle_analyzed",0)}/{cycle_total}'},
@@ -537,14 +542,14 @@ def system_audit_api():
       {'name':'Broker Safety','status':'OK','detail':'Direct live locked · paper risk gates active' if not br.get('direct_live_execution_enabled') else 'Live enabled'},
       {'name':'Last Error','status':'OK' if not bg.get('error') else 'WARN','detail':bg.get('error') or 'none'}
     ]
-    fs=full_system_audit('121.0.0')
+    fs=full_system_audit('122.0.0')
     checks.append({'name':'V120 Full Source/Wiring Audit','status':'OK' if fs.get('status')=='PASS' else 'WARN' if fs.get('status')=='WARN' else 'ERROR','detail':f"{fs.get('status')} · blockers {len(fs.get('blockers') or [])} · warnings {len(fs.get('warnings') or [])}"})
     overall='ERROR' if any(x['status']=='ERROR' for x in checks) else ('WARMING' if any(x['status']=='WARMING' for x in checks) else ('WARN' if any(x['status']=='WARN' for x in checks) else 'OK'))
-    return {'version':'121.0.0','overall':overall,'checks':checks,'background':bg,'broker':br,'full_audit':fs}
+    return {'version':'122.0.0','overall':overall,'checks':checks,'background':bg,'broker':br,'full_audit':fs}
 
 @app.get('/api/full-system-audit')
 def full_system_audit_api():
-    return full_system_audit('121.0.0')
+    return full_system_audit('122.0.0')
 
 @app.get('/api/trap-defense/{ticker}')
 def trap_defense_api(ticker:str):
@@ -1060,7 +1065,7 @@ def desktop_background_radar():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'121.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'122.0.0','service':'bist-ai-terminal'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
