@@ -3,6 +3,7 @@ Safety/integrity features can never be downweighted or disabled by adaptive chal
 Non-protected penalties/recovery require repeated NEW forward evidence.
 """
 from __future__ import annotations
+from .runtime_db import connect as db_connect
 import hashlib,json,sqlite3,time
 from pathlib import Path
 
@@ -19,7 +20,7 @@ def _db():
     p.parent.mkdir(parents=True,exist_ok=True);return p
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS states(
       feature TEXT PRIMARY KEY, applied_state TEXT, raw_state TEXT, last_evidence_hash TEXT,
       bad_streak INTEGER, good_streak INTEGER, updated_epoch REAL
