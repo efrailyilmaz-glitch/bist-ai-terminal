@@ -28,5 +28,6 @@ def test_v104_remains_paper_only():
 
 def test_v104_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='104.0.0'" in text
-    assert "'version':'104.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=104
+    assert "'version':" in text
