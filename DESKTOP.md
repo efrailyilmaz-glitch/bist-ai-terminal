@@ -1,12 +1,12 @@
-# BIST AI Terminal Desktop 122.0
+# BIST AI Terminal Desktop 123.0
 
 Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electron içinde açılır; FastAPI/Python motoru uygulamanın kendi içinde paketlidir ve yalnızca `127.0.0.1` üzerinde çalışır. Render kullanılmaz.
 
 ## Üretilen kurulum dosyaları
 
-- Windows 64-bit: `BIST-AI-Terminal-Setup-122.0.0-x64.exe`
-- macOS Intel: `BIST-AI-Terminal-122.0.0-x64.dmg`
-- macOS Apple Silicon: `BIST-AI-Terminal-122.0.0-arm64.dmg`
+- Windows 64-bit: `BIST-AI-Terminal-Setup-123.0.0-x64.exe`
+- macOS Intel: `BIST-AI-Terminal-123.0.0-x64.dmg`
+- macOS Apple Silicon: `BIST-AI-Terminal-123.0.0-arm64.dmg`
 
 ## Kurulum davranışı
 
@@ -90,3 +90,8 @@ Grafik altındaki AL, SAT, AÇIĞA SAT ve AÇIĞI KAPAT düğmeleri yalnız yere
 Agresif alış, kullanıcının fiyat;lot biçiminde girdiği deneme satış kademelerini düşükten yükseğe tüketir. Hedef toplam lot, alt emir lotu ve üst fiyat zorunludur. Kademe tükenmesi, fiyat/pozisyon/nakit sınırı, 200 alt emir sınırı, Durdur, sayfadan ayrılma veya sekmenin gizlenmesi kalan planı durdurur. Gerçek kademe verisi veya gerçekleşme iddiası yoktur. Birden çok sekmede aynı yerel hesaba yazımlar Web Locks ile sıraya alınır.
 
 Masaüstü yerel adresi yeniden başlatmalarda korunur; çizimler ve grafik simülasyonu aynı cihazdaki uygulama profilinde saklanır. Kayıtlı port kullanımda ise uygulama farklı adrese geçmek yerine hata gösterir.
+
+
+## V123 paketleme doğrulaması
+
+Installer üretiminden önce sürüm eşleşmesi, Electron sandbox ayarları, loopback backend, icon kaynakları ve paketlenmiş Python backend yolu doğrulanır. Her platform build'i `BUILD-<platform>-<arch>.json` manifesti üretir; manifest installer SHA-256 değerini, dosya boyutunu, Git commit'ini, platform ve mimariyi kaydeder. Release ayrıca `SHA256SUMS.txt` yayınlar.
