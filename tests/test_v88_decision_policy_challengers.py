@@ -9,6 +9,8 @@ def test_v88_shadow_policy_module_is_prospective_only():
     assert "JOIN signals" in text
     assert "settled_" in text
     assert "never mutates incumbent thresholds automatically" in text
+    assert "STALE_SIGNAL_ID" in text
+    assert "max_signal_age_sec=120" in text
 
 def test_v88_background_records_shadow_at_signal_time():
     text=(ROOT/'app'/'background_supervisor.py').read_text(encoding='utf-8')
