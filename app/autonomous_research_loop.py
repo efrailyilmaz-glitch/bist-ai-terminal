@@ -3,18 +3,18 @@ Orchestrates research validation -> implementation reality -> prospective paper 
 -> forward governance. Paper/research only; no broker path and no live promotion.
 """
 from __future__ import annotations
+from contextlib import closing
 import hashlib,json,sqlite3,time
-from pathlib import Path
+from .runtime_db import connect as db_connect
+from .runtime_paths import data_path
 from .cross_sectional_ml import purged_walk_forward_cost_reality
 from . import xs_tournament, xs_scheduler
 from .pit_universe import dataset_status as pit_universe_status
 
-def _db():
-    p=Path.home()/'.bist-ai-terminal'/'research_loop.db'
-    p.parent.mkdir(parents=True,exist_ok=True);return p
+def _db():return data_path('research_loop.db')
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS experiments(
       config_hash TEXT PRIMARY KEY, created_epoch REAL, tournament_id INTEGER, status TEXT, config_json TEXT
     )''')
@@ -27,13 +27,13 @@ def _hash(x):
     return hashlib.sha256(json.dumps(x,sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest()
 
 def _existing(config_hash):
-    with _conn() as c:
+    with closing(_conn()) as c, c:
         r=c.execute('SELECT tournament_id,status FROM experiments WHERE config_hash=?',(config_hash,)).fetchone()
     return {'tournament_id':r[0],'status':r[1]} if r else None
 
 def _save_run(config_hash,status,result):
     now=time.time()
-    with _conn() as c:
+    with closing(_conn()) as c, c:
         c.execute('INSERT INTO runs(config_hash,created_epoch,status,result_json) VALUES(?,?,?,?)',
                   (config_hash,now,status,json.dumps(result,ensure_ascii=False,sort_keys=True,default=str)))
         c.execute('UPDATE experiments SET status=? WHERE config_hash=?',(status,config_hash))
@@ -60,7 +60,7 @@ def run_once(tickers=None,period='5y',limit=120,train_days=252,test_days=63,purg
         out={'status':'RESEARCH_ONLY','config_hash':ch,'reasons':reasons,'validation':validation,
              'pit_universe':pit,'tournament_id':None,
              'policy':'Failed research stages cannot be bypassed. No live execution path exists.'}
-        with _conn() as c:
+        with closing(_conn()) as c, c:
             c.execute('INSERT OR IGNORE INTO experiments(config_hash,created_epoch,tournament_id,status,config_json) VALUES(?,?,?,?,?)',
                       (ch,time.time(),None,'RESEARCH_ONLY',json.dumps(config,sort_keys=True)))
         _save_run(ch,'RESEARCH_ONLY',out);return out
@@ -72,7 +72,7 @@ def run_once(tickers=None,period='5y',limit=120,train_days=252,test_days=63,purg
             xs_tournament.start(tid)
             xs_scheduler.configure(tid,enabled=True,rebalance_every_days=int(rebalance_every),
                                    cost_bps=float(one_way_cost_bps),limit=int(limit),adv_limit_pct=float(adv_limit_pct))
-            with _conn() as c:
+            with closing(_conn()) as c, c:
                 c.execute('INSERT OR REPLACE INTO experiments(config_hash,created_epoch,tournament_id,status,config_json) VALUES(?,?,?,?,?)',
                           (ch,time.time(),int(tid),'PAPER_INCUBATION',json.dumps(config,sort_keys=True)))
     if tid is None:
@@ -92,7 +92,7 @@ def run_once(tickers=None,period='5y',limit=120,train_days=252,test_days=63,purg
     _save_run(ch,status,out);return out
 
 def status(limit=50):
-    with _conn() as c:
+    with closing(_conn()) as c, c:
         c.row_factory=sqlite3.Row
         ex=[dict(x) for x in c.execute('SELECT * FROM experiments ORDER BY created_epoch DESC LIMIT ?',(max(1,min(int(limit),200)),)).fetchall()]
         runs=[dict(x) for x in c.execute('SELECT id,config_hash,created_epoch,status FROM runs ORDER BY id DESC LIMIT ?',(max(1,min(int(limit),200)),)).fetchall()]
