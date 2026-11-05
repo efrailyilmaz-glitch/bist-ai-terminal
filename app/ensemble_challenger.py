@@ -80,8 +80,21 @@ def build(candidates,max_model_weight=.40):
             corr=float(np.corrcoef(a,b)[0,1]) if np.std(a)>0 and np.std(b)>0 else 1.0
             pairwise.append({'a':eligible[i].get('id'),'b':eligible[j].get('id'),'rank_corr':round(corr,4)})
     mean_corr=float(np.mean([x['rank_corr'] for x in pairwise])) if pairwise else 1.0
+    disagreements=[]
+    ordered=sorted(common);top_n=max(1,int(len(ordered)*.25))
+    for i in range(len(ranks)):
+        for j in range(i+1,len(ranks)):
+            ai=set(sorted(common,key=lambda t:ranks[i][t],reverse=True)[:top_n])
+            bj=set(sorted(common,key=lambda t:ranks[j][t],reverse=True)[:top_n])
+            union=len(ai|bj);jac=(len(ai&bj)/union) if union else 1.0
+            disagreements.append({'a':eligible[i].get('id'),'b':eligible[j].get('id'),'top_quartile_disagreement':round(1-jac,4)})
+    mean_disagreement=float(np.mean([x['top_quartile_disagreement'] for x in disagreements])) if disagreements else 0.0
+    effective_models=float(1/max(1e-12,np.sum(np.asarray(weights,float)**2)))
+    diversity_score=max(0,min(100,100*(.60*(1-min(1,abs(mean_corr)))+.40*mean_disagreement)))
     flags=[]
-    if mean_corr>.95:flags.append('HIGH_MODEL_REDUNDANCY')
+    if mean_corr>.90:flags.append('HIGH_MODEL_REDUNDANCY')
+    if effective_models<2.5:flags.append('LOW_EFFECTIVE_MODEL_COUNT')
+    if diversity_score<20:flags.append('LOW_ENSEMBLE_DIVERSITY')
     rows=[]
     for t in sorted(common):
         score=sum(float(weights[i])*ranks[i][t] for i in range(len(eligible)))
@@ -92,13 +105,13 @@ def build(candidates,max_model_weight=.40):
                  'model_fingerprint':c.get('model_fingerprint'),'forward_evidence':c.get('forward_evidence')}
                 for i,c in enumerate(eligible)]
     artifact=register_artifact({
-        'model_name':'BIST Forward-Evidence Ensemble Challenger','model_version':'74.0','seed':74,
+        'model_name':'BIST Forward-Evidence Ensemble Challenger','model_version':'114.0','seed':114,
         'features':['constituent_rank_percentiles'],'label':'relative_rank_score','train_rows':None,'train_dates':None,
         'train_cutoff':None,'as_of':next(iter(dates)),'symbols':len(common),
-        'params':{'components':components,'max_model_weight':max_model_weight,'mean_pairwise_rank_corr':mean_corr}
+        'params':{'components':components,'max_model_weight':max_model_weight,'mean_pairwise_rank_corr':mean_corr,'mean_top_quartile_disagreement':mean_disagreement,'effective_models':effective_models,'diversity_score':diversity_score}
     })
     return {'status':'CAUTION' if flags else 'OK','flags':flags,'as_of':next(iter(dates)),
-            'common_symbols':len(common),'components':components,'pairwise_rank_correlations':pairwise,
-            'mean_pairwise_rank_corr':round(mean_corr,4),'rows':rows,'model_artifact':artifact,
+            'version':'114.0','common_symbols':len(common),'components':components,'pairwise_rank_correlations':pairwise,'pairwise_disagreements':disagreements,
+            'mean_pairwise_rank_corr':round(mean_corr,4),'mean_top_quartile_disagreement':round(mean_disagreement,4),'effective_models':round(effective_models,3),'diversity_score':round(diversity_score,2),'rows':rows,'model_artifact':artifact,
             'promotion_status':'RESEARCH_ONLY','paper_execution_enabled':False,'live_execution':False,
-            'policy':'Only mature prospective candidates are combined. Ensemble output remains research-only and must earn its own forward paper evidence.'}
+            'policy':'Only mature prospective candidates are combined. Correlated models do not count as independent diversity; ensemble output remains research-only and must earn its own forward paper evidence.'}
