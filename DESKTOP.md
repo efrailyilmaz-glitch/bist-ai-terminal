@@ -1,12 +1,12 @@
-# BIST AI Terminal Desktop 126.0
+# BIST AI Terminal Desktop 127.0
 
 Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electron içinde açılır; FastAPI/Python motoru uygulamanın kendi içinde paketlidir ve yalnızca `127.0.0.1` üzerinde çalışır. Render kullanılmaz.
 
 ## Üretilen kurulum dosyaları
 
-- Windows 64-bit: `BIST-AI-Terminal-Setup-126.0.0-x64.exe`
-- macOS Intel: `BIST-AI-Terminal-126.0.0-x64.dmg`
-- macOS Apple Silicon: `BIST-AI-Terminal-126.0.0-arm64.dmg`
+- Windows 64-bit: `BIST-AI-Terminal-Setup-127.0.0-x64.exe`
+- macOS Intel: `BIST-AI-Terminal-127.0.0-x64.dmg`
+- macOS Apple Silicon: `BIST-AI-Terminal-127.0.0-arm64.dmg`
 
 ## Kurulum davranışı
 
@@ -100,3 +100,12 @@ Installer üretiminden önce sürüm eşleşmesi, Electron sandbox ayarları, lo
 ## Controlled Live Readiness
 
 V126 canlı emir yetkisi açmaz. Forward evidence, research integrity, desktop/runtime, broker sandbox, lisanslı gerçek zamanlı veri ve doğrulanmış resmi broker sözleşmesi ayrı hard gate olarak raporlanır. Tüm gate'ler geçse bile sonuç yalnız manuel entegrasyon/güvenlik incelemesine hazır olunduğunu belirtir.
+
+
+## Offline grafik
+
+V127 masaüstü build'i Lightweight Charts 5.2.1 dosyasını uygulama içine vendor eder. Desktop kullanımında grafik kütüphanesi internet/CDN gerektirmez; web geliştirme ortamında yerel vendor bulunamazsa kontrollü CDN fallback kullanılır.
+
+## Runtime dayanıklılığı
+
+Persistent SQLite ledger'ları WAL, busy timeout, foreign-key ve quick-check tabanlı runtime sağlık kontrolleriyle açılır. `/api/runtime-storage-health` boş disk ve kritik veritabanı bütünlüğünü raporlar.
