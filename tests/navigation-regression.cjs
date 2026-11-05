@@ -3,7 +3,8 @@ function app(href='https://terminal.example/?view=all&ticker=ASELS'){
  const tabs=[],listeners={},buttons={},nav=['overview','all','detail','forecast','cycles'].map(view=>({dataset:{view},classList:{toggle(){}}}));
  const loc=new URL(href),entries=[];let index=-1;
  const history={get state(){return entries[index]?.state},replaceState(state,_,url){entries[index<0?++index:index]={state,url:String(url)};loc.href=String(url)},pushState(state,_,url){entries.splice(index+1);entries.push({state,url:String(url)});index++;loc.href=String(url)},back(){index--;loc.href=entries[index].url;listeners.popstate()}};
- const c={URL,URLSearchParams,location:loc,history,state:{view:'overview',current:'ASELS',chartPeriod:'1y',chartInterval:'1d',universe:[{ticker:'THYAO'}]},els:{search:{value:''},title:{},content:{}},render(){},openStock(){},setActiveTicker(t){state.current=t;return true},$:()=>null,$$:s=>s==='.nav'?nav:[],document:{createElement:()=>({}),querySelector:()=>({prepend:b=>buttons[b.id]=b})},window:{addEventListener:(n,f)=>listeners[n]=f,open:(...args)=>tabs.push(args)}};
+ const state={view:'overview',current:'ASELS',chartPeriod:'1y',chartInterval:'1d',universe:[{ticker:'THYAO'}]};
+ const c={URL,URLSearchParams,location:loc,history,state,els:{search:{value:''},title:{},content:{}},render(){},openStock(){},setActiveTicker(t){state.current=t;return true},$:()=>null,$$:s=>s==='.nav'?nav:[],document:{createElement:()=>({}),querySelector:()=>({prepend:b=>buttons[b.id]=b})},window:{addEventListener:(n,f)=>listeners[n]=f,open:(...args)=>tabs.push(args)}};
  vm.createContext(c);vm.runInContext(fs.readFileSync('app/static/v19.js','utf8'),c);return {c,tabs,buttons};
 }
 const {c,tabs,buttons}=app();
