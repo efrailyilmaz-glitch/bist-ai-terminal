@@ -39,6 +39,7 @@ from .gate_threshold_challenger import report as gate_threshold_report
 from .gate_interaction_analysis import analyze as gate_interaction_analyze
 from .decision_error_cost import analyze as decision_error_cost_analyze
 from .confidence_calibration import analyze as confidence_calibration_analyze
+from .regime_adaptive_policy import analyze as regime_adaptive_policy_analyze
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
@@ -601,6 +602,11 @@ def decision_error_cost_api(horizon:int=20,good_excess_pct:float=3.0,bad_excess_
 def confidence_calibration_api(horizon:int=20,success_excess_pct:float=0.0,min_bin:int=5):
     h=horizon if horizon in (5,20,60) else 20
     return confidence_calibration_analyze(h,float(success_excess_pct),max(3,min(int(min_bin),100)))
+
+@app.get('/api/regime-adaptive-policy')
+def regime_adaptive_policy_api(horizon:int=20,min_regime_samples:int=10,min_selected:int=4):
+    h=horizon if horizon in (5,20,60) else 20
+    return regime_adaptive_policy_analyze(h,max(5,min(int(min_regime_samples),200)),max(2,min(int(min_selected),100)))
 
 @app.get('/api/feature-governance')
 def feature_governance_api(force:bool=False):
