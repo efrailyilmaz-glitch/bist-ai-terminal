@@ -52,6 +52,7 @@ from .feature_governance import governance_report as feature_governance_report, 
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
 from .cross_sectional_ml import build_panel as xs_build_panel, run_lab as xs_run_lab, purged_walk_forward_lab as xs_purged_walk_forward_lab, purged_walk_forward_cost_reality as xs_cost_reality
+from .cross_sectional_ranking_v2 import rank as cross_sectional_rank_v2
 from .xs_portfolio import construct as xs_portfolio_construct
 from .xs_paper import create as xs_paper_create, rebalance as xs_paper_rebalance, mark as xs_paper_mark, history as xs_paper_history, lineage as xs_paper_lineage, verify_lineage_ledger as xs_verify_lineage_ledger
 from .xs_tournament import create as xs_tournament_create, start as xs_tournament_start, rebalance_variant as xs_tournament_rebalance, mark_all as xs_tournament_mark, snapshot as xs_tournament_snapshot
@@ -139,6 +140,10 @@ def data_trust_v2_api(codes:str|None=None):
 def universe(force: bool=False):
     rows=get_universe(force=force)
     return {'count':len(rows),'source':rows[0].get('source','UNKNOWN') if rows else 'NONE','rows':rows}
+
+@app.get('/api/cross-sectional-ranking-v2')
+def cross_sectional_ranking_v2_api(limit:int=600,min_coverage_pct:float=80.0):
+    return cross_sectional_rank_v2(max(20,min(int(limit),700)),max(50,min(float(min_coverage_pct),100)))
 
 @app.get('/api/scan')
 def scan(offset:int=0,limit:int=60,codes:str|None=None):
