@@ -50,6 +50,7 @@ from .confidence_calibration import analyze as confidence_calibration_analyze
 from .regime_adaptive_policy import analyze as regime_adaptive_policy_analyze
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
+from .model_zoo_v2 import catalog as model_zoo_v2_catalog, adapter_plan as model_zoo_v2_plan
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
 from .cross_sectional_ml import build_panel as xs_build_panel, run_lab as xs_run_lab, purged_walk_forward_lab as xs_purged_walk_forward_lab, purged_walk_forward_cost_reality as xs_cost_reality
 from .cross_sectional_ranking_v2 import rank as cross_sectional_rank_v2
@@ -690,6 +691,14 @@ def feature_governance_api(force:bool=False):
 def feature_governance_ab_api(horizon:int=20,threshold:int=78,min_samples:int=20):
     if horizon not in (5,20,60): raise HTTPException(422,'horizon must be 5, 20 or 60')
     return feature_governance_ab(horizon,max(50,min(threshold,95)),max(5,min(min_samples,200)))
+
+@app.get('/api/model-zoo-v2')
+def model_zoo_v2_api():
+    return model_zoo_v2_catalog()
+
+@app.get('/api/model-zoo-v2/{candidate_id}')
+def model_zoo_v2_plan_api(candidate_id:str):
+    return model_zoo_v2_plan(candidate_id)
 
 @app.get('/api/model-zoo')
 def model_zoo_api():
