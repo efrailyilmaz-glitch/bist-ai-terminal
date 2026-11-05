@@ -1,6 +1,8 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const els={content:$('#content'),title:$('#pageTitle'),subtitle:$('#subtitle'),tickerbar:$('#tickerbar'),search:$('#globalSearch'),scanBtn:$('#scanBtn'),scanStatus:$('#scanStatus'),systemMode:$('#systemMode')};
-const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:'ASELS',chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true,wavetrend:false,squeeze:false,chandelier:false,utbot:false,chop:false}};
+const CURRENT_TICKER_KEY='bist-ai-current-ticker';
+const savedTicker=(()=>{try{const v=String(localStorage.getItem(CURRENT_TICKER_KEY)||'ASELS').toUpperCase().replace(/\.IS$/,'');return /^[A-Z0-9]{2,12}$/.test(v)?v:'ASELS'}catch(e){return 'ASELS'}})();
+const state={view:'overview',universe:[],meta:new Map(),scan:new Map(),market:{},scanning:false,scanned:0,total:0,current:savedTicker,chart:null,chartPeriod:'1y',chartInterval:'1d',factorRows:[],researchCache:new Map(),watchlist:new Set(JSON.parse(localStorage.getItem('bist-ai-watchlist')||'[]')),indicators:{ema:true,bb:true,rsi:true,stoch:true,macd:true,supertrend:true,ichimoku:false,levels:true,wavetrend:false,squeeze:false,chandelier:false,utbot:false,chop:false}};
 const SCAN_CACHE_KEY='bist-ai-scan-v26-2';
 function restoreScanCache(){
   try{
@@ -21,12 +23,34 @@ function persistScanCache(){
 const fmt=(n,d=2)=>Number(n||0).toLocaleString('tr-TR',{maximumFractionDigits:d,minimumFractionDigits:0});
 const pct=n=>`${n>=0?'+':''}${fmt(n,2)}%`; const cls=n=>Number(n)>=0?'up':'down';
 const tagClass=s=>s==='GÜÇLÜ'?'':s==='POZİTİF'?'':s==='NÖTR'?'neutral':'weak';
-async function getJSON(url){const r=await fetch(url); if(!r.ok) throw new Error(`${r.status} ${url}`); return r.json();}
+const API_CACHE=new Map(),API_FLIGHTS=new Map();
+function apiTTL(url){
+  if(url==='/health')return 60000;
+  if(url.startsWith('/api/universe'))return 10*60*1000;
+  if(url.startsWith('/api/scan')||url.includes('/alerts')||url.includes('/background/')||url.includes('/radar/')||url.includes('/performance'))return 0;
+  if(url.startsWith('/api/market'))return 30000;
+  if(url.startsWith('/api/chart/'))return 2*60*1000;
+  if(url.startsWith('/api/mtf/'))return 90*1000;
+  if(url.startsWith('/api/fundamentals/')||url.startsWith('/api/kap-profile/'))return 5*60*1000;
+  if(url.startsWith('/api/kap-disclosures/')||url.startsWith('/api/news/'))return 2*60*1000;
+  if(url.startsWith('/api/backtest/')||url.startsWith('/api/strategy-compare/')||url.startsWith('/api/walk-forward/')||url.startsWith('/api/monte-carlo/')||url.startsWith('/api/forecast/')||url.startsWith('/api/edge/'))return 5*60*1000;
+  if(url.startsWith('/api/committee/')||url.startsWith('/api/unified-decision/')||url.startsWith('/api/pro-technical/')||url.startsWith('/api/premium/'))return 60*1000;
+  return 30000;
+}
+async function getJSON(url,opts={}){
+  const force=opts&&opts.force===true,ttl=apiTTL(url),now=Date.now(),hit=API_CACHE.get(url);
+  if(!force&&ttl>0&&hit&&now-hit.ts<ttl)return hit.data;
+  if(!force&&API_FLIGHTS.has(url))return API_FLIGHTS.get(url);
+  const p=(async()=>{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(`${r.status} ${url}`);const data=await r.json();if(ttl>0)API_CACHE.set(url,{ts:Date.now(),data});return data;})().finally(()=>API_FLIGHTS.delete(url));
+  API_FLIGHTS.set(url,p);return p;
+}
+function clearApiCache(prefix=''){for(const k of [...API_CACHE.keys()])if(!prefix||k.startsWith(prefix))API_CACHE.delete(k);}
 async function init(){
   try{
     const [u,m,h]=await Promise.all([getJSON('/api/universe'),getJSON('/api/market'),getJSON('/health')]);
     state.universe=u.rows||[]; state.total=u.count||state.universe.length; state.market=m||{};
     state.universe.forEach(x=>state.meta.set(x.ticker,x));
+    if(!state.universe.some(x=>x.ticker===state.current)&&state.universe.length){state.current=state.universe[0].ticker;try{localStorage.setItem(CURRENT_TICKER_KEY,state.current)}catch(e){}}
     const restored=restoreScanCache();
     els.systemMode.textContent=`V${h.version||'17.1'} · ${u.source||'UNIVERSE'}`;
     els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
@@ -46,7 +70,7 @@ async function scanAll(force=true){
   state.scanning=true;
   if(force){state.scan.clear();state.scanned=0;try{localStorage.removeItem(SCAN_CACHE_KEY)}catch(e){}}
   els.scanBtn.textContent='Taranıyor…';
-  const batch=40, offsets=[];
+  const batch=100, offsets=[];
   for(let offset=0;offset<state.total;offset+=batch)offsets.push(offset);
   let cursor=0,completed=0,failed=0,lastPaint=0,lastPersist=0;
   async function worker(){
@@ -75,7 +99,8 @@ async function scanAll(force=true){
       }
     }
   }
-  await Promise.all([worker(),worker()]);
+  const workers=Math.min(3,Math.max(1,offsets.length));
+  await Promise.all(Array.from({length:workers},()=>worker()));
   state.scanned=completed;
   updateRegime();persistScanCache();
   state.scanning=false;els.scanBtn.textContent='Tüm Evreni Tara';
@@ -145,7 +170,7 @@ function portfolioView(){
   const sum=raw.reduce((a,b)=>a+b,0)||1;
   return `<div class="panel"><div class="panelHead"><div><h2>Model Portföy</h2><p>Alpha skoru + risk azaltımı ile oluşturulan örnek nicel araştırma sepeti; kişiye özel yatırım tavsiyesi değildir.</p></div><span class="pill">QUANT BASKET</span></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Kod</th><th>Şirket</th><th>Model ağırlık</th><th>Alpha</th><th>Kısa</th><th>Uzun</th><th>Risk</th><th>Smart Money</th></tr></thead><tbody>${rows.map((r,i)=>{const m=state.meta.get(r.ticker)||{};const w=raw[i]/sum*100;return `<tr onclick="openStock('${r.ticker}')"><td><strong>${r.ticker}</strong></td><td>${m.name||''}</td><td>%${fmt(w,1)}</td><td>${r.alpha_score||0}</td><td>${r.short_score}</td><td>${r.long_score}</td><td>${r.risk}</td><td>${r.smart_money_score||0}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
-async function openStock(t){state.current=t;state.view='detail';$$('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view==='detail'));render();}
+async function openStock(t){state.current=t;try{localStorage.setItem(CURRENT_TICKER_KEY,state.current)}catch(e){}state.view='detail';$$('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view==='detail'));render();}
 function indicatorTone(label,value){
   if(value==null)return '';
   if(label==='RSI') return value>=70?'amber':value<=30?'down':'up';
