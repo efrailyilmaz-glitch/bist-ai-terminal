@@ -5,6 +5,7 @@ autonomous research loop. It can create/advance paper challengers but has no pro
 from __future__ import annotations
 import hashlib,json,sqlite3,time
 from pathlib import Path
+from .runtime_db import connect as db_connect
 from .data_provider_trust_v2 import snapshot as data_trust
 from .pit_universe import dataset_status as pit_status
 from .feature_governance_v3 import report as feature_governance
@@ -16,7 +17,7 @@ def _db():
     p.parent.mkdir(parents=True,exist_ok=True);return p
 
 def _conn():
-    c=sqlite3.connect(_db())
+    c=db_connect(_db())
     c.execute('''CREATE TABLE IF NOT EXISTS factory_runs(
       id INTEGER PRIMARY KEY AUTOINCREMENT, run_hash TEXT, created_epoch REAL,
       stage TEXT, status TEXT, config_json TEXT, result_json TEXT
