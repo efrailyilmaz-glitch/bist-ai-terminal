@@ -120,3 +120,61 @@ def missed_opportunity_audit(horizon=20,min_excess_pct=3.0,min_samples=3):
             'miss_rate_pct':round(len(misses)/max(1,len(rows))*100,2),
             'gate_summary':gates,'recent_misses':misses[:100],
             'policy':'Forward false-negative audit only. A missed opportunity does not prove the veto was wrong; risk avoided by vetoes is analyzed separately and no gate is auto-disabled.'}
+
+
+def gate_net_utility(horizon=20,bad_excess_pct=-3.0,good_excess_pct=3.0,min_samples=8):
+    """Balance downside avoided vs upside missed for each failed hard gate using settled prospective evidence.
+    Multiple failed gates may share the same outcome; scores are diagnostic associations, not causal PnL attribution.
+    """
+    if horizon not in (5,20,60):raise ValueError('horizon must be 5, 20 or 60')
+    bad=float(bad_excess_pct);good=float(good_excess_pct)
+    if bad>=0:bad=-abs(bad or 3.0)
+    if good<=0:good=abs(good or 3.0)
+    with ex._LOCK:
+        c=ex._conn();c.row_factory=__import__('sqlite3').Row
+        rows=[dict(x) for x in c.execute(f'''SELECT id,ticker,committee_decision,regime,setup_json,excess_{horizon} AS excess
+                                             FROM signals
+                                             WHERE settled_{horizon}=1 AND excess_{horizon} IS NOT NULL
+                                             ORDER BY id''').fetchall()]
+        c.close()
+    by_gate={}
+    for r in rows:
+        try:setup=json.loads(r.get('setup_json') or '{}')
+        except Exception:setup={}
+        failed=[g for g in (setup.get('committee_gates') or []) if g.get('hard') and not g.get('pass') and g.get('name')]
+        exv=float(r.get('excess') or 0)
+        for g in failed:
+            name=str(g['name'])
+            z=by_gate.setdefault(name,{'gate':name,'failed_n':0,'bad':[],'good':[],'neutral':[],'all':[],'regimes':{}})
+            z['failed_n']+=1;z['all'].append(exv)
+            bucket='bad' if exv<=bad else 'good' if exv>=good else 'neutral'
+            z[bucket].append(exv)
+            reg=str(r.get('regime') or 'UNKNOWN').upper()
+            rr=z['regimes'].setdefault(reg,{'n':0,'bad_n':0,'good_n':0})
+            rr['n']+=1;rr['bad_n']+=int(bucket=='bad');rr['good_n']+=int(bucket=='good')
+    out=[]
+    for z in by_gate.values():
+        n=z['failed_n'];bad_vals=z['bad'];good_vals=z['good'];neutral=z['neutral'];all_vals=z.pop('all')
+        avoided_loss=sum(abs(x) for x in bad_vals)
+        missed_upside=sum(x for x in good_vals)
+        gross=avoided_loss-missed_upside
+        avg=gross/max(1,n)
+        protection_rate=len(bad_vals)/max(1,n)*100
+        miss_rate=len(good_vals)/max(1,n)*100
+        if n<int(min_samples):label='INSUFFICIENT'
+        elif avg>=1.0 and protection_rate>miss_rate:label='NET_PROTECTIVE'
+        elif avg<=-1.0 and miss_rate>protection_rate:label='NET_COSTLY'
+        else:label='BALANCED'
+        out.append({'gate':z['gate'],'failed_n':n,'bad_n':len(bad_vals),'good_n':len(good_vals),'neutral_n':len(neutral),
+                    'protection_rate_pct':round(protection_rate,2),'miss_rate_pct':round(miss_rate,2),
+                    'avoided_downside_sum_pct':round(avoided_loss,3),'missed_upside_sum_pct':round(missed_upside,3),
+                    'net_utility_sum_pct':round(gross,3),'net_utility_per_failure_pct':round(avg,3),
+                    'failed_mean_excess_pct':round(float(np.mean(all_vals)),3) if all_vals else None,
+                    'label':label,'regimes':z['regimes']})
+    order={'NET_COSTLY':0,'NET_PROTECTIVE':1,'BALANCED':2,'INSUFFICIENT':3}
+    out.sort(key=lambda x:(order.get(x['label'],9),x['net_utility_per_failure_pct'],x['gate']))
+    return {'status':'OK','version':'86.0','horizon':horizon,'bad_excess_threshold_pct':bad,'good_excess_threshold_pct':good,
+            'settled_signals':len(rows),'min_samples':int(min_samples),'rows':out,
+            'review_candidates':[x for x in out if x['label']=='NET_COSTLY'],
+            'protective_gates':[x for x in out if x['label']=='NET_PROTECTIVE'],
+            'policy':'Prospective diagnostic only. Outcomes can be shared across simultaneous gate failures, so utility is not causal attribution and never changes a gate automatically.'}
