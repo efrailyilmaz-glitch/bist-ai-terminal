@@ -7,6 +7,7 @@ from .opportunity_engine import trigger_refresh, radar_snapshot, smart_money_can
 from .pro_alert_engine import evaluate_once, list_rules
 from .investment_committee import investment_committee
 from .experience_engine import record_signal, settle_due
+from .decision_policy_challenger import record as record_policy_shadow
 from .smart_money_engine import smart_money_snapshot
 from .cycle_engine import scan_cycle_batch, cycle_radar
 from .weekly_reversal import scan_weekly_reversal_batch, weekly_reversal_radar
@@ -59,6 +60,7 @@ def _review_top():
         try:
             c=investment_committee(code);_LAST_COMMITTEE[code]=now;_save_cooldowns()
             rid=record_signal(s,c)
+            if rid: record_policy_shadow(rid,c)
             item={'ticker':code,'decision':c.get('decision'),'decision_tr':c.get('decision_tr'),'committee_score':c.get('committee_score'),
                   'opportunity_score':s.get('opportunity_score'),'record_id':rid,'time':time.strftime('%d.%m.%Y %H:%M:%S')}
             reviews.append(item)
