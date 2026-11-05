@@ -61,6 +61,7 @@ from .data_quality_guard import evaluate_history as data_quality_history_evaluat
 from .pit_universe import dataset_status as pit_universe_status, intervals as pit_universe_intervals
 from .factor_neutralization import evaluate_history as factor_neutralization_history
 from .xs_capacity import assess as xs_capacity_assess
+from .capacity_scale_analysis import analyze as capacity_scale_analyze, portfolio as capacity_scale_portfolio
 from .bist_execution_rules import official_policy as bist_execution_policy
 from .decay_v2 import detect_xs_decay as xs_detect_decay_v2
 from .champion_governance import status as champion_governance_status
