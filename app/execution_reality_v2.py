@@ -14,10 +14,10 @@ def _f(x,d=None):
         z=float(x);return z if math.isfinite(z) else d
     except Exception:return d
 
-def evaluate_quote(q,qty,reference,side='BUY',base_slippage_bps=10,base_price=None,microstructure_snapshot=None,trade_reality_result=None):
+def evaluate_quote(q,qty,reference,side='BUY',base_slippage_bps=10,base_price=None,microstructure_snapshot=None,microstructure_result=None,trade_reality_result=None):
     ed=execution_diagnostics(q,qty,reference,base_slippage_bps,side)
     market=quote_guard(q,base_price)
-    micro=microstructure_guard(microstructure_snapshot) if microstructure_snapshot is not None else {'status':'UNKNOWN','score':0,'flags':['NO_MICROSTRUCTURE_DATA'],'risk_multiplier':1.0}
+    micro=microstructure_result if isinstance(microstructure_result,dict) else microstructure_guard(microstructure_snapshot) if microstructure_snapshot is not None else {'status':'UNKNOWN','score':0,'flags':['NO_MICROSTRUCTURE_DATA'],'risk_multiplier':1.0}
     reality=trade_reality_result or {'status':'NOT_RUN'}
     flags=[]
     flags += ['EXEC:'+str(x) for x in (ed.get('flags') or [])]
@@ -61,6 +61,6 @@ def snapshot(ticker,notional=100_000,side='BUY',base_slippage_bps=10):
     px=_f(q.get('close'),0) or 0
     qty=max(0,int(float(notional)/px)) if px>0 else 0
     micro=latest_microstructure(code)
-    ms=micro.get('snapshot') if isinstance(micro,dict) else None
-    r=evaluate_quote(q,qty,px,side,base_slippage_bps,base_price=previous_close(code),microstructure_snapshot=ms)
+    mg=micro.get('guard') if isinstance(micro,dict) else None
+    r=evaluate_quote(q,qty,px,side,base_slippage_bps,base_price=previous_close(code),microstructure_result=mg)
     return {'ticker':code,'reference_price':px,'notional':float(notional),'quantity':qty,**r}
