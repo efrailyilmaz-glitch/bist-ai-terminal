@@ -7,7 +7,8 @@ function decisionLearningShell33(){
  '<section class="panel"><div class="panelHead"><div><h2>Kaçırılan Fırsat Denetimi</h2><p>NO_TRADE sonrası benchmark üzerinde güçlü giden hisseler ve bunları bloke eden hard gate kümeleri</p></div></div><div id="missedOpportunityBox33"><div class="loading">Kaçırılan fırsatlar analiz ediliyor…</div></div></section>'+ 
  '<section class="panel"><div class="panelHead"><div><h2>Gate Net Fayda</h2><p>Engellenen kötü sonuçlar ile kaçırılan iyi sonuçların aynı forward örneklemde dengesi</p></div></div><div class="warningBox">Aynı sinyalde birden fazla gate başarısız olabilir. Bu nedenle net fayda ortak-atıflı tanısal bir ölçümdür; nedensel PnL değildir.</div><div id="gateUtilityBox33"><div class="loading">Net fayda hesaplanıyor…</div></div></section>'+ 
  '<section class="panel"><div class="panelHead"><div><h2>Rejim Bazlı Gate Davranışı</h2><p>Aynı gate farklı piyasa rejimlerinde koruyucu mu, fırsat maliyetli mi?</p></div></div><div id="gateRegimeBox33"><div class="loading">Rejim analizi yükleniyor…</div></div></section>'+ 
- '<section class="panel"><div class="panelHead"><div><h2>Decision Policy Challengers</h2><p>Incumbent, Strict Defense ve Adaptive politikalarının aynı snapshot üzerindeki forward shadow yarışı</p></div></div><div class="warningBox">Challenger yalnız inceleme durumuna ulaşabilir. Ana politika ve canlı işlem yolu otomatik olarak değişmez.</div><div id="policyChallengerBox33"><div class="loading">Shadow challenger sonuçları yükleniyor…</div></div></section>';
+ '<section class="panel"><div class="panelHead"><div><h2>Decision Policy Challengers</h2><p>Incumbent, Strict Defense ve Adaptive politikalarının aynı snapshot üzerindeki forward shadow yarışı</p></div></div><div class="warningBox">Challenger yalnız inceleme durumuna ulaşabilir. Ana politika ve canlı işlem yolu otomatik olarak değişmez.</div><div id="policyChallengerBox33"><div class="loading">Shadow challenger sonuçları yükleniyor…</div></div></section>'+ 
+ '<section class="panel"><div class="panelHead"><div><h2>Policy Tournament</h2><p>5 / 20 / 60 günlük forward kanıtın birlikte değerlendirildiği çok ufuklu yarış</p></div></div><div id="policyTournamentBox33"><div class="loading">Turnuva sonuçları yükleniyor…</div></div></section>';
 }
 function metric33(x){if(!x||!x.n)return '<span>n=0</span>';return '<span>n='+v33Esc(x.n)+' · hit %'+v33Esc(x.hit_rate_pct)+' · ort '+v33Esc(x.mean_excess_pct)+'% · med '+v33Esc(x.median_excess_pct)+'%</span>'}
 async function loadDecisionCalibration33(){
@@ -73,11 +74,20 @@ async function loadPolicyChallengers33(){
   box.innerHTML='<div class="stats"><div class="stat"><span>Governance</span><b class="'+(dec.action==='CHALLENGER_REVIEW'?'amber':'up')+'">'+v33Esc(dec.action||'HOLD')+'</b><small>'+v33Esc(dec.reason||'—')+'</small></div><div class="stat"><span>Canlı işlem</span><b class="down">KAPALI</b><small>shadow only</small></div></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Politika</th><th>Durum</th><th>Settle</th><th>Seçim</th><th>PASS</th><th>WATCH</th><th>NO_TRADE</th><th>Ort. excess</th><th>Hit %</th><th>Korunan kötü</th><th>Kaçan iyi</th><th>Shadow skor</th></tr></thead><tbody>'+rows+'</tbody></table></div><h3>Paired Forward Confidence</h3><div class="tableWrap"><table class="stockTable"><thead><tr><th>Challenger</th><th>Pair n</th><th>Ort. utility Δ</th><th>%95 CI</th><th>P(Δ&gt;0)</th><th>Durum</th><th>Rejim kapsamı</th></tr></thead><tbody>'+paired+'</tbody></table></div><h3>Persistence / Decay</h3><div class="tableWrap"><table class="stockTable"><thead><tr><th>Policy</th><th>State</th><th>Good streak</th><th>Bad streak</th><th>Son pair n</th><th>Evidence</th></tr></thead><tbody>'+persistRows+'</tbody></table></div><p class="muted">'+v33Esc(ps.policy||'')+'</p><p class="muted">'+v33Esc(d.policy||'')+'</p>';
  }catch(e){box.innerHTML='<div class="empty">'+v33Esc(e.message)+'</div>'}
 }
+async function loadPolicyTournament33(){
+ const box=$('#policyTournamentBox33');if(!box)return;
+ try{
+  const d=await getJSON('/api/decision-policy-tournament?min_settled=12');
+  const rows=(d.rows||[]).map(x=>'<tr><td><b>'+v33Esc(x.name)+'</b></td><td class="'+(x.status==='MATURE'?'up':'amber')+'">'+v33Esc(x.status)+'</td><td>'+v33Esc(x.mature_horizons)+'</td><td>'+v33Esc(x.supported_horizons)+'</td><td><b>'+v33Esc(x.composite_score)+'</b></td><td>'+v33Esc(x.horizon_dispersion)+'</td><td>'+v33Esc(x.dispersion_penalty)+'</td><td>'+v33Esc((x.horizons||[]).map(h=>h.horizon+'g:'+h.shadow_score).join(' · '))+'</td></tr>').join('');
+  const dec=d.decision||{};
+  box.innerHTML='<div class="stats"><div class="stat"><span>Turnuva kararı</span><b class="'+(dec.action==='TOURNAMENT_REVIEW'?'amber':'up')+'">'+v33Esc(dec.action||'HOLD')+'</b><small>'+v33Esc(dec.reason||'—')+'</small></div><div class="stat"><span>Ufuk ağırlıkları</span><b>20 / 50 / 30</b><small>5g / 20g / 60g</small></div></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Policy</th><th>Durum</th><th>Mature ufuk</th><th>Supported ufuk</th><th>Composite</th><th>Dispersion</th><th>Ceza</th><th>Ufuk skorları</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="muted">'+v33Esc(d.policy||'')+'</p>';
+ }catch(e){box.innerHTML='<div class="empty">'+v33Esc(e.message)+'</div>'}
+}
 async function settleDecisions33(){
  const b=$('#settleDecisions33');if(!b)return;b.disabled=true;b.textContent='Güncelleniyor…';
  try{
   const r=await fetch('/api/experience/settle',{method:'POST'});if(!r.ok)throw new Error(r.status+' settle');
-  const d=await r.json();b.textContent=(d.updated||0)+' sonuç güncellendi';await loadDecisionCalibration33();await loadGateCalibration33();await loadMissedOpportunity33();await loadGateUtility33();await loadGateRegime33();await loadPolicyChallengers33();
+  const d=await r.json();b.textContent=(d.updated||0)+' sonuç güncellendi';await loadDecisionCalibration33();await loadGateCalibration33();await loadMissedOpportunity33();await loadGateUtility33();await loadGateRegime33();await loadPolicyChallengers33();await loadPolicyTournament33();
  }catch(e){b.textContent='Hata: '+e.message}
  finally{setTimeout(()=>{b.disabled=false;b.textContent='Vadesi Dolanları Güncelle'},1800)}
 }
@@ -90,6 +100,6 @@ render=function(...args){
   els.content.innerHTML=decisionLearningShell33();
   $('#settleDecisions33').onclick=settleDecisions33;
   $('#gateHorizon33').onchange=()=>{loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();loadPolicyChallengers33();};
-  loadDecisionCalibration33();loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();loadPolicyChallengers33();
+  loadDecisionCalibration33();loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();loadPolicyChallengers33();loadPolicyTournament33();
  }
 };
