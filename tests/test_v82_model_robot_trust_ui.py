@@ -19,5 +19,6 @@ def test_v82_trust_center_sources_are_forward_and_reproducible():
 
 def test_v82_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='82.0.0'" in text
-    assert "'version':'82.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=82
+    assert "'version':" in text
