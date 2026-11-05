@@ -79,6 +79,7 @@ from .portfolio_stress_lab import evaluate as portfolio_stress_evaluate
 from .forward_scorecard import build as forward_scorecard_build
 from .research_integrity_dashboard import dashboard as research_integrity_dashboard
 from .autonomous_research_loop import run_once as autonomous_research_run, status as autonomous_research_status
+from .research_factory_v2 import run_once as research_factory_run, status as research_factory_status
 from .cycle_engine import cycle_profile, cycle_radar, scan_cycle_batch
 from .weekly_reversal import weekly_reversal, weekly_reversal_radar
 from .trap_defense import assess_traps
@@ -991,6 +992,14 @@ def autonomous_research_run_api(payload:dict=Body(default={})):
         adv_limit_pct=max(.1,min(float(payload.get('adv_limit_pct') or 1.0),10)),
         auto_create_paper=bool(payload.get('auto_create_paper',True)),
         force_rebalance=bool(payload.get('force_rebalance',False)))
+
+@app.post('/api/research-factory/run')
+def research_factory_run_api(payload:dict=Body(default={})):
+    return research_factory_run(payload)
+
+@app.get('/api/research-factory/status')
+def research_factory_status_api(limit:int=50):
+    return research_factory_status(max(1,min(int(limit),200)))
 
 @app.get('/api/autonomous-research/status')
 def autonomous_research_status_api(limit:int=50):
