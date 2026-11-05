@@ -24,7 +24,7 @@ def test_v127_sqlite_runtime_hardening():
     assert 'busy_timeout=15000' in db
     assert 'foreign_keys=ON' in db
     assert 'PRAGMA quick_check' in db
-    for p in ['xs_paper.py','model_registry.py','experience_engine.py','champion_governance.py']:
+    for p in ['xs_paper.py','model_registry.py','experience_engine.py','champion_governance.py','xs_tournament.py','feature_governance_v3.py','protected_feature_governance.py','research_factory_v2.py']:
         assert 'runtime_db import connect as db_connect' in (ROOT/'app'/p).read_text(encoding='utf-8')
 
 def test_v127_runtime_storage_health_exposed():
