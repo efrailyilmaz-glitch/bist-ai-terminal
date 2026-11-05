@@ -1,12 +1,12 @@
-# BIST AI Terminal Desktop 21.0
+# BIST AI Terminal Desktop 122.0
 
 Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electron içinde açılır; FastAPI/Python motoru uygulamanın kendi içinde paketlidir ve yalnızca `127.0.0.1` üzerinde çalışır. Render kullanılmaz.
 
 ## Üretilen kurulum dosyaları
 
-- Windows 64-bit: `BIST-AI-Terminal-Setup-21.0.1-x64.exe`
-- macOS Intel: `BIST-AI-Terminal-21.0.1-x64.dmg`
-- macOS Apple Silicon: `BIST-AI-Terminal-21.0.1-arm64.dmg`
+- Windows 64-bit: `BIST-AI-Terminal-Setup-122.0.0-x64.exe`
+- macOS Intel: `BIST-AI-Terminal-122.0.0-x64.dmg`
+- macOS Apple Silicon: `BIST-AI-Terminal-122.0.0-arm64.dmg`
 
 ## Kurulum davranışı
 
@@ -21,6 +21,10 @@ Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electr
 - Standart DMG penceresi
 - Uygulama Applications klasörüne sürüklenerek kurulur
 - Intel ve Apple Silicon için native ayrı build
+
+## Yerel veri kökü
+
+Electron, backend'e `BIST_AI_DATA_DIR=<userData>/data` verir. Experience ledger, model registry, paper/robot state, radar state ve governance verileri bu yazılabilir kökte tutulur.
 
 ## Yerel çalışma
 
