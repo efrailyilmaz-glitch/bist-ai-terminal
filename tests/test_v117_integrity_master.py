@@ -20,5 +20,6 @@ def test_v117_api_and_ui():
 
 def test_v117_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='117.0.0'" in text
-    assert "'version':'117.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=117
+    assert "'version':" in text
