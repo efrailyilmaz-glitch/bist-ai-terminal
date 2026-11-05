@@ -37,13 +37,14 @@ function backendExecutable() {
 }
 
 function startBackend(port) {
+  const dataDir = path.join(app.getPath('userData'), 'data');
   if (app.isPackaged) {
     const exe = backendExecutable();
     backend = spawn(exe, [], {
       cwd: path.dirname(exe),
       windowsHide: true,
       stdio: 'ignore',
-      env: { ...process.env, BIST_AI_PORT: String(port), BIST_AI_DESKTOP: '1', PYTHONUNBUFFERED: '1' }
+      env: { ...process.env, BIST_AI_PORT: String(port), BIST_AI_DESKTOP: '1', BIST_AI_DATA_DIR: dataDir, PYTHONUNBUFFERED: '1' }
     });
   } else {
     const python = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
