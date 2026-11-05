@@ -6,7 +6,8 @@ function decisionLearningShell33(){
  '<section class="panel"><div class="panelHead"><div><h2>Gate Fayda Analizi</h2><p>Gate PASS ile FAIL gruplarının benchmark üstü forward sonuç farkı</p></div><select id="gateHorizon33"><option value="5">5 gün</option><option value="20" selected>20 gün</option><option value="60">60 gün</option></select></div><div class="warningBox">Bu ekran ilişki ölçer, nedensellik kanıtlamaz. “Fazla katı” etiketi gate’i otomatik değiştirmez; yalnızca yeniden doğrulama adayı yapar.</div><div id="gateCalibrationBox33"><div class="loading">Gate kalibrasyonu yükleniyor…</div></div></section></div>'+ 
  '<section class="panel"><div class="panelHead"><div><h2>Kaçırılan Fırsat Denetimi</h2><p>NO_TRADE sonrası benchmark üzerinde güçlü giden hisseler ve bunları bloke eden hard gate kümeleri</p></div></div><div id="missedOpportunityBox33"><div class="loading">Kaçırılan fırsatlar analiz ediliyor…</div></div></section>'+ 
  '<section class="panel"><div class="panelHead"><div><h2>Gate Net Fayda</h2><p>Engellenen kötü sonuçlar ile kaçırılan iyi sonuçların aynı forward örneklemde dengesi</p></div></div><div class="warningBox">Aynı sinyalde birden fazla gate başarısız olabilir. Bu nedenle net fayda ortak-atıflı tanısal bir ölçümdür; nedensel PnL değildir.</div><div id="gateUtilityBox33"><div class="loading">Net fayda hesaplanıyor…</div></div></section>'+ 
- '<section class="panel"><div class="panelHead"><div><h2>Rejim Bazlı Gate Davranışı</h2><p>Aynı gate farklı piyasa rejimlerinde koruyucu mu, fırsat maliyetli mi?</p></div></div><div id="gateRegimeBox33"><div class="loading">Rejim analizi yükleniyor…</div></div></section>';
+ '<section class="panel"><div class="panelHead"><div><h2>Rejim Bazlı Gate Davranışı</h2><p>Aynı gate farklı piyasa rejimlerinde koruyucu mu, fırsat maliyetli mi?</p></div></div><div id="gateRegimeBox33"><div class="loading">Rejim analizi yükleniyor…</div></div></section>'+ 
+ '<section class="panel"><div class="panelHead"><div><h2>Decision Policy Challengers</h2><p>Incumbent, Strict Defense ve Adaptive politikalarının aynı snapshot üzerindeki forward shadow yarışı</p></div></div><div class="warningBox">Challenger yalnız inceleme durumuna ulaşabilir. Ana politika ve canlı işlem yolu otomatik olarak değişmez.</div><div id="policyChallengerBox33"><div class="loading">Shadow challenger sonuçları yükleniyor…</div></div></section>';
 }
 function metric33(x){if(!x||!x.n)return '<span>n=0</span>';return '<span>n='+v33Esc(x.n)+' · hit %'+v33Esc(x.hit_rate_pct)+' · ort '+v33Esc(x.mean_excess_pct)+'% · med '+v33Esc(x.median_excess_pct)+'%</span>'}
 async function loadDecisionCalibration33(){
@@ -62,11 +63,20 @@ async function loadGateRegime33(){
   box.innerHTML='<div class="stats"><div class="stat"><span>Rejim çatışmalı gate</span><b class="'+((d.regime_conflict_gates||[]).length?'down':'up')+'">'+v33Esc((d.regime_conflict_gates||[]).length)+'</b><small>'+v33Esc((d.regime_conflict_gates||[]).join(' · ')||'yok')+'</small></div></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Gate</th><th>Rejim</th><th>n</th><th>Kötü</th><th>İyi</th><th>Koruma %</th><th>Miss %</th><th>Etiket</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="muted">'+v33Esc(d.policy||'')+'</p>';
  }catch(e){box.innerHTML='<div class="empty">'+v33Esc(e.message)+'</div>'}
 }
+async function loadPolicyChallengers33(){
+ const box=$('#policyChallengerBox33'),sel=$('#gateHorizon33');if(!box||!sel)return;
+ try{
+  const d=await getJSON('/api/decision-policy-challengers?horizon='+encodeURIComponent(sel.value)+'&min_settled=12');
+  const rows=(d.rows||[]).map(x=>'<tr><td><b>'+v33Esc(x.name)+'</b><br><small>'+v33Esc(x.id)+'</small></td><td class="'+(x.status==='MATURE'?'up':'amber')+'">'+v33Esc(x.status)+'</td><td>'+v33Esc(x.settled_n)+'</td><td>'+v33Esc(x.selected_n)+'</td><td>'+v33Esc(x.pass_n)+'</td><td>'+v33Esc(x.watch_n)+'</td><td>'+v33Esc(x.no_trade_n)+'</td><td>'+v33Esc(x.selected_mean_excess_pct??'—')+'%</td><td>'+v33Esc(x.selected_hit_rate_pct??'—')+'%</td><td>'+v33Esc(x.protected_bad_n)+'</td><td>'+v33Esc(x.missed_good_n)+'</td><td><b>'+v33Esc(x.shadow_score)+'</b></td></tr>').join('');
+  const dec=d.decision||{};
+  box.innerHTML='<div class="stats"><div class="stat"><span>Governance</span><b class="'+(dec.action==='CHALLENGER_REVIEW'?'amber':'up')+'">'+v33Esc(dec.action||'HOLD')+'</b><small>'+v33Esc(dec.reason||'—')+'</small></div><div class="stat"><span>Canlı işlem</span><b class="down">KAPALI</b><small>shadow only</small></div></div><div class="tableWrap"><table class="stockTable"><thead><tr><th>Politika</th><th>Durum</th><th>Settle</th><th>Seçim</th><th>PASS</th><th>WATCH</th><th>NO_TRADE</th><th>Ort. excess</th><th>Hit %</th><th>Korunan kötü</th><th>Kaçan iyi</th><th>Shadow skor</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="muted">'+v33Esc(d.policy||'')+'</p>';
+ }catch(e){box.innerHTML='<div class="empty">'+v33Esc(e.message)+'</div>'}
+}
 async function settleDecisions33(){
  const b=$('#settleDecisions33');if(!b)return;b.disabled=true;b.textContent='Güncelleniyor…';
  try{
   const r=await fetch('/api/experience/settle',{method:'POST'});if(!r.ok)throw new Error(r.status+' settle');
-  const d=await r.json();b.textContent=(d.updated||0)+' sonuç güncellendi';await loadDecisionCalibration33();await loadGateCalibration33();await loadMissedOpportunity33();await loadGateUtility33();await loadGateRegime33();
+  const d=await r.json();b.textContent=(d.updated||0)+' sonuç güncellendi';await loadDecisionCalibration33();await loadGateCalibration33();await loadMissedOpportunity33();await loadGateUtility33();await loadGateRegime33();await loadPolicyChallengers33();
  }catch(e){b.textContent='Hata: '+e.message}
  finally{setTimeout(()=>{b.disabled=false;b.textContent='Vadesi Dolanları Güncelle'},1800)}
 }
@@ -78,7 +88,7 @@ render=function(...args){
   els.subtitle.textContent='Prospektif kararların gerçek forward sonuçlarıyla doğrulanması';
   els.content.innerHTML=decisionLearningShell33();
   $('#settleDecisions33').onclick=settleDecisions33;
-  $('#gateHorizon33').onchange=()=>{loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();};
-  loadDecisionCalibration33();loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();
+  $('#gateHorizon33').onchange=()=>{loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();loadPolicyChallengers33();};
+  loadDecisionCalibration33();loadGateCalibration33();loadMissedOpportunity33();loadGateUtility33();loadGateRegime33();loadPolicyChallengers33();
  }
 };
