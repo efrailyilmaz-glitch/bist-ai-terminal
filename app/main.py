@@ -17,6 +17,7 @@ from .catalysts import catalyst_calendar
 from .model_governance import model_card
 from .portfolio_analytics import analyze_portfolio, compare_allocations, optimize_alpha_portfolio
 from .portfolio_decision_intelligence import analyze as portfolio_decision_intelligence
+from .dynamic_position_sizing import size as dynamic_position_size
 from .analyst_engine import trusted_research
 from .opportunity_engine import start_radar, trigger_refresh, radar_snapshot, alerts_snapshot
 from .premium_engine import fair_value_health, volume_profile
@@ -557,6 +558,11 @@ def portfolio_allocations(codes:str):
 def portfolio_decision_intelligence_api(codes:str,candidate:str|None=None,method:str='equal',portfolio_value:float=1000000):
     selected=[x.strip().upper() for x in codes.split(',') if x.strip()][:12]
     return portfolio_decision_intelligence(selected,candidate=candidate,method=method,portfolio_value=max(0,portfolio_value))
+
+@app.get('/api/dynamic-position-sizing/{ticker}')
+def dynamic_position_sizing_api(ticker:str,portfolio_value:float=1000000,codes:str|None=None):
+    selected=[x.strip().upper() for x in (codes or '').split(',') if x.strip()][:12]
+    return dynamic_position_size(ticker,portfolio_value=max(0,portfolio_value),portfolio_codes=selected)
 
 @app.get('/api/evidence-ledger/verify')
 def evidence_ledger_verify_api():
