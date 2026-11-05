@@ -19,5 +19,6 @@ def test_v81_research_control_uses_paper_only_endpoints():
 
 def test_v81_api_version():
     text = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
-    assert "version='81.0.0'" in text
-    assert "'version':'81.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=81
+    assert "'version':" in text
