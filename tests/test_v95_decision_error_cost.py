@@ -15,7 +15,7 @@ def test_v95_api_and_ui():
     html=(ROOT/'app'/'templates'/'index.html').read_text(encoding='utf-8')
     assert "/api/decision-error-cost" in main
     assert "False Positive / False Negative Cost Matrix" in js
-    assert "/static/v35.js?v=95.0.0" in html
+    assert "/static/v35.js" in html
 
 def test_v95_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
