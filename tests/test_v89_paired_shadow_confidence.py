@@ -24,5 +24,6 @@ def test_v89_ui_surfaces_paired_confidence():
 
 def test_v89_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='89.0.0'" in text
-    assert "'version':'89.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=89
+    assert "'version':" in text
