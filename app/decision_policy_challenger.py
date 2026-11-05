@@ -3,7 +3,8 @@ Policies are evaluated only at signal-record time from the same committee snapsh
 They never alter the incumbent committee decision or authorize execution.
 """
 from __future__ import annotations
-import json,sqlite3,time
+import json,sqlite3,time,hashlib
+import numpy as np
 from . import experience_engine as ex
 
 POLICIES=[
@@ -58,11 +59,57 @@ def record(signal_id,committee,max_signal_age_sec=120):
         c.commit();c.close()
     return {'recorded':n,'status':'OK'}
 
+def _decision_utility(decision,excess):
+    x=float(excess)
+    return x if decision in {'PASS','WATCH'} else -x
+
+def _paired_bootstrap(deltas,seed=89,simulations=5000):
+    a=np.asarray([float(x) for x in deltas],float)
+    if len(a)<8:return {'status':'INSUFFICIENT','n':len(a)}
+    rng=np.random.default_rng(int(seed));sims=max(1000,min(int(simulations),10000))
+    means=np.empty(sims,float)
+    for i in range(sims):means[i]=rng.choice(a,size=len(a),replace=True).mean()
+    return {'status':'OK','n':len(a),'mean_delta':float(a.mean()),
+            'ci_low':float(np.quantile(means,.025)),'ci_high':float(np.quantile(means,.975)),
+            'prob_positive':float(np.mean(means>0)),'simulations':sims}
+
+def _paired_comparisons(rows,min_pairs=12):
+    by_signal={}
+    for r in rows:
+        by_signal.setdefault(int(r['signal_id']),{})[r['policy_id']]=r
+    out=[]
+    for p in POLICIES:
+        if p['id']=='incumbent':continue
+        pairs=[];regimes={}
+        for sid,d in by_signal.items():
+            a=d.get('incumbent');b=d.get(p['id'])
+            if not a or not b:continue
+            inc=_decision_utility(a['decision'],a['excess']);chal=_decision_utility(b['decision'],b['excess'])
+            delta=chal-inc;reg=str(a.get('regime') or 'UNKNOWN').upper()
+            pairs.append(delta);regimes.setdefault(reg,[]).append(delta)
+        boot=_paired_bootstrap(pairs,seed=int(hashlib.sha256(p['id'].encode()).hexdigest()[:8],16))
+        reg_rows=[]
+        for reg,vals in sorted(regimes.items()):
+            rb=_paired_bootstrap(vals,seed=int(hashlib.sha256((p['id']+'|'+reg).encode()).hexdigest()[:8],16),simulations=3000)
+            reg_rows.append({'regime':reg,'n':len(vals),'mean_delta':None if not vals else round(float(np.mean(vals)),3),
+                             'ci_low':None if rb.get('status')!='OK' else round(rb['ci_low'],3),
+                             'ci_high':None if rb.get('status')!='OK' else round(rb['ci_high'],3)})
+        mature=len(pairs)>=int(min_pairs) and boot.get('status')=='OK'
+        supportive=mature and boot['ci_low']>0 and boot['prob_positive']>=.95
+        out.append({'challenger':p['id'],'name':p['name'],'paired_n':len(pairs),
+                    'mean_utility_delta':None if boot.get('status')!='OK' else round(boot['mean_delta'],3),
+                    'ci_low':None if boot.get('status')!='OK' else round(boot['ci_low'],3),
+                    'ci_high':None if boot.get('status')!='OK' else round(boot['ci_high'],3),
+                    'prob_positive_pct':None if boot.get('status')!='OK' else round(boot['prob_positive']*100,2),
+                    'status':'SUPPORTED' if supportive else 'MATURE_NO_EDGE' if mature else 'OBSERVE',
+                    'regimes':reg_rows})
+    return out
+
 def report(horizon=20,min_settled=12):
     if horizon not in (5,20,60):raise ValueError('horizon must be 5, 20 or 60')
     with ex._LOCK:
         c=ex._conn();_ensure(c);c.row_factory=sqlite3.Row
-        rows=[dict(x) for x in c.execute(f'''SELECT p.policy_id,p.policy_name,p.decision,s.excess_{horizon} AS excess
+        rows=[dict(x) for x in c.execute(f'''SELECT p.signal_id,p.policy_id,p.policy_name,p.decision,s.regime,s.excess_{horizon} AS excess
           FROM policy_shadow p JOIN signals s ON s.id=p.signal_id
           WHERE s.settled_{horizon}=1 AND s.excess_{horizon} IS NOT NULL ORDER BY p.signal_id''').fetchall()]
         c.close()
@@ -87,12 +134,21 @@ def report(horizon=20,min_settled=12):
                     'protected_bad_n':protected,'missed_good_n':missed,'shadow_score':round(score,3),'policy':p})
     out.sort(key=lambda x:(x['status']!='MATURE',-x['shadow_score'],x['id']))
     incumbent=next((x for x in out if x['id']=='incumbent'),None)
+    paired=_paired_comparisons(rows,min_pairs=max(12,int(min_settled)))
     best=out[0] if out else None
     decision={'action':'HOLD','reason':'INSUFFICIENT_FORWARD_EVIDENCE'}
     if best and incumbent and best['id']!='incumbent' and best['status']=='MATURE' and incumbent['status']=='MATURE':
+        pc=next((x for x in paired if x['challenger']==best['id']),None)
         margin=best['shadow_score']-incumbent['shadow_score']
-        if margin>=1.5 and best['selected_n']>=10:
-            decision={'action':'CHALLENGER_REVIEW','challenger':best['id'],'margin':round(margin,3),'reason':'FORWARD_SHADOW_MARGIN'}
+        regime_ns=[int(x.get('n') or 0) for x in (pc or {}).get('regimes') or []]
+        regime_ok=sum(1 for n in regime_ns if n>=5)>=2
+        if margin>=1.5 and best['selected_n']>=10 and pc and pc['status']=='SUPPORTED' and regime_ok:
+            decision={'action':'CHALLENGER_REVIEW','challenger':best['id'],'margin':round(margin,3),
+                      'paired_mean_delta':pc.get('mean_utility_delta'),'reason':'PAIRED_FORWARD_EDGE_WITH_REGIME_COVERAGE'}
+        elif pc and pc['status']!='SUPPORTED':
+            decision={'action':'HOLD','reason':'PAIRED_EDGE_NOT_CONFIRMED'}
+        elif not regime_ok:
+            decision={'action':'HOLD','reason':'INSUFFICIENT_REGIME_COVERAGE'}
         else:decision={'action':'HOLD','reason':'NO_MATERIAL_MARGIN'}
-    return {'status':'OK','version':'88.0','horizon':horizon,'rows':out,'decision':decision,
-            'live_execution':False,'policy':'Shadow policies are prospective-only. CHALLENGER_REVIEW is a human/research review state; it never mutates incumbent thresholds automatically.'}
+    return {'status':'OK','version':'89.0','horizon':horizon,'rows':out,'paired_comparisons':paired,'decision':decision,
+            'live_execution':False,'policy':'Shadow policies are prospective-only. Challenger review requires paired bootstrap evidence and regime coverage; it never mutates incumbent thresholds automatically.'}
