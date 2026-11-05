@@ -32,6 +32,7 @@ from .smart_money_engine import smart_money_snapshot, smart_money_radar
 from .decision_levels import decision_levels
 from .decision_attribution import attribution as decision_attribution, feature_report as decision_feature_report
 from .decision_calibration import gate_calibration as decision_gate_calibration, decision_calibration as decision_gate_report, missed_opportunity_audit, gate_net_utility, gate_regime_utility
+from .decision_policy_challenger import report as decision_policy_challenger_report
 from .feature_governance import governance_report as feature_governance_report, ab_report as feature_governance_ab
 from .model_zoo_lab import catalog as model_zoo_catalog, validate_candidate as model_zoo_validate, lab_summary as model_zoo_summary
 from .qlib_bridge import adapter_status as qlib_adapter_status, qlib_dataset_payload, fit_predict_lab as qlib_fit_predict_lab
@@ -430,6 +431,7 @@ def system_audit_api():
       {'name':'Missed Opportunity Audit','status':'OK','detail':'Prospective NO_TRADE decisions are checked for later benchmark outperformance to expose false-negative clusters without disabling risk gates automatically'},
       {'name':'Gate Net Utility','status':'OK','detail':'Settled failed hard-gate outcomes balance downside avoided against upside missed; shared-outcome diagnostic only, never causal attribution or automatic threshold mutation'},
       {'name':'Regime-Aware Gate Utility','status':'OK','detail':'Hard-gate protection vs missed-upside diagnostics are sliced by market regime to expose sign reversals hidden by aggregate averages; review-only'},
+      {'name':'Decision Policy Shadow Challengers','status':'OK','detail':'Incumbent, strict-defense and adaptive policies are evaluated prospectively on the same committee snapshot and can reach review state only after settled forward evidence'},
       {'name':'Adaptive Feature Governance','status':'OK','detail':'Champion unchanged; challenger-only quarantine/downweight/disable policy with prospective shadow A/B promotion review'},
       {'name':'Model Zoo Challenger Lab','status':'OK','detail':'External Qlib/Hugging Face/FinRL-style candidates require license, model-card, PIT, causality, cost, robustness, execution and forward-paper gates before challenger eligibility'},
       {'name':'External Challenger Execution','status':'OK','detail':'License-aware research adapters are isolated from paper/live paths; Qlib GBDT family has an internal causal BIST concept adapter while sequence/uncleared candidates remain blocked'},
@@ -555,6 +557,11 @@ def decision_gate_net_utility_api(horizon:int=20,bad_excess_pct:float=-3.0,good_
 def decision_gate_regime_utility_api(horizon:int=20,bad_excess_pct:float=-3.0,good_excess_pct:float=3.0,min_samples:int=5):
     h=horizon if horizon in (5,20,60) else 20
     return gate_regime_utility(h,max(-50.0,min(float(bad_excess_pct),-0.1)),max(0.1,min(float(good_excess_pct),50.0)),max(2,min(int(min_samples),100)))
+
+@app.get('/api/decision-policy-challengers')
+def decision_policy_challengers_api(horizon:int=20,min_settled:int=12):
+    h=horizon if horizon in (5,20,60) else 20
+    return decision_policy_challenger_report(h,max(5,min(int(min_settled),200)))
 
 @app.get('/api/feature-governance')
 def feature_governance_api(force:bool=False):
