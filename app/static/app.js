@@ -79,7 +79,7 @@ async function init(){
     els.systemMode.textContent=`V${h.version||'17.1'} · ${u.source||'UNIVERSE'}`;
     els.scanStatus.textContent=restored?`Önbellekten ${state.scan.size} hisse · arka planda yenileniyor`:`${state.total} şirket bulundu`;
     if(restored)updateRegime();
-    renderTickerbar(); render(); if(!['detail','forecast','edges','paperportfolio','documentlab','community','autopaper','robotarena'].includes(state.view))setTimeout(()=>scanAll(false),restored?900:150);
+    renderTickerbar(); render(); const autoScanViews=new Set(['overview','all','short','long','setups','anomaly','portfolio','screener','community']); if(autoScanViews.has(state.view))setTimeout(()=>scanAll(false),restored?8000:500);
   }catch(e){els.content.innerHTML=`<div class="empty">Başlatma hatası: ${e.message}</div>`;}
 }
 function renderTickerbar(){
@@ -415,6 +415,7 @@ async function loadKapRadar(){
   }catch(e){box.innerHTML='<div class="empty">KAP verisi yüklenemedi: '+kapEsc(e.message)+'</div>'}
 }
 function render(){
+  refreshActiveTickerUI();
   if(state.view==='overview'){els.title.textContent='Piyasa Komuta Merkezi';els.content.innerHTML=overview();}
   if(state.view==='all'){els.title.textContent='Tüm BIST Şirketleri';els.content.innerHTML=allStocks();bindTable();}
   if(state.view==='short'){els.title.textContent='Kısa Vade Alpha Radar';els.content.innerHTML=horizonView('short');}
