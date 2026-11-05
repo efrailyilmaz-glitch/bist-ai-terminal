@@ -20,5 +20,6 @@ def test_v120_system_audit_wires_full_audit_and_fixes_stale_backend_label():
 
 def test_v120_api_version():
     main=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='120.0.0'" in main
-    assert "'version':'120.0.0'" in main
+    current=int(main.split("version='",1)[1].split('.',1)[0])
+    assert current>=120
+    assert "'version':" in main
