@@ -140,7 +140,7 @@ def event_study(ticker:str,limit=20):
         except Exception:continue
         idx=next((i for i,x in enumerate(dates) if x>=iso),None);bi=next((i for i,x in enumerate(bdates) if x>=iso),None)
         if idx is None or bi is None:continue
-        ev={'date':ds,'category':it.get('event_category'),'title':it.get('title'),'materiality':it.get('materiality'),'sentiment_score':it.get('sentiment_score')}
+        ev={'date':ds,'category':it.get('event'),'title':it.get('title'),'materiality':it.get('materiality'),'sentiment_score':it.get('sentiment_score')}
         for h in (1,5,20):
             end=idx+h
             if end<len(df) and dates[idx] in bmap and dates[end] in bmap:
