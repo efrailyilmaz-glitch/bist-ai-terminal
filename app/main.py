@@ -12,6 +12,7 @@ from .kap_engine import company_profile, disclosures
 from .news_engine import headlines
 from .research_engine import research_snapshot
 from .providers import data_health, provider_registry
+from .data_provider_trust_v2 import snapshot as data_provider_trust_v2
 from .market_internals import market_internals
 from .catalysts import catalyst_calendar
 from .model_governance import model_card
@@ -126,6 +127,11 @@ def microstructure_live_api(ticker:str):
 @app.post('/api/microstructure-guard')
 def microstructure_guard_api(payload:dict=Body(...)):
     return microstructure_guard(payload)
+
+@app.get('/api/data-trust-v2')
+def data_trust_v2_api(codes:str|None=None):
+    selected=[x.strip().upper() for x in (codes or '').split(',') if x.strip()][:100]
+    return data_provider_trust_v2(selected)
 
 @app.get('/api/universe')
 def universe(force: bool=False):
