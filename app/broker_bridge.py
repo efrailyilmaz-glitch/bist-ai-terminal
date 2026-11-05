@@ -8,10 +8,8 @@ _STATE={'kill_switch':False,'paper_orders':[],'paper_positions':{},'daily_realiz
 TRADINGVIEW_URL='https://www.tradingview.com/chart/?symbol=BIST%3A{ticker}'
 
 def _dir():
-    if platform.system()=='Darwin':base=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
-    elif platform.system()=='Windows':base=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
-    else:base=Path.home()/'.bist-ai-terminal'
-    base.mkdir(parents=True,exist_ok=True);return base
+    from .runtime_paths import data_root
+    return data_root()
 def _file():return _dir()/'execution_state.json'
 def _save():
     try:
