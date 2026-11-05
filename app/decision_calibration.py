@@ -178,3 +178,29 @@ def gate_net_utility(horizon=20,bad_excess_pct=-3.0,good_excess_pct=3.0,min_samp
             'review_candidates':[x for x in out if x['label']=='NET_COSTLY'],
             'protective_gates':[x for x in out if x['label']=='NET_PROTECTIVE'],
             'policy':'Prospective diagnostic only. Outcomes can be shared across simultaneous gate failures, so utility is not causal attribution and never changes a gate automatically.'}
+
+
+def gate_regime_utility(horizon=20,bad_excess_pct=-3.0,good_excess_pct=3.0,min_samples=5):
+    """Regime-sliced hard-gate utility from settled prospective outcomes.
+    Intended to detect sign reversals hidden by aggregate averages.
+    """
+    base=gate_net_utility(horizon,bad_excess_pct,good_excess_pct,min_samples=2)
+    rows=[]
+    for g in base.get('rows') or []:
+        for regime,rg in (g.get('regimes') or {}).items():
+            n=int(rg.get('n') or 0);bad_n=int(rg.get('bad_n') or 0);good_n=int(rg.get('good_n') or 0)
+            protect=bad_n/max(1,n)*100;miss=good_n/max(1,n)*100
+            if n<int(min_samples):label='INSUFFICIENT'
+            elif protect>=miss+15:label='PROTECTIVE'
+            elif miss>=protect+15:label='COSTLY'
+            else:label='MIXED'
+            rows.append({'gate':g['gate'],'regime':regime,'n':n,'bad_n':bad_n,'good_n':good_n,
+                         'protection_rate_pct':round(protect,2),'miss_rate_pct':round(miss,2),'label':label})
+    conflicts=[]
+    for gate in sorted({x['gate'] for x in rows}):
+        labs={x['label'] for x in rows if x['gate']==gate and x['label']!='INSUFFICIENT'}
+        if 'PROTECTIVE' in labs and 'COSTLY' in labs:conflicts.append(gate)
+    order={'COSTLY':0,'PROTECTIVE':1,'MIXED':2,'INSUFFICIENT':3}
+    rows.sort(key=lambda x:(order.get(x['label'],9),x['gate'],x['regime']))
+    return {'status':'OK','version':'87.0','horizon':horizon,'rows':rows,'regime_conflict_gates':conflicts,
+            'policy':'Regime-sliced prospective diagnostic. Regime conflict triggers review only; no regime-specific gate relaxation is automatic.'}
