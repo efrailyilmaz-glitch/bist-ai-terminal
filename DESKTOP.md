@@ -1,12 +1,12 @@
-# BIST AI Terminal Desktop 123.0
+# BIST AI Terminal Desktop 125.0
 
 Bu sürüm web sitesinden bağımsız olarak bilgisayara kurulur. Arayüz Electron içinde açılır; FastAPI/Python motoru uygulamanın kendi içinde paketlidir ve yalnızca `127.0.0.1` üzerinde çalışır. Render kullanılmaz.
 
 ## Üretilen kurulum dosyaları
 
-- Windows 64-bit: `BIST-AI-Terminal-Setup-123.0.0-x64.exe`
-- macOS Intel: `BIST-AI-Terminal-123.0.0-x64.dmg`
-- macOS Apple Silicon: `BIST-AI-Terminal-123.0.0-arm64.dmg`
+- Windows 64-bit: `BIST-AI-Terminal-Setup-125.0.0-x64.exe`
+- macOS Intel: `BIST-AI-Terminal-125.0.0-x64.dmg`
+- macOS Apple Silicon: `BIST-AI-Terminal-125.0.0-arm64.dmg`
 
 ## Kurulum davranışı
 
