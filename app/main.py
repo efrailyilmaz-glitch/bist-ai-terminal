@@ -1127,7 +1127,7 @@ def kap():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','version':'128.0.0','service':'bist-ai-terminal'}
+    return {'status':'ok','version':'128.0.0','service':'bist-ai-terminal','performance_profile':'FAST_UI_V128'}
 
 @app.get('/api/document-lab/status')
 def document_status_api():
