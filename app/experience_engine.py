@@ -8,10 +8,8 @@ from .point_in_time import audit_signal
 _LOCK=threading.Lock()
 
 def _dir():
-    if platform.system()=='Darwin':b=Path.home()/'Library'/'Application Support'/'BIST AI Terminal'
-    elif platform.system()=='Windows':b=Path(os.getenv('APPDATA') or Path.home())/'BIST AI Terminal'
-    else:b=Path.home()/'.bist-ai-terminal'
-    b.mkdir(parents=True,exist_ok=True);return b
+    from .runtime_paths import data_root
+    return data_root()
 def _db():return _dir()/'experience.db'
 def _conn():
     c=sqlite3.connect(_db(),timeout=15)
