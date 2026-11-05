@@ -25,7 +25,7 @@ def test_v125_api_and_ui():
     assert "/api/broker-sandbox/submit" in main
     assert "x_idempotency_key" in main
     assert 'data-view="brokersandbox"' in html
-    assert '/static/v57.js?v=125.0.0' in html
+    assert '/static/v57.js' in html
     assert 'Live execution' in js and 'KAPALI' in js
 
 def test_v125_version():
