@@ -9,6 +9,7 @@ from .market_data import scan_codes, yahoo_chart, market_overview, multi_timefra
 from .backtest import run_backtest, compare_strategies, walk_forward, monte_carlo
 from .fundamentals import get_fundamentals, factor_screen
 from .kap_engine import company_profile, disclosures
+from .kap_intelligence_v2 import analyze as kap_intelligence_v2
 from .news_engine import headlines
 from .research_engine import research_snapshot
 from .providers import data_health, provider_registry
@@ -360,6 +361,10 @@ def experience_calibration_api():
 @app.post('/api/experience/settle')
 def experience_settle_api():
     return experience_settle()
+
+@app.get('/api/kap-intelligence-v2/{ticker}')
+def kap_intelligence_v2_api(ticker:str,limit:int=30):
+    return kap_intelligence_v2(ticker,max(5,min(int(limit),50)))
 
 @app.get('/api/smart-money/{ticker}')
 def smart_money(ticker:str,calibrate:bool=True):
