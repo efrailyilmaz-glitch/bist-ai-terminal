@@ -4,8 +4,8 @@ import hashlib,json,platform,sqlite3,sys,time
 from pathlib import Path
 
 def _db():
-    p=Path.home()/'.bist-ai-terminal'/'model_registry.db'
-    p.parent.mkdir(parents=True,exist_ok=True);return p
+    from .runtime_paths import data_path
+    return data_path('model_registry.db')
 
 def _conn():
     c=sqlite3.connect(_db())
