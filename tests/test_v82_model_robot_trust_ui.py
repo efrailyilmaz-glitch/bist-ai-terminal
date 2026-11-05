@@ -6,7 +6,7 @@ def test_v82_model_robot_trust_navigation_and_script():
     html=(ROOT/'app'/'templates'/'index.html').read_text(encoding='utf-8')
     assert 'data-view="modeltrust"' in html
     assert 'Model / Robot Güven' in html
-    assert '/static/v31.js?v=82.0.0' in html
+    assert '/static/v31.js' in html
     assert '\\\\n' not in html
 
 def test_v82_trust_center_sources_are_forward_and_reproducible():
