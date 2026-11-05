@@ -9,6 +9,7 @@ from .robot_strategies import CATALOG,catalog,entry,exit_reason
 from .meta_governance import rank_forward_bots,meta_decision
 from .decay_v2 import detect_trade_decay
 from .meta_portfolio import arena_regime,allocate
+from .robot_arena_v2 import score as arena_v2_score
 
 _LOCK=threading.RLock();_BUSY=set();_THREADS={}
 
@@ -71,7 +72,8 @@ def snapshot(token):
     scan={k:v for k,v in a['scan'].items() if k not in {'rows','codes'}};scan['total']=len(a['scan']['codes'])
     regime=arena_regime(scan,{'cash_adjusted_pct':bench_adj})
     meta_portfolio=allocate(rows,ranking,regime)
-    return {'exists':True,'mode':'FORWARD_PAPER','live_execution':False,'validation':'PROSPECTIVE_ONLY','enabled':a['enabled'],'started_at':a['started_at'],'created_at':a['created_at'],'config':a['config'],'scan':scan,'last_risk_check':a['last_risk_check'],'error':a['error'],'benchmark':{'return_pct':ret,'cash_adjusted_pct':bench_adj,'base_at':bench.get('base',{}).get('at'),'last_at':bench.get('last',{}).get('at'),'label':'XU100 fiyat endeksi · masrafsız referans, temettü ve nakit faizi hariç; doğrudan alınabilir ürün değil'},'bots':rows,'meta_governance':{'ranking':ranking,'decision':meta,'days':days,'mode':'FORWARD_PAPER_ONLY'},'meta_portfolio':meta_portfolio,'external':catalog()['external'],'audit':catalog().get('audit',[]),'adaptation':catalog()['adaptation'],'worker_running':all(_THREADS.get(l) and _THREADS[l].is_alive() for l in ('scan','risk'))}
+    arena_v2=arena_v2_score(rows,bench_adj,days)
+    return {'exists':True,'mode':'FORWARD_PAPER','live_execution':False,'validation':'PROSPECTIVE_ONLY','enabled':a['enabled'],'started_at':a['started_at'],'created_at':a['created_at'],'config':a['config'],'scan':scan,'last_risk_check':a['last_risk_check'],'error':a['error'],'benchmark':{'return_pct':ret,'cash_adjusted_pct':bench_adj,'base_at':bench.get('base',{}).get('at'),'last_at':bench.get('last',{}).get('at'),'label':'XU100 fiyat endeksi · masrafsız referans, temettü ve nakit faizi hariç; doğrudan alınabilir ürün değil'},'bots':rows,'meta_governance':{'ranking':ranking,'decision':meta,'days':days,'mode':'FORWARD_PAPER_ONLY'},'meta_portfolio':meta_portfolio,'arena_v2':arena_v2,'external':catalog()['external'],'audit':catalog().get('audit',[]),'adaptation':catalog()['adaptation'],'worker_running':all(_THREADS.get(l) and _THREADS[l].is_alive() for l in ('scan','risk'))}
 
 def configure(token,payload):
     key=paper._key(token)
