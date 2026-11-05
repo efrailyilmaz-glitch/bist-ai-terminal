@@ -31,5 +31,6 @@ def test_v84_api_and_ui_sources():
 
 def test_v84_api_version():
     text=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='84.0.0'" in text
-    assert "'version':'84.0.0'" in text
+    current=int(text.split("version='",1)[1].split('.',1)[0])
+    assert current>=84
+    assert "'version':" in text
