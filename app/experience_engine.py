@@ -2,6 +2,7 @@ from __future__ import annotations
 import json, os, platform, sqlite3, threading, time, hashlib
 from datetime import datetime, timezone
 from pathlib import Path
+from .runtime_db import connect as db_connect
 from .market_data import yahoo_rows
 from .point_in_time import audit_signal
 
@@ -12,7 +13,7 @@ def _dir():
     return data_root()
 def _db():return _dir()/'experience.db'
 def _conn():
-    c=sqlite3.connect(_db(),timeout=15)
+    c=db_connect(_db(),timeout=15)
     c.execute('''CREATE TABLE IF NOT EXISTS signals(
       id INTEGER PRIMARY KEY AUTOINCREMENT, created_epoch REAL, created_at TEXT, ticker TEXT, grade TEXT,
       opportunity_score REAL, committee_decision TEXT, committee_score REAL, regime TEXT, entry_price REAL,
