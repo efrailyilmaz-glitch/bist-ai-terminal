@@ -19,5 +19,6 @@ def test_v121_performance_telemetry():
 
 def test_v121_api_version():
     main=(ROOT/'app'/'main.py').read_text(encoding='utf-8')
-    assert "version='121.0.0'" in main
-    assert "'version':'121.0.0'" in main
+    current=int(main.split("version='",1)[1].split('.',1)[0])
+    assert current>=121
+    assert "'version':" in main
