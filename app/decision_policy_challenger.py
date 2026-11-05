@@ -19,6 +19,15 @@ def _ensure(c):
       signal_id INTEGER, policy_id TEXT, policy_name TEXT, decision TEXT, reasons_json TEXT,
       created_epoch REAL, PRIMARY KEY(signal_id,policy_id)
     )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS policy_persistence(
+      horizon INTEGER, policy_id TEXT, state TEXT, last_paired_n INTEGER,
+      good_streak INTEGER, bad_streak INTEGER, updated_epoch REAL,
+      PRIMARY KEY(horizon,policy_id)
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS policy_persistence_events(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, horizon INTEGER, policy_id TEXT,
+      event TEXT, paired_n INTEGER, created_epoch REAL
+    )''')
     c.commit()
 
 def _num(x,d=None):
@@ -105,6 +114,41 @@ def _paired_comparisons(rows,min_pairs=12):
                     'regimes':reg_rows})
     return out
 
+
+def _persistence(c,horizon,policy_id):
+    r=c.execute('SELECT state,last_paired_n,good_streak,bad_streak FROM policy_persistence WHERE horizon=? AND policy_id=?',(int(horizon),str(policy_id))).fetchone()
+    return {'state':r[0],'last_paired_n':int(r[1] or 0),'good_streak':int(r[2] or 0),'bad_streak':int(r[3] or 0)} if r else {'state':'OBSERVE','last_paired_n':0,'good_streak':0,'bad_streak':0}
+
+def _update_persistence(horizon,paired,good_required=3,bad_required=2,recovery_required=3):
+    with ex._LOCK:
+        c=ex._conn();_ensure(c);states={}
+        for row in paired or []:
+            pid=str(row.get('challenger'));n=int(row.get('paired_n') or 0);status=row.get('status')
+            st=_persistence(c,horizon,pid);prior=st['state'];advanced=n>st['last_paired_n']
+            if advanced:
+                st['last_paired_n']=n
+                if status=='SUPPORTED':st['good_streak']+=1;st['bad_streak']=0
+                elif status=='MATURE_NO_EDGE':st['bad_streak']+=1;st['good_streak']=0
+                else:st['good_streak']=0
+                if prior=='QUARANTINE':
+                    st['state']='RECOVERING' if st['good_streak']>0 else 'QUARANTINE'
+                    if st['good_streak']>=int(recovery_required):st['state']='PERSISTENT'
+                elif st['bad_streak']>=int(bad_required):st['state']='QUARANTINE'
+                elif st['good_streak']>=int(good_required):st['state']='PERSISTENT'
+                elif status=='SUPPORTED':st['state']='BUILDING'
+                elif status=='MATURE_NO_EDGE':st['state']='WATCH'
+                else:st['state']='OBSERVE'
+            evt=None
+            if advanced and st['state']!=prior:evt=prior+'->'+st['state']
+            c.execute('''INSERT OR REPLACE INTO policy_persistence(horizon,policy_id,state,last_paired_n,good_streak,bad_streak,updated_epoch)
+                         VALUES(?,?,?,?,?,?,?)''',(int(horizon),pid,st['state'],st['last_paired_n'],st['good_streak'],st['bad_streak'],time.time()))
+            if evt:c.execute('INSERT INTO policy_persistence_events(horizon,policy_id,event,paired_n,created_epoch) VALUES(?,?,?,?,?)',(int(horizon),pid,evt,n,time.time()))
+            states[pid]={**st,'advanced':advanced}
+        c.commit()
+        events=[{'id':r[0],'policy_id':r[1],'event':r[2],'paired_n':r[3],'created_epoch':r[4]} for r in c.execute('SELECT id,policy_id,event,paired_n,created_epoch FROM policy_persistence_events WHERE horizon=? ORDER BY id DESC LIMIT 50',(int(horizon),)).fetchall()]
+        c.close()
+    return {'states':states,'events':events,'policy':'State advances only on new paired forward evidence. Persistence never promotes a policy automatically.'}
+
 def report(horizon=20,min_settled=12):
     if horizon not in (5,20,60):raise ValueError('horizon must be 5, 20 or 60')
     with ex._LOCK:
@@ -135,6 +179,7 @@ def report(horizon=20,min_settled=12):
     out.sort(key=lambda x:(x['status']!='MATURE',-x['shadow_score'],x['id']))
     incumbent=next((x for x in out if x['id']=='incumbent'),None)
     paired=_paired_comparisons(rows,min_pairs=max(12,int(min_settled)))
+    persistence=_update_persistence(horizon,paired)
     best=out[0] if out else None
     decision={'action':'HOLD','reason':'INSUFFICIENT_FORWARD_EVIDENCE'}
     if best and incumbent and best['id']!='incumbent' and best['status']=='MATURE' and incumbent['status']=='MATURE':
@@ -142,13 +187,16 @@ def report(horizon=20,min_settled=12):
         margin=best['shadow_score']-incumbent['shadow_score']
         regime_ns=[int(x.get('n') or 0) for x in (pc or {}).get('regimes') or []]
         regime_ok=sum(1 for n in regime_ns if n>=5)>=2
-        if margin>=1.5 and best['selected_n']>=10 and pc and pc['status']=='SUPPORTED' and regime_ok:
+        pst=(persistence.get('states') or {}).get(best['id']) or {}
+        if margin>=1.5 and best['selected_n']>=10 and pc and pc['status']=='SUPPORTED' and regime_ok and pst.get('state')=='PERSISTENT':
             decision={'action':'CHALLENGER_REVIEW','challenger':best['id'],'margin':round(margin,3),
                       'paired_mean_delta':pc.get('mean_utility_delta'),'reason':'PAIRED_FORWARD_EDGE_WITH_REGIME_COVERAGE'}
+        elif pc and pc['status']=='SUPPORTED' and pst.get('state')!='PERSISTENT':
+            decision={'action':'HOLD','reason':'CHALLENGER_EDGE_NOT_PERSISTENT_YET'}
         elif pc and pc['status']!='SUPPORTED':
             decision={'action':'HOLD','reason':'PAIRED_EDGE_NOT_CONFIRMED'}
         elif not regime_ok:
             decision={'action':'HOLD','reason':'INSUFFICIENT_REGIME_COVERAGE'}
         else:decision={'action':'HOLD','reason':'NO_MATERIAL_MARGIN'}
-    return {'status':'OK','version':'89.0','horizon':horizon,'rows':out,'paired_comparisons':paired,'decision':decision,
-            'live_execution':False,'policy':'Shadow policies are prospective-only. Challenger review requires paired bootstrap evidence and regime coverage; it never mutates incumbent thresholds automatically.'}
+    return {'status':'OK','version':'90.0','horizon':horizon,'rows':out,'paired_comparisons':paired,'persistence':persistence,'decision':decision,
+            'live_execution':False,'policy':'Shadow policies are prospective-only. Challenger review requires paired bootstrap evidence, regime coverage and persistent support across new forward evidence increments; it never mutates incumbent thresholds automatically.'}
