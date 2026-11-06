@@ -79,8 +79,8 @@ def _terminal_context(ticker:str,view:str,message:str,client:dict|None=None):
     out={}
     with ThreadPoolExecutor(max_workers=min(4,len(jobs))) as ex:
         fut={ex.submit(fn):name for name,fn in jobs.items()}
-        for f,name in [(f,n) for f,n in fut.items()]:
-            try:out[name]=f.result(timeout=18)
+        for future,name in fut.items():
+            try:out[name]=future.result(timeout=18)
             except Exception:out[name]=None
     out['active_ticker']=ticker
     out['active_view']=view
