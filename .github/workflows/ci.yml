@@ -37,6 +37,7 @@ jobs:
       - run: node --check app/static/v56.js
       - run: node --check app/static/v57.js
       - run: node --check app/static/v58.js
+      - run: node --check app/static/v59.js
       - run: node --check app/static/chart-loader.js
       - run: node tests/community.cjs
       - run: node --check app/static/v25.js
@@ -370,4 +371,4 @@ jobs:
           assert any(f['code']=='UNCONFIRMED_FIRST_BREAKOUT' for f in t['flags'])
           print('V32 first-bar breakout is not trusted',t['status'],t['score'])
           PY
-      - run: python -c "from app.main import app; assert app.version == '128.0.0'; print(app.title, app.version)"
+      - run: python -c "from app.main import app; assert app.version == '129.0.0'; print(app.title, app.version)"
