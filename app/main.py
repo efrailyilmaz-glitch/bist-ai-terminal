@@ -37,6 +37,7 @@ from .market_intelligence import seasonality, rolling_risk, relative_rotation, w
 from .broker_bridge import broker_status, order_preview, paper_order, orders as broker_orders, set_kill_switch, update_risk
 from .broker_sandbox import status as broker_sandbox_status, preview as broker_sandbox_preview, submit as broker_sandbox_submit
 from .controlled_live_readiness import report as controlled_live_readiness
+from .copilot import status as copilot_status, save_desktop_config as copilot_save_config, chat as copilot_chat
 from .background_supervisor import start_background_supervisor, status as background_status, alerts as background_alerts
 from .experience_engine import history as experience_history, calibration as experience_calibration, settle_due as experience_settle, verify_ledger
 from .smart_money_engine import smart_money_snapshot, smart_money_radar
@@ -411,6 +412,24 @@ def broker_sandbox_status_api():
 @app.get('/api/controlled-live-readiness')
 def controlled_live_readiness_api(min_settled_20d:int=30,min_total_signals:int=50):
     return controlled_live_readiness(max(10,min(int(min_settled_20d),500)),max(20,min(int(min_total_signals),2000)))
+
+@app.get('/api/copilot/status')
+def copilot_status_api():
+    return copilot_status()
+
+@app.post('/api/copilot/config')
+def copilot_config_api(payload:dict=Body(...)):
+    return copilot_save_config(payload.get('api_key'),payload.get('model'))
+
+@app.post('/api/copilot/chat')
+def copilot_chat_api(payload:dict=Body(...)):
+    return copilot_chat(
+      payload.get('message') or '',
+      payload.get('ticker') or 'ASELS',
+      payload.get('view') or 'overview',
+      payload.get('history') or [],
+      payload.get('context') or {}
+    )
 
 @app.post('/api/broker-sandbox/preview')
 def broker_sandbox_preview_api(payload:dict=Body(...)):
