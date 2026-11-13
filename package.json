@@ -16,7 +16,7 @@
     "electron": "38.1.2",
     "electron-builder": "26.18.1",
     "@electron/notarize": "3.1.0",
-    "lightweight-charts": "5.2.1"
+    "lightweight-charts": "5.3.0"
   },
   "build": {
     "appId": "com.bistai.terminal",
